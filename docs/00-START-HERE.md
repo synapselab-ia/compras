@@ -8,11 +8,13 @@ O sistema não substitui os sistemas oficiais de processo administrativo, requis
 
 ## Estado atual
 
-A `Foundation-00`, a fundação executável, a Central do Setor, o detalhe demonstrativo, o desenho de persistência e a primeira fundação executável de PostgreSQL foram revisados e integrados em `main`.
+A `Foundation-00`, a fundação executável, a Central do Setor, o detalhe demonstrativo, a fundação PostgreSQL e o desenho da fronteira de identidade/RLS foram revisados e integrados em `main`.
 
-Existe uma aplicação executável com jornada demonstrativa `Central → detalhe → Central`, exclusivamente com dados fictícios. O núcleo relacional definido em `docs/architecture/DATABASE.md` agora possui a migration imutável `database/migrations/0001_core_foundation.sql`, testes adversariais de integridade/RLS e verificação em PostgreSQL descartável na CI. A fundação permanece `default-deny`: não há policy permissiva, Auth real, banco hospedado, persistência operacional da aplicação ou deploy de produção.
+Existe uma aplicação executável com jornada demonstrativa `Central → detalhe → Central`, exclusivamente com dados fictícios. O núcleo relacional possui a migration imutável `database/migrations/0001_core_foundation.sql`, testes adversariais de integridade/RLS e verificação em PostgreSQL descartável na CI. A fundação permanece segura por padrão: RLS está habilitada/forçada e nenhuma policy de escrita foi criada.
 
-A próxima ação canônica é `F06-TRUSTED-IDENTITY-RLS-DESIGN-01 — Revalidar Neon e especificar a fronteira de identidade/RLS`.
+ADR-003 registra a fronteira aprovada para futura autenticação: sessão externa validada no servidor → `issuer + subject` confiáveis → `app_user` → membership ativa → escopo de equipe no PostgreSQL. Nenhum Auth, banco hospedado, Data API operacional, secret ou deploy foi provisionado. A documentação atual da Neon foi revalidada na F06; a integração real deverá ser novamente checada no momento de implantação por se tratar de capacidade externa mutável.
+
+A próxima ação canônica é `F07-SERVER-IDENTITY-READ-RLS-01 — Contexto de identidade server-only e policies de leitura`. Ela implementará somente a camada PostgreSQL de leitura autorizada em ambiente descartável, sem Auth real ou infraestrutura externa.
 
 O repositório está público. Aplicam-se integralmente as restrições de publicação de `AGENTS.md` e `docs/architecture/SECURITY.md`; nenhum dado real ou pré-publicação pode ser usado.
 
@@ -46,8 +48,9 @@ A hierarquia detalhada está em `docs/ai/SOURCE_OF_TRUTH.md`.
 
 - `docs/architecture/ARCHITECTURE.md`;
 - `docs/architecture/SECURITY.md`;
-- `docs/architecture/DATABASE.md` — contrato atual da fundação persistente;
-- `docs/decisions/ADR-002-persistence-foundation.md` — decisões estruturais da persistência/default-deny.
+- `docs/architecture/DATABASE.md` — contrato da fundação persistente;
+- `docs/decisions/ADR-002-persistence-foundation.md` — fundação relacional/default-deny;
+- `docs/decisions/ADR-003-trusted-identity-rls-boundary.md` — fronteira de identidade confiável e autorização de leitura.
 
 ### Operação por IA
 
@@ -70,6 +73,8 @@ A hierarquia detalhada está em `docs/ai/SOURCE_OF_TRUTH.md`.
 - nenhuma regra crítica existe somente na interface;
 - privacidade e segurança entram desde a primeira tabela;
 - persistência nasce relacional, portátil e deny-by-default;
+- autenticação não é autorização; escopo deriva de membership ativa no banco;
+- IDs fornecidos pelo cliente nunca definem identidade ou escopo por si só;
 - evitar complexidade prematura;
 - construir por slices pequenas, utilizáveis e verificáveis;
 - qualquer incerteza importante aumenta a investigação, nunca autoriza adivinhação.

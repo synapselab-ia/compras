@@ -1,0 +1,73 @@
+export type SectorCentralRecord = {
+  id: string;
+  object: string;
+  responsible: string;
+  stage: string;
+  status: string;
+  waitingOn: string;
+  nextAction: string;
+  lastMovement: string;
+};
+
+export const demoSectorRecords: SectorCentralRecord[] = [
+  {
+    id: "DEMO-001",
+    object: "Aquisição demonstrativa A",
+    responsible: "Pessoa A",
+    stage: "Triagem demo",
+    status: "Em andamento demo",
+    waitingOn: "Setor Alfa",
+    nextAction: "Conferir informações demonstrativas",
+    lastMovement: "Momento demo 01",
+  },
+  {
+    id: "DEMO-002",
+    object: "Serviço demonstrativo B",
+    responsible: "Pessoa B",
+    stage: "Pesquisa demo",
+    status: "Aguardando demo",
+    waitingOn: "Pessoa C",
+    nextAction: "Revisar referência fictícia",
+    lastMovement: "Momento demo 02",
+  },
+  {
+    id: "DEMO-003",
+    object: "Material demonstrativo C",
+    responsible: "Pessoa C",
+    stage: "Preparação demo",
+    status: "Em andamento demo",
+    waitingOn: "Ação interna",
+    nextAction: "Organizar registro demonstrativo",
+    lastMovement: "Momento demo 03",
+  },
+  {
+    id: "DEMO-004",
+    object: "Solução demonstrativa D",
+    responsible: "Pessoa A",
+    stage: "Revisão demo",
+    status: "Pendente demo",
+    waitingOn: "Setor Beta",
+    nextAction: "Validar pendência fictícia",
+    lastMovement: "Momento demo 04",
+  },
+  {
+    id: "DEMO-005",
+    object: "Aquisição demonstrativa E",
+    responsible: "Pessoa B",
+    stage: "Preparação demo",
+    status: "Aguardando demo",
+    waitingOn: "Setor Alfa",
+    nextAction: "Aguardar retorno demonstrativo",
+    lastMovement: "Momento demo 05",
+  },
+  {
+    id: "DEMO-006",
+    object: "Serviço demonstrativo F",
+    responsible: "Pessoa C",
+    stage: "Pesquisa demo",
+    status: "Em andamento demo",
+    waitingOn: "Ação interna",
+    nextAction: "Comparar opções fictícias",
+    lastMovement: "Momento demo 06",
+  },
+];

@@ -6,13 +6,14 @@ Este arquivo define regras obrigatórias para qualquer agente de IA ou novo chat
 
 Antes de qualquer alteração substantiva:
 
-1. ler `docs/00-START-HERE.md`;
-2. ler `docs/ai/CURRENT_STATE.md`;
-3. ler `docs/ai/NEXT_ACTION.md`;
-4. ler `docs/ai/WORK_PROTOCOL.md`;
-5. validar `docs/ai/CONTEXT_MANIFEST.md` conforme o protocolo;
-6. verificar branch, commit, Issue/PR e estado real do repositório;
-7. abrir somente a documentação e o código exigidos pela tarefa ativa.
+1. localizar o estado canônico atual do projeto; se os documentos de operação ainda não estiverem na branch default, localizar a PR/branch ativa que os contém;
+2. ler `docs/00-START-HERE.md`;
+3. ler `docs/ai/CURRENT_STATE.md`;
+4. ler `docs/ai/NEXT_ACTION.md`;
+5. ler `docs/ai/WORK_PROTOCOL.md`;
+6. validar `docs/ai/CONTEXT_MANIFEST.md` conforme o protocolo;
+7. verificar branch, commit, Issue/PR e estado real do repositório;
+8. abrir somente a documentação e o código exigidos pela tarefa ativa.
 
 O histórico do chat não substitui o repositório.
 
@@ -27,9 +28,17 @@ O histórico do chat não substitui o repositório.
 
 ## 3. Regra especial enquanto o repositório for público
 
-Tratar todo conteúdo versionado como permanentemente público.
+Tratar toda superfície pública do GitHub como potencialmente permanente e divulgável, não apenas arquivos versionados.
 
-É proibido versionar:
+É proibido publicar dados internos reais ou `SENSITIVE_PRE_PUBLICATION` em:
+
+- commits e arquivos;
+- Issues, Pull Requests, descrições e comentários de review;
+- GitHub Actions inputs, nomes de jobs, logs, summaries, artifacts ou outputs;
+- releases, snippets, exemplos, fixtures, dumps ou relatórios gerados;
+- qualquer outra superfície pública associada ao repositório.
+
+Também é proibido versionar ou publicar:
 
 - processos reais ainda não públicos;
 - números, objetos, quantidades ou valores de contratações sensíveis;
@@ -40,7 +49,7 @@ Tratar todo conteúdo versionado como permanentemente público.
 - credenciais, tokens, chaves, connection strings ou secrets;
 - dumps, logs ou fixtures com dados reais.
 
-Somente documentação sanitizada e dados fictícios são permitidos até que o projeto seja privado e a política de dados seja revisada.
+Somente documentação sanitizada, código genérico e dados fictícios são permitidos até que o projeto seja privado e a política de dados seja revisada. Tornar o repositório privado depois não revoga cópias, logs, forks ou divulgações ocorridas enquanto público.
 
 ## 4. Segurança
 

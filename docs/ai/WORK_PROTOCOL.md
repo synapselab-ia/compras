@@ -10,6 +10,8 @@ Uma nova sessão deve poder começar com:
 
 O agente deve recuperar o estado pelo repositório. Não pedir ao usuário para repetir decisões que já estejam documentadas.
 
+Se os documentos canônicos ainda não estiverem na branch default, a sessão deve localizar a PR/branch ativa que contém o estado em construção antes de concluir que o projeto não possui protocolo ou contexto.
+
 ## 2. Ciclo FLOW-IA
 
 Toda sessão substantiva segue:
@@ -18,6 +20,7 @@ Toda sessão substantiva segue:
 
 ### RECOVER
 
+- localizar o estado canônico atual, inclusive em PR/branch ativa quando a branch default ainda não contiver os documentos operacionais;
 - ler startup mínimo;
 - conferir Git/branch/commit/PR/Issue reais;
 - validar `CONTEXT_MANIFEST`;
@@ -175,11 +178,19 @@ Enquanto ON HOLD:
 
 ## 7. Segurança do repositório público
 
-Enquanto `REPO_VISIBILITY = PUBLIC`, toda tarefa começa com um gate adicional:
+Enquanto `REPO_VISIBILITY = PUBLIC`, toda operação que possa persistir ou expor conteúdo no GitHub começa com um gate adicional:
 
-> O diff contém qualquer informação interna real ou sensível?
+> Este write, comentário, log, workflow, summary, artifact ou diff pode conter informação interna real ou sensível?
 
-Se sim, não persistir. Sanitizar ou bloquear até o repositório/fluxo adequado existir.
+Se sim, não persistir nem executar de forma que a informação possa ser publicada. Sanitizar ou bloquear até existir contexto adequado.
+
+O gate se aplica a:
+
+- commits/arquivos;
+- Issues/PRs/reviews/comentários;
+- workflows e seus inputs/outputs;
+- logs, summaries e artifacts;
+- releases e demais superfícies públicas do repositório.
 
 ## 8. Banco e segurança
 

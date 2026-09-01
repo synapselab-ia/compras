@@ -33,11 +33,19 @@ A classificação concreta deve ser refinada com governança institucional antes
 
 ## 3. Regra do repositório público
 
-Enquanto este repositório estiver público, considerar qualquer commit permanentemente divulgável.
+Enquanto este repositório estiver público, considerar qualquer superfície pública do GitHub potencialmente permanente e divulgável.
 
-Não versionar dados `INTERNAL` reais nem `SENSITIVE_PRE_PUBLICATION`.
+A proibição não se limita a arquivos versionados. Não publicar dados `INTERNAL` reais nem `SENSITIVE_PRE_PUBLICATION` em:
 
-Tornar o repositório privado posteriormente não revoga clones, forks ou cópias feitas enquanto público.
+- commits, branches e arquivos;
+- Issues, Pull Requests, descrições, comentários e reviews;
+- GitHub Actions inputs, logs, summaries, outputs e artifacts;
+- releases, fixtures, dumps, relatórios gerados ou exemplos;
+- qualquer outra superfície pública associada ao repositório.
+
+Workflows públicos devem usar somente dados fictícios/sanitizados. Secrets de CI podem existir apenas no mecanismo seguro do provedor e nunca devem ser ecoados, serializados em artifact ou expostos por saída de comando.
+
+Tornar o repositório privado posteriormente não revoga clones, forks, logs, artifacts, caches ou cópias feitas enquanto público. Informação publicada nesta fase deve ser tratada como potencialmente irrecuperável.
 
 ## 4. Autenticação
 

@@ -19,10 +19,10 @@ Ele não substitui as fontes detalhadas. Seu fast path é válido somente enquan
 | `docs/product/BUSINESS_WORKFLOW.md` | `f8fc35aaf8cdd5334591c2402921e6776afd2f4b` |
 | `docs/product/OPEN_QUESTIONS.md` | `145ef9fe301d5c35ad9455d04be5740dbba36a13` |
 | `docs/architecture/ARCHITECTURE.md` | `a7544848c1eefcc54ec4537d3951e6b3559619d7` |
-| `docs/architecture/SECURITY.md` | `d8e65b514f53772af854be87c08f79e037432ade` |
+| `docs/architecture/SECURITY.md` | `4c601c35585db74d62d1a8ae83cd3c996ae71630` |
 | `docs/qa/DEFINITION_OF_DONE.md` | `cd0e3d1f01333c418d4fb622940f908df2b87a57` |
 | `docs/ai/SOURCE_OF_TRUTH.md` | `dca5ef489d0fd32e70f3e157550c6b1eaed5e476` |
-| `docs/ai/WORK_PROTOCOL.md` | `c53df5afa42297a1501fbb7b666f0539f91af918` |
+| `docs/ai/WORK_PROTOCOL.md` | `d76159c1687110607338d49767594d4fdfcc1aba` |
 
 ## 3. Validação
 
@@ -67,18 +67,19 @@ Antes de edição substantiva:
 
 - dados internos privados por padrão;
 - classificação `PUBLIC`, `INTERNAL`, `SENSITIVE_PRE_PUBLICATION`;
-- enquanto o repo for público, não versionar dados internos reais nem sensíveis;
+- enquanto o repo for público, não publicar dados internos reais nem sensíveis em qualquer superfície pública do GitHub, inclusive Issues/PRs/reviews/Actions/logs/artifacts;
 - autenticação obrigatória para operação interna;
 - sem signup público por padrão;
 - autorização server/database, não apenas UI;
 - RLS para dados internos expostos por Data API;
-- secrets nunca no repositório/browser;
+- secrets nunca no repositório/browser/logs;
 - conteúdo sensível não sai para serviço externo sem decisão explícita;
 - desenvolvimento usa dados fictícios/sanitizados.
 
 ### Desenvolvimento por IA
 
 - GitHub canônico; chat descartável;
+- se a branch default ainda não contiver o protocolo, localizar a PR/branch ativa antes de concluir ausência de contexto;
 - uma `NEXT_ACTION` por sessão;
 - ciclo `RECOVER → CLASSIFY → INSPECT → BOUND → IMPLEMENT → RED TEAM → VERIFY → PROMOTE → CHECKPOINT → REPORT`;
 - não inventar requisitos;

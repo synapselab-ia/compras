@@ -1,54 +1,50 @@
 # Next Action — Compras
 
-## F00-REVIEW-01 — Revisar e aprovar a Foundation-00
+## F01-BOOTSTRAP-01 — Inicializar Fundação Executável
 
-**Classe:** `T0 — descoberta/produto`  
+**Classe:** `T5 — arquitetura/fundação`  
 **Estado:** READY  
-**Objetivo:** validar se a fundação documental representa corretamente o produto antes de inicializar código ou infraestrutura.
+**Objetivo:** transformar a baseline documental aprovada em uma aplicação mínima executável, testável e validável, sem introduzir ainda dados internos, banco, autenticação, deploy ou regras de negócio não resolvidas.
 
-## Escopo
+## Fonte da tarefa
 
-Revisar com o usuário:
+Executar conforme `tasks/F01-BOOTSTRAP-01/SPEC.md`.
 
-- missão e limites do produto;
-- entidade central `Contratação`;
-- Central do Setor como experiência principal;
-- separação entre etapa, status, responsável, aguardando e próxima ação;
-- workflow sanitizado inicial;
-- modelo de domínio;
-- questões abertas que realmente bloqueiam implementação;
-- política de segurança e restrições do repositório público;
-- arquitetura de referência;
-- protocolo FLOW-IA.
+## Resultado esperado
 
-## Critérios de aceite
+Ao final, o repositório deve conter uma aplicação web mínima que:
 
-A tarefa termina quando:
+- possa ser instalada de forma reproduzível;
+- compile em TypeScript estrito;
+- possua scripts reais de lint, typecheck, test e build;
+- tenha uma página inicial neutra, sem dados reais;
+- possua CI no GitHub executando os gates aplicáveis com dados exclusivamente fictícios/sanitizados;
+- preserve a arquitetura modular e os guardrails da Foundation-00;
+- não dependa de Neon, Vercel, Auth ou qualquer banco para funcionar localmente.
 
-- erros conceituais apontados pelo usuário forem corrigidos;
-- nenhuma informação interna sensível for adicionada ao repositório público;
-- as questões ainda desconhecidas permanecerem explicitamente abertas;
-- não houver conflito material entre Project Design, Domain Model, Workflow, Security e Source of Truth;
-- o usuário aprovar a fundação como baseline suficiente para começar a implementação;
-- `CURRENT_STATE` for atualizado;
-- uma única próxima ação técnica for promovida.
+## Regras obrigatórias
+
+Antes de implementar:
+
+- verificar documentação oficial atual do Next.js e ferramentas externas adotadas;
+- inspecionar a branch `main` e evitar sobrescrever trabalho concorrente;
+- tratar o repositório como público em todos os writes, logs e artifacts;
+- registrar decisão arquitetural somente se surgir escolha estrutural material não coberta pela Foundation-00.
 
 ## Fora do escopo
 
 Não:
 
-- inicializar Next.js;
 - provisionar Neon;
+- criar schema/migrations de negócio;
+- implementar autenticação/RLS;
 - configurar Vercel;
-- criar dados reais;
-- importar planilhas;
-- implementar autenticação;
-- implementar banco;
+- importar planilhas ou dados reais;
+- cadastrar contratação real;
 - integrar PNCP/Compras.gov;
-- publicar informação interna para completar documentação.
+- resolver Q-001 a Q-012 por conveniência;
+- implementar telas funcionais da Central do Setor além de um shell neutro necessário à fundação.
 
-## Próxima ação esperada após aprovação
+## Critério de encerramento
 
-Promover uma work unit de **Fundação Executável** que inicialize a aplicação mínima, validações locais e estrutura técnica sem ainda carregar dados internos reais.
-
-A especificação dessa work unit deve ser criada somente após a revisão, para refletir eventuais correções arquiteturais da Foundation-00.
+A tarefa só pode ser promovida quando os gates definidos no SPEC tiverem sido realmente executados e registrados, o diff público estiver livre de dados sensíveis e `CURRENT_STATE`/`NEXT_ACTION` refletirem o Git real.

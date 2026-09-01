@@ -24,7 +24,7 @@ database/
 A migration deve implementar, de forma coerente com `docs/architecture/DATABASE.md` e ADR-002:
 
 - `teams`;
-- `app_users`;
+- `app_users` com identidade externa composta por issuer + subject, sem email como chave de segurança;
 - `memberships`;
 - `contractings`;
 - `related_identifiers`;
@@ -34,7 +34,7 @@ A migration deve implementar, de forma coerente com `docs/architecture/DATABASE.
 - índices mínimos justificados pelas consultas atuais;
 - timestamps de arquivamento/revogação/desvínculo/retirada previstos no desenho;
 - RLS habilitada/default-deny nas tabelas internas previstas para acesso operacional;
-- papel de teste operacional sem privilégios administrativos suficientes para provar negação real;
+- papel criado somente nos testes para exercitar RLS sem privilégios administrativos;
 - imutabilidade operacional de eventos por grants/policies compatíveis com a fundação.
 
 ## 3. Testes obrigatórios
@@ -47,13 +47,15 @@ A suíte deve provar ao menos:
 - migrations rodam em banco vazio;
 - membership de outra equipe não pode ser usada como responsável de uma contratação;
 - cardinalidade N de identificadores relacionados funciona;
-- ordinal de item inválido é rejeitado;
-- quantidade negativa/zero, quando fornecida, é rejeitada;
+- ordinal duplicado dentro da mesma contratação é rejeitado;
 - FK de equipe/contratação impede item/identificador/evento cruzado entre equipes;
-- papel operacional sem política permissiva não consegue ler linhas internas mesmo conhecendo UUID válido;
-- papel operacional não consegue inserir/alterar/excluir linha por ausência de política/grant;
+- evento não consegue apontar item ou identificador de outra contratação/equipe;
+- papel operacional de teste, mesmo recebendo grants necessários para exercitar a policy, não consegue ler linhas internas sem policy permissiva, ainda que conheça UUID válido;
+- o mesmo papel não consegue inserir/alterar/excluir linhas pela ausência de policy permissiva;
 - eventos não podem ser alterados/excluídos pelo papel operacional;
 - dados de teste são exclusivamente artificiais.
+
+Não criar assertions de quantidade positiva, faixa ou precisão máxima sem regra de negócio aprovada.
 
 Preferir SQL reproduzível e simples. Não adicionar framework de banco se assertions SQL/psql forem suficientes.
 
@@ -81,6 +83,7 @@ Requisitos:
 - não criar catálogos finais de workflow;
 - não adicionar Pendência, pesquisa de preços, documentos ou módulos futuros;
 - não usar `jsonb` genérico no núcleo;
+- não adicionar constraint quantitativa de item sem fonte aprovada;
 - não adicionar dados/números/nomes reais;
 - migration aplicada nesta work unit passa a ser história imutável; correções posteriores usam nova migration.
 
@@ -90,7 +93,9 @@ A slice pode escolher defaults PostgreSQL pequenos e portáveis necessários à 
 
 Se geração de UUID exigir extensão específica, preferir manter IDs sem default e inserir UUIDs artificiais pela aplicação/testes a acoplar o schema a uma extensão sem necessidade.
 
-Exato mecanismo de identidade corrente para políticas permissivas permanece fora do escopo.
+Exato mecanismo de identidade corrente para policies permissivas permanece fora do escopo.
+
+O papel de migration/owner deve permanecer distinto do papel usado para testar acesso operacional; owner/BYPASSRLS não pode ser usado como prova de segurança.
 
 ## 7. Open Questions preservadas
 
@@ -110,12 +115,14 @@ Não fechar:
 Antes de promover:
 
 - tentar relações cross-team por todas as FKs relevantes;
-- tentar acesso com UUID conhecido usando o papel operacional;
-- procurar `GRANT` amplo ou política `USING (true)` indevida;
+- tentar evento referenciando subentidade de outra contratação;
+- tentar acesso com UUID conhecido usando o papel operacional de teste;
+- procurar `GRANT` de produção amplo ou policy `USING (true)` indevida;
 - procurar tabela interna sem RLS quando o desenho exigir proteção;
-- confirmar que policy inexistente resulta em deny, não em bypass;
+- confirmar que policy inexistente resulta em deny real de RLS, não apenas em ausência de grant;
 - confirmar que owner/admin usado para migration não é usado como prova de autorização;
 - procurar enum/lista fechada que resolva open question;
+- procurar regra quantitativa inventada;
 - procurar DELETE destrutivo como fluxo normal;
 - revisar fixtures/logs por aparência de dado real;
 - revisar migration completa e CI.
@@ -138,7 +145,7 @@ Obrigatórios:
 ## 10. Fora do escopo
 
 - Auth/claims/JWT reais;
-- política de leitura para membership autorizada;
+- policy de leitura para membership autorizada;
 - CRUD da aplicação;
 - servidor/RPC de mutação;
 - banco hospedado;

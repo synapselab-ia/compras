@@ -4,9 +4,9 @@ Sistema em desenvolvimento para organizar fluxos de contratações públicas, ce
 
 ## Estado atual
 
-O projeto está na fase `Foundation-00 — Public Bootstrap`.
+A `Foundation-00` foi revisada e integrada. A próxima work unit é `F01-BOOTSTRAP-01 — Inicializar Fundação Executável`.
 
-Ainda não existe aplicação funcional, banco conectado ou ambiente com dados reais. O repositório está público nesta fase e, por isso, somente documentação sanitizada e dados fictícios podem ser versionados.
+Ainda não existe aplicação funcional, banco conectado ou ambiente com dados reais. O repositório permanece público e, por isso, somente documentação sanitizada, código genérico e dados fictícios podem ser publicados em qualquer superfície pública do GitHub.
 
 ## Princípio central
 

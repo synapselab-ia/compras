@@ -8,7 +8,9 @@ O sistema não substitui os sistemas oficiais de processo administrativo, requis
 
 ## Estado atual
 
-`Foundation-00 — Public Bootstrap`.
+A `Foundation-00 — Public Bootstrap` foi revisada e integrada em `main`.
+
+A próxima ação canônica é `F01-BOOTSTRAP-01 — Inicializar Fundação Executável`.
 
 Não existe aplicação funcional. Nenhum banco, provedor de autenticação, deploy ou dado real foi conectado.
 

@@ -1,21 +1,22 @@
 # Current State — Compras
 
-**PROJECT_STATUS:** FOUNDATION_REVIEWED  
-**CURRENT_PHASE:** Foundation-00 — Public Bootstrap  
+**PROJECT_STATUS:** READY_FOR_EXECUTABLE_FOUNDATION  
+**CURRENT_PHASE:** F01 — Fundação Executável  
 **REPO_VISIBILITY:** PUBLIC  
 **APPLICATION_STATUS:** NOT_INITIALIZED  
 **DATABASE_STATUS:** NOT_PROVISIONED  
 **DEPLOYMENT_STATUS:** NOT_CONFIGURED  
 **REAL_DATA_ALLOWED:** NO  
-**CONTEXT_STATUS:** VALID_AFTER_REVIEW  
+**CONTEXT_STATUS:** VALID  
+**FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`  
 **BLOCKERS:** none  
 **MANUAL_ACTION_REQUIRED:** none
 
 ## Estado real
 
-A Foundation-00 foi revisada em red-team de produto, continuidade e segurança antes da promoção para `main`.
+A Foundation-00 foi revisada, endurecida e integrada à `main` pela PR #2.
 
-A revisão confirmou como baseline suficiente para iniciar a fundação executável:
+A baseline aprovada define:
 
 - visão do produto;
 - `Contratação` como entidade central;
@@ -33,9 +34,7 @@ A revisão confirmou como baseline suficiente para iniciar a fundação executá
 
 ## Red-team da Foundation-00
 
-A revisão encontrou um endurecimento necessário: em repositório público, o risco não se limita ao conteúdo commitado. Issues, PRs, reviews, GitHub Actions logs/summaries/artifacts e outras superfícies públicas também devem ser tratadas como potencialmente divulgáveis.
-
-`AGENTS.md`, `SECURITY.md`, `WORK_PROTOCOL.md` e `ADR-001` foram endurecidos para refletir essa regra.
+A revisão encontrou e corrigiu um gap de segurança: enquanto o repositório estiver público, o risco não se limita ao conteúdo commitado. Issues, PRs, reviews, GitHub Actions logs/summaries/artifacts e outras superfícies públicas também devem ser tratadas como potencialmente divulgáveis.
 
 Não foi identificado outro conflito material entre Project Design, Domain Model, Business Workflow, Security e Source of Truth que impeça o bootstrap técnico.
 
@@ -64,16 +63,17 @@ Enquanto o repositório permanecer público:
 
 ## Verificação da revisão
 
-- recuperação do estado real de `main`, branch `foundation-00` e PR #1: PASS;
-- validação dos blobs do `CONTEXT_MANIFEST` antes da revisão: PASS;
+- recuperação do estado real de `main`, branch e PR: PASS;
+- validação dos blobs do `CONTEXT_MANIFEST` antes e após hardening: PASS;
 - revisão cruzada Project Design × Domain Model × Workflow × Security × Source of Truth: PASS após hardening;
 - gate de informação pública/sensível no conteúdo da Foundation-00: PASS;
+- promoção para `main`: PASS via PR #2 / squash merge `40c3297094d700552896d2945e10b18b982186da`;
 - lint/typecheck/test/build: SKIPPED — aplicação ainda não inicializada;
 - browser: SKIPPED — não existe aplicação.
 
 ## Last good
 
-Ainda não existe `LAST_GOOD_COMMIT` de aplicação executável. A Foundation-00 revisada constitui a baseline documental para a próxima fase.
+Ainda não existe `LAST_GOOD_COMMIT` de aplicação executável. `40c3297094d700552896d2945e10b18b982186da` é a baseline documental aprovada.
 
 ## Próxima ação
 

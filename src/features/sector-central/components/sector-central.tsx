@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { demoSectorRecords, type SectorCentralRecord } from "../demo-data";
 import { filterSectorRecords, getSectorFilterOptions } from "../filtering";
@@ -30,6 +31,9 @@ function RecordTable({ records }: Readonly<{ records: SectorCentralRecord[] }>) 
             <tr key={record.id}>
               <td>
                 <strong className="record-id">{record.id}</strong>
+                <Link className="record-detail-link" href={`/contratacoes/${record.id}`}>
+                  Ver detalhe<span className="sr-only"> de {record.id}</span>
+                </Link>
               </td>
               <td className="object-cell">{record.object}</td>
               <td>{record.responsible}</td>
@@ -83,6 +87,10 @@ function RecordCards({ records }: Readonly<{ records: SectorCentralRecord[] }>) 
               <dd>{record.nextAction}</dd>
             </div>
           </dl>
+
+          <Link className="record-detail-link card-detail-link" href={`/contratacoes/${record.id}`}>
+            Abrir detalhe demonstrativo<span className="sr-only"> de {record.id}</span>
+          </Link>
         </article>
       ))}
     </div>

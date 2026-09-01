@@ -1,6 +1,6 @@
 # Context Manifest — Compras
 
-`CONTEXT_SCHEMA = 1`
+`CONTEXT_SCHEMA = 2`
 
 ## 1. Propósito
 
@@ -20,8 +20,9 @@ Ele não substitui as fontes detalhadas. Seu fast path é válido somente enquan
 | `docs/product/OPEN_QUESTIONS.md` | `145ef9fe301d5c35ad9455d04be5740dbba36a13` |
 | `docs/architecture/ARCHITECTURE.md` | `a7544848c1eefcc54ec4537d3951e6b3559619d7` |
 | `docs/architecture/SECURITY.md` | `4c601c35585db74d62d1a8ae83cd3c996ae71630` |
+| `docs/architecture/DATABASE.md` | `8ab1478030152d58932577e1566fd34ff3a33b6a` |
 | `docs/qa/DEFINITION_OF_DONE.md` | `cd0e3d1f01333c418d4fb622940f908df2b87a57` |
-| `docs/ai/SOURCE_OF_TRUTH.md` | `dca5ef489d0fd32e70f3e157550c6b1eaed5e476` |
+| `docs/ai/SOURCE_OF_TRUTH.md` | `61aac1f38a93e2bd50ba60adc699e78826b9f8fa` |
 | `docs/ai/WORK_PROTOCOL.md` | `d76159c1687110607338d49767594d4fdfcc1aba` |
 
 ## 3. Validação
@@ -54,6 +55,20 @@ Antes de edição substantiva:
 - mudança relevante deve ser rastreável;
 - arquivamento/cancelamento não apaga histórico;
 - evidência de preço escolhida deve preservar proveniência e snapshot histórico.
+
+### Persistência
+
+- PostgreSQL relacional e portátil;
+- IDs internos `uuid` independem de identificadores administrativos externos;
+- dados operacionais são escopados por equipe e referências críticas devem preservar mesmo escopo;
+- `app_users` e `memberships` permanecem separados; membership não implica papel/permissão final;
+- identidade externa é mapeada por `issuer + subject`, sem assumir subject globalmente único;
+- etapa/status/tipos ainda abertos usam chaves `text`, sem `ENUM` físico prematuro;
+- estado atual estruturado e `contracting_events` append-only coexistem;
+- núcleo não usa `jsonb` como substituto de relações conhecidas;
+- primeira migration nasce com RLS/default-deny, sem policy permissiva baseada em Auth ainda inexistente;
+- futuras mutações rastreáveis devem atualizar estado + evento atomicamente e não depender de CRUD direto amplo do cliente;
+- constraints quantitativas não são inventadas sem fonte de negócio aprovada.
 
 ### Pesquisa pública
 

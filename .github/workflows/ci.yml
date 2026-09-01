@@ -69,10 +69,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Apply database foundation
-        run: psql -v ON_ERROR_STOP=1 -f database/migrations/0001_core_foundation.sql
-
-      - name: Run database tests
+      - name: Verify 0001 default-deny foundation
         run: |
+          psql -v ON_ERROR_STOP=1 -f database/migrations/0001_core_foundation.sql
           psql -v ON_ERROR_STOP=1 -f database/tests/core_foundation.sql
           psql -v ON_ERROR_STOP=1 -f database/tests/scope_integrity_red_team.sql
+
+      - name: Verify 0001 + 0002 trusted read policies
+        run: |
+          createdb compras_read_ci
+          PGDATABASE=compras_read_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0001_core_foundation.sql
+          PGDATABASE=compras_read_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0002_trusted_identity_read_policies.sql
+          PGDATABASE=compras_read_ci psql -v ON_ERROR_STOP=1 -f database/tests/trusted_identity_read_policies.sql

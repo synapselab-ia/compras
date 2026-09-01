@@ -1,31 +1,31 @@
-name: Bootstrap lockfile
+name: CI
 
 on:
   push:
     branches:
-      - f01-executable-foundation
+      - main
+  pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  verify-and-lock:
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
-      - name: Checkout without persisted credentials
+      - name: Checkout
         uses: actions/checkout@v6
-        with:
-          persist-credentials: false
 
       - name: Use Node.js 24 LTS
         uses: actions/setup-node@v7
         with:
           node-version: "24.x"
+          cache: npm
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install dependencies from lockfile
+        run: npm ci
 
       - name: Lint
         run: npm run lint
@@ -38,16 +38,3 @@ jobs:
 
       - name: Build
         run: npm run build
-
-      - name: Commit generated lockfile when changed
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ -z "$(git status --porcelain -- package-lock.json)" ]; then
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package-lock.json
-          git commit -m "chore: add reproducible npm lockfile"
-          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_REF_NAME}"

@@ -9,11 +9,12 @@ Este documento define precedência quando artefatos discordarem.
 3. ADRs aceitos — decisões arquiteturais compatíveis com o produto;
 4. `docs/product/DOMAIN_MODEL.md` e `docs/product/BUSINESS_WORKFLOW.md` — semântica de domínio e fluxo;
 5. `docs/architecture/SECURITY.md` — política mínima de segurança e classificação;
-6. especificação/work item ativo e `docs/ai/NEXT_ACTION.md` — escopo de execução;
-7. migrations e testes automatizados — contrato executável do estado implementado;
-8. código da aplicação;
-9. `docs/ai/CURRENT_STATE.md` — cursor operacional, sem poder de reescrever produto;
-10. memória do chat/assunções da IA.
+6. `docs/architecture/DATABASE.md` — desenho de persistência, subordinado às fontes anteriores;
+7. especificação/work item ativo e `docs/ai/NEXT_ACTION.md` — escopo de execução;
+8. migrations e testes automatizados — contrato executável do estado implementado;
+9. código da aplicação;
+10. `docs/ai/CURRENT_STATE.md` — cursor operacional, sem poder de reescrever produto;
+11. memória do chat/assunções da IA.
 
 ## Regra de conflito
 
@@ -23,6 +24,8 @@ Classificar como:
 
 - defeito de implementação → corrigir código/testes/migration; ou
 - mudança deliberada de produto/arquitetura → atualizar fonte canônica/ADR na mesma work unit e depois implementação.
+
+`DATABASE.md` não resolve silenciosamente open questions e não supera Project Design, Domain Model ou Security.
 
 ## Questões abertas
 
@@ -40,9 +43,11 @@ Esses arquivos não superam o Project Design nem decisões arquiteturais.
 
 ## Banco
 
-Quando implementação persistente começar, migrations são a única história canônica do schema.
+Antes da primeira migration, `docs/architecture/DATABASE.md` descreve o desenho pretendido.
 
-Correções usam novas migrations; alterações feitas apenas por painel não constituem solução permanente.
+Quando implementação persistente começar, migrations são a história canônica do schema aplicado. Correções usam novas migrations; alterações feitas apenas por painel não constituem solução permanente.
+
+Divergência entre `DATABASE.md` e schema aplicado deve ser reconciliada por documentação ou nova decisão/migration, sem reescrever migration já aplicada.
 
 ## Segurança
 

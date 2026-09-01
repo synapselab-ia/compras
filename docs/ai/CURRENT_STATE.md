@@ -1,80 +1,79 @@
 # Current State — Compras
 
-**PROJECT_STATUS:** READY_FOR_EXECUTABLE_FOUNDATION  
-**CURRENT_PHASE:** F01 — Fundação Executável  
+**PROJECT_STATUS:** READY_FOR_SECTOR_CENTRAL_PROTOTYPE  
+**CURRENT_PHASE:** F02 — Central do Setor Prototype  
 **REPO_VISIBILITY:** PUBLIC  
-**APPLICATION_STATUS:** NOT_INITIALIZED  
+**APPLICATION_STATUS:** EXECUTABLE_FOUNDATION  
 **DATABASE_STATUS:** NOT_PROVISIONED  
+**AUTH_STATUS:** NOT_IMPLEMENTED  
 **DEPLOYMENT_STATUS:** NOT_CONFIGURED  
 **REAL_DATA_ALLOWED:** NO  
 **CONTEXT_STATUS:** VALID  
 **FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`  
+**LAST_GOOD_COMMIT:** `c2e756cecdbbbc1e3b43a1cb8da570dcf4fe04b5`  
+**LAST_GOOD_CI_RUN:** `33541243573`  
 **BLOCKERS:** none  
 **MANUAL_ACTION_REQUIRED:** none
 
 ## Estado real
 
-A Foundation-00 foi revisada, endurecida e integrada à `main` pela PR #2.
+A work unit `F01-BOOTSTRAP-01` foi concluída e integrada à `main` pela PR #3.
 
-A baseline aprovada define:
+A aplicação agora possui uma fundação executável mínima com:
 
-- visão do produto;
-- `Contratação` como entidade central;
-- Central do Setor como experiência principal;
-- separação entre etapa, status, responsável, aguardando e próxima ação;
-- modelo de domínio inicial;
-- workflow público sanitizado;
-- questões abertas preservadas sem inferência;
-- arquitetura de referência;
-- baseline de segurança;
-- Definition of Done;
-- protocolo FLOW-IA;
-- fast context por manifest;
-- regra de uma `NEXT_ACTION` por sessão.
+- Next.js App Router e React;
+- TypeScript em modo estrito;
+- CSS global mínimo, sem design system prematuro;
+- shell inicial neutro, sem dados operacionais;
+- módulo compartilhado mínimo fora da camada React;
+- teste unitário real com Vitest;
+- ESLint configurado para a cadeia atual do Next.js;
+- scripts reais de `lint`, `typecheck`, `test` e `build`;
+- `package-lock.json` canônico;
+- CI read-only com `npm ci` em Pull Requests e pushes na `main`;
+- README técnico com instruções reproduzíveis.
 
-## Red-team da Foundation-00
+## Ajustes descobertos pela verificação
 
-A revisão encontrou e corrigiu um gap de segurança: enquanto o repositório estiver público, o risco não se limita ao conteúdo commitado. Issues, PRs, reviews, GitHub Actions logs/summaries/artifacts e outras superfícies públicas também devem ser tratadas como potencialmente divulgáveis.
+A implementação inicial tentou versões mais novas do tooling e a própria CI revelou incompatibilidades upstream:
 
-Não foi identificado outro conflito material entre Project Design, Domain Model, Business Workflow, Security e Source of Truth que impeça o bootstrap técnico.
+- TypeScript 7 não era suportado pela cadeia atual de `typescript-eslint` usada pelo `eslint-config-next`;
+- ESLint 10 ainda conflitava com `eslint-plugin-react` transitivo do `eslint-config-next`.
 
-## Guardrail de visibilidade
+Nenhum bypass foi aplicado. A fundação foi estabilizada em TypeScript `6.0.2` e ESLint `9.39.5`, mantendo os demais gates ativos.
 
-Enquanto o repositório permanecer público:
+## Verificação de F01
 
-- somente dados fictícios/sanitizados;
-- nenhum documento interno real;
-- nenhum processo real sensível;
-- nenhuma credencial;
-- nenhum segredo;
-- nenhuma fixture derivada de dado interno;
-- nenhum dado sensível em Issues/PRs/comments/workflow logs/artifacts.
+- recuperação do estado real e validação do `CONTEXT_MANIFEST`: PASS;
+- documentação oficial atual das ferramentas externas: CONSULTADA;
+- instalação inicial e geração do lockfile em ambiente limpo: PASS;
+- `npm ci` a partir do lockfile: PASS;
+- lint: PASS;
+- typecheck: PASS;
+- teste unitário: PASS;
+- build: PASS;
+- CI da PR #3: PASS — run `33541085153`;
+- CI da `main` após merge: PASS — run `33541243573`;
+- red-team do diff e gate de conteúdo público/sensível: PASS;
+- browser visual: SKIPPED — não houve execução em navegador nesta work unit; nenhuma conclusão de fidelidade visual é declarada.
 
-## Ainda não feito
+## Segurança e limites atuais
 
-- nenhuma aplicação Next.js criada;
-- nenhuma dependência instalada;
-- nenhum banco criado/conectado;
-- nenhuma autenticação implementada;
-- nenhuma migration;
-- nenhuma integração com fonte pública;
-- nenhum deploy;
-- nenhuma importação de planilha/dado real.
+O repositório continua público e a aplicação ainda não possui autenticação. Portanto:
 
-## Verificação da revisão
+- somente dados fictícios/sanitizados podem existir na aplicação, testes, Issues, PRs, logs e artifacts;
+- nenhum uso operacional com dados reais é permitido;
+- não existe banco, Auth, RLS, deploy ou integração externa;
+- a fundação executável não deve ser confundida com ambiente autorizado para informações internas.
 
-- recuperação do estado real de `main`, branch e PR: PASS;
-- validação dos blobs do `CONTEXT_MANIFEST` antes e após hardening: PASS;
-- revisão cruzada Project Design × Domain Model × Workflow × Security × Source of Truth: PASS após hardening;
-- gate de informação pública/sensível no conteúdo da Foundation-00: PASS;
-- promoção para `main`: PASS via PR #2 / squash merge `40c3297094d700552896d2945e10b18b982186da`;
-- lint/typecheck/test/build: SKIPPED — aplicação ainda não inicializada;
-- browser: SKIPPED — não existe aplicação.
+## Context manifest
+
+Os inputs estáveis do `CONTEXT_MANIFEST` não foram alterados por F01. O manifest permanece válido.
 
 ## Last good
 
-Ainda não existe `LAST_GOOD_COMMIT` de aplicação executável. `40c3297094d700552896d2945e10b18b982186da` é a baseline documental aprovada.
+`c2e756cecdbbbc1e3b43a1cb8da570dcf4fe04b5` é o primeiro `LAST_GOOD_COMMIT` de aplicação executável, validado pela CI da `main`.
 
 ## Próxima ação
 
-Executar `F01-BOOTSTRAP-01` conforme `docs/ai/NEXT_ACTION.md` e `tasks/F01-BOOTSTRAP-01/SPEC.md`.
+Executar `F02-CENTRAL-PROTOTYPE-01` conforme `docs/ai/NEXT_ACTION.md` e `tasks/F02-CENTRAL-PROTOTYPE-01/SPEC.md`.

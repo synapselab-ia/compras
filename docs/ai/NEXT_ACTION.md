@@ -1,50 +1,53 @@
 # Next Action — Compras
 
-## F01-BOOTSTRAP-01 — Inicializar Fundação Executável
+## F02-CENTRAL-PROTOTYPE-01 — Prototipar Central do Setor com dados fictícios
 
-**Classe:** `T5 — arquitetura/fundação`  
+**Classe:** `T1 — feature/protótipo`  
 **Estado:** READY  
-**Objetivo:** transformar a baseline documental aprovada em uma aplicação mínima executável, testável e validável, sem introduzir ainda dados internos, banco, autenticação, deploy ou regras de negócio não resolvidas.
+**Objetivo:** transformar o shell neutro em um primeiro protótipo utilizável da visão compartilhada do setor, suficiente para validar organização da informação e reduzir incerteza de produto antes de banco, autenticação e regras definitivas.
 
 ## Fonte da tarefa
 
-Executar conforme `tasks/F01-BOOTSTRAP-01/SPEC.md`.
+Executar conforme `tasks/F02-CENTRAL-PROTOTYPE-01/SPEC.md`.
 
 ## Resultado esperado
 
-Ao final, o repositório deve conter uma aplicação web mínima que:
+Ao final, a aplicação deve permitir avaliar a experiência principal do produto usando somente dados obviamente fictícios e memória local/estática:
 
-- possa ser instalada de forma reproduzível;
-- compile em TypeScript estrito;
-- possua scripts reais de lint, typecheck, test e build;
-- tenha uma página inicial neutra, sem dados reais;
-- possua CI no GitHub executando os gates aplicáveis com dados exclusivamente fictícios/sanitizados;
-- preserve a arquitetura modular e os guardrails da Foundation-00;
-- não dependa de Neon, Vercel, Auth ou qualquer banco para funcionar localmente.
+- visualizar em uma única tela o trabalho de todo o setor fictício;
+- localizar rapidamente uma contratação por busca;
+- identificar responsável, etapa, status, aguardando, próxima ação e última movimentação;
+- aplicar filtros operacionais simples;
+- preservar uma apresentação densa no desktop e deliberada em telas menores;
+- deixar claro na própria interface que se trata de protótipo sem dados reais e sem persistência.
 
 ## Regras obrigatórias
 
-Antes de implementar:
-
-- verificar documentação oficial atual do Next.js e ferramentas externas adotadas;
-- inspecionar a branch `main` e evitar sobrescrever trabalho concorrente;
-- tratar o repositório como público em todos os writes, logs e artifacts;
-- registrar decisão arquitetural somente se surgir escolha estrutural material não coberta pela Foundation-00.
+- não resolver silenciosamente as taxonomias abertas de etapas/status; valores usados no protótipo são provisórios;
+- não definir ainda limites automáticos de processo parado;
+- não criar banco, autenticação, RLS ou integração externa;
+- não incluir números, objetos, nomes, setores, empresas ou qualquer dado derivado de processo real;
+- usar identificadores e pessoas genéricas como `DEMO-001` e `Pessoa A`;
+- lógica de busca/filtro deve ser testável fora de componentes React quando fizer sentido;
+- manter o repositório público seguro em todas as superfícies;
+- executar lint, typecheck, testes e build antes de promoção.
 
 ## Fora do escopo
 
 Não:
 
-- provisionar Neon;
-- criar schema/migrations de negócio;
-- implementar autenticação/RLS;
-- configurar Vercel;
-- importar planilhas ou dados reais;
-- cadastrar contratação real;
-- integrar PNCP/Compras.gov;
-- resolver Q-001 a Q-012 por conveniência;
-- implementar telas funcionais da Central do Setor além de um shell neutro necessário à fundação.
+- cadastro/edição persistente de contratação;
+- banco ou migrations;
+- login/permissões;
+- importação de planilhas;
+- documentos reais;
+- PNCP/Compras.gov;
+- pesquisa de preços;
+- regra de ±25%;
+- alertas definitivos de inatividade;
+- fechar Q-001, Q-002, Q-004 ou Q-005 por inferência;
+- deploy de produção.
 
 ## Critério de encerramento
 
-A tarefa só pode ser promovida quando os gates definidos no SPEC tiverem sido realmente executados e registrados, o diff público estiver livre de dados sensíveis e `CURRENT_STATE`/`NEXT_ACTION` refletirem o Git real.
+A tarefa termina quando o protótipo da Central do Setor estiver implementado com dados estritamente fictícios, sua lógica relevante estiver testada, os gates de engenharia passarem, o diff tiver sido red-teamado e o checkpoint canônico apontar exatamente uma nova `NEXT_ACTION`.

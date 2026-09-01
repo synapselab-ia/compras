@@ -4,18 +4,16 @@ Sistema em desenvolvimento para organizar fluxos de contratações públicas, ce
 
 ## Estado atual
 
-O projeto está na fase **F01 — Fundação Executável**.
+A **F01 — Fundação Executável** foi concluída e validada. O projeto está agora em **F02 — Central do Setor Prototype**.
 
-A aplicação desta fase é deliberadamente neutra: não possui banco, autenticação, integração externa ou dados operacionais reais. O repositório continua público e somente conteúdo sanitizado pode ser publicado.
+A aplicação possui uma base mínima executável e reproduzível, mas ainda não possui banco, autenticação, integração externa, deploy operacional ou dados reais. O repositório continua público e somente conteúdo sanitizado/fictício pode ser publicado.
 
 ## Requisitos locais
 
-- Node.js 24 LTS ou superior suportado pelo projeto;
+- Node.js 24 LTS ou versão compatível com o `engines` do projeto;
 - npm.
 
 ## Instalação
-
-Após a inclusão do lockfile canônico:
 
 ```bash
 npm ci
@@ -34,7 +32,7 @@ npm start
 
 `typecheck` executa `next typegen` antes do TypeScript para manter os tipos de rotas/framework atualizados.
 
-## Stack da fundação
+## Stack atual
 
 - Next.js App Router;
 - React;
@@ -42,11 +40,13 @@ npm start
 - CSS global mínimo, sem design system prematuro;
 - ESLint com `eslint-config-next`;
 - Vitest para testes unitários;
-- GitHub Actions para CI.
+- GitHub Actions com instalação reproduzível por `npm ci`.
 
 ## Segurança desta fase
 
 Nenhum secret é necessário para instalar, testar ou compilar a aplicação. Não use dados reais, documentos internos ou informações pré-publicação em código, fixtures, Issues, PRs, logs ou artifacts enquanto o repositório estiver público.
+
+A ausência de autenticação nesta fase significa que **nenhum dado operacional real é permitido**. O próximo protótipo usa apenas registros artificiais e explicitamente demonstrativos.
 
 ## Continuidade por IA
 

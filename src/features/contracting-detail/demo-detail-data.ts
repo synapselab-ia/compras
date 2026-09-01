@@ -1,4 +1,4 @@
-import { demoSectorRecords, type SectorCentralRecord } from "@/features/sector-central/demo-data";
+import { demoSectorRecords, type SectorCentralRecord } from "../sector-central/demo-data";
 
 export type DemoRelatedIdentifier = {
   label: string;

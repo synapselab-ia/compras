@@ -27,7 +27,7 @@ BEGIN
       RETURN NULL;
   END;
 
-  RETURN NULLIF(btrim(claims ->> 'iss'), '');
+  RETURN NULLIF(claims ->> 'iss', '');
 END;
 $$;
 
@@ -55,7 +55,7 @@ BEGIN
       RETURN NULL;
   END;
 
-  RETURN NULLIF(btrim(claims ->> 'sub'), '');
+  RETURN NULLIF(claims ->> 'sub', '');
 END;
 $$;
 

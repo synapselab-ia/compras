@@ -1,7 +1,7 @@
 # F02-CENTRAL-PROTOTYPE-01 — Central do Setor com dados fictícios
 
 **Classe:** T1 — feature/protótipo  
-**Estado:** READY  
+**Estado:** DONE — integrada pela PR #4  
 **Dependência:** F01-BOOTSTRAP-01 concluída  
 **Classificação dos dados permitidos:** PUBLIC / FICTITIOUS ONLY
 
@@ -173,3 +173,7 @@ Browser deve ser verificado quando houver ferramenta/ambiente adequado. Se não 
 ## 11. Não decidido nesta work unit
 
 A eventual aprovação visual/operacional do protótipo não autoriza uso com dados reais. Banco, autenticação, RLS, infraestrutura e política de dados permanecem gates próprios posteriores.
+
+## 12. Resultado da execução
+
+Implementada e promovida em `main` pela PR #4. Gates de CI passaram na PR e novamente após merge; browser visual permaneceu `SKIPPED` por indisponibilidade de ambiente adequado.

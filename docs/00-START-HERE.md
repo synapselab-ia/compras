@@ -8,13 +8,13 @@ O sistema não substitui os sistemas oficiais de processo administrativo, requis
 
 ## Estado atual
 
-A `Foundation-00 — Public Bootstrap` foi revisada e integrada em `main`.
+A `Foundation-00`, a `F01 — Fundação Executável` e a `F02 — Central do Setor Prototype` foram revisadas, validadas e integradas em `main`.
 
-A próxima ação canônica é `F01-BOOTSTRAP-01 — Inicializar Fundação Executável`.
+Existe agora uma aplicação executável com uma Central do Setor demonstrativa: busca, filtros e visualização responsiva sobre registros exclusivamente fictícios. Não existe banco, autenticação, persistência operacional, integração externa ou deploy de produção.
 
-Não existe aplicação funcional. Nenhum banco, provedor de autenticação, deploy ou dado real foi conectado.
+A próxima ação canônica é `F03-CONTRATACAO-DETAIL-PROTOTYPE-01 — Prototipar detalhe navegável da contratação demo`.
 
-O repositório está público. Aplicam-se integralmente as restrições de publicação de `AGENTS.md` e `docs/architecture/SECURITY.md`.
+O repositório está público. Aplicam-se integralmente as restrições de publicação de `AGENTS.md` e `docs/architecture/SECURITY.md`; nenhum dado real ou pré-publicação pode ser usado no protótipo.
 
 ## Fonte de verdade
 

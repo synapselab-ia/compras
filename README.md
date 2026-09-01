@@ -4,9 +4,9 @@ Sistema em desenvolvimento para organizar fluxos de contratações públicas, ce
 
 ## Estado atual
 
-A **F01 — Fundação Executável** foi concluída e validada. O projeto está agora em **F02 — Central do Setor Prototype**.
+A **F02 — Central do Setor Prototype** foi concluída e validada. O projeto está agora preparado para **F03 — Detalhe da Contratação Prototype**.
 
-A aplicação possui uma base mínima executável e reproduzível, mas ainda não possui banco, autenticação, integração externa, deploy operacional ou dados reais. O repositório continua público e somente conteúdo sanitizado/fictício pode ser publicado.
+A aplicação possui uma Central demonstrativa com registros exclusivamente fictícios, busca, filtros e estratégia responsiva. Ainda não existem banco, autenticação, persistência operacional, integração externa, deploy de produção ou dados reais. O repositório continua público e somente conteúdo sanitizado/fictício pode ser publicado.
 
 ## Requisitos locais
 
@@ -42,11 +42,24 @@ npm start
 - Vitest para testes unitários;
 - GitHub Actions com instalação reproduzível por `npm ci`.
 
+## Protótipo atual
+
+A home representa a Central do Setor com dados `DEMO-*` e permite:
+
+- visualizar trabalho demonstrativo em uma tela;
+- buscar por identificador, objeto e responsável;
+- filtrar por responsável, etapa e status demonstrativos;
+- limpar filtros e recuperar a visão completa;
+- visualizar feedback de zero resultados;
+- usar tabela densa em desktop e cards em telas menores.
+
+Os valores de etapa/status são provisórios de demonstração e não constituem taxonomia aprovada.
+
 ## Segurança desta fase
 
 Nenhum secret é necessário para instalar, testar ou compilar a aplicação. Não use dados reais, documentos internos ou informações pré-publicação em código, fixtures, Issues, PRs, logs ou artifacts enquanto o repositório estiver público.
 
-A ausência de autenticação nesta fase significa que **nenhum dado operacional real é permitido**. O próximo protótipo usa apenas registros artificiais e explicitamente demonstrativos.
+A ausência de autenticação significa que **nenhum dado operacional real é permitido**. O protótipo atual e as próximas slices desta fase usam apenas registros artificiais e explicitamente demonstrativos.
 
 ## Continuidade por IA
 

@@ -1,89 +1,92 @@
 # Current State — Compras
 
-**PROJECT_STATUS:** READY_FOR_DB_CORE_SCHEMA  
-**CURRENT_PHASE:** F05 — DB Core Schema  
+**PROJECT_STATUS:** READY_FOR_TRUSTED_IDENTITY_RLS_DESIGN  
+**CURRENT_PHASE:** F06 — Trusted Identity / RLS Design  
 **REPO_VISIBILITY:** PUBLIC  
 **APPLICATION_STATUS:** CENTRAL_AND_DETAIL_PROTOTYPE  
-**DATABASE_STATUS:** DESIGNED_NOT_APPLIED  
+**DATABASE_STATUS:** CORE_SCHEMA_VALIDATED_IN_EPHEMERAL_CI  
 **AUTH_STATUS:** NOT_IMPLEMENTED  
 **DEPLOYMENT_STATUS:** NOT_CONFIGURED  
 **REAL_DATA_ALLOWED:** NO  
 **CONTEXT_STATUS:** VALID  
 **FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`  
-**LAST_GOOD_COMMIT:** `b5ddfd6d00a196164413bdba2fe9ead719bf71ac`  
-**LAST_GOOD_CI_RUN:** `33546364117`  
+**LAST_GOOD_COMMIT:** `e5118957cd1714bfd6a34dd693e62217f2e1a16d`  
+**LAST_GOOD_CI_RUN:** `33547862171`  
 **BLOCKERS:** none  
 **MANUAL_ACTION_REQUIRED:** none
 
 ## Estado real
 
-A work unit `F04-PERSISTENCE-FOUNDATION-DESIGN-01` foi concluída e integrada à `main` pela PR #6.
+A work unit `F05-DB-CORE-SCHEMA-01` foi concluída e integrada à `main` pela PR #7.
 
-O repositório agora possui uma fundação de persistência canônica, ainda não aplicada:
+O repositório agora possui a primeira fundação executável de persistência, ainda sem provedor externo:
 
-- `docs/architecture/DATABASE.md` define o núcleo PostgreSQL relacional e portátil;
-- ADR-002 registra as decisões estruturais de persistência/default-deny;
-- `Contratação` permanece a raiz operacional;
-- `teams`, `app_users` e `memberships` separam escopo, identidade e autorização;
-- identidade externa é modelada por `issuer + subject`, sem assumir subject globalmente único;
-- responsáveis/atores e subentidades usam relações compostas para impedir referência cross-team/cross-contracting quando aplicável;
-- etapa, status e tipos de identificador permanecem `text` sem `ENUM` físico enquanto as taxonomias estiverem abertas;
-- estado atual e `contracting_events` append-only são separados;
-- arquivamento/cancelamento/revogação/desvínculo/retirada preservam registro em vez de exclusão silenciosa;
-- RLS nasce como default-deny e nenhuma policy permissiva depende de Auth ainda inexistente;
-- a primeira implementação de banco será PostgreSQL descartável em CI, sem banco hospedado ou segredo externo.
+- `database/migrations/0001_core_foundation.sql` cria `teams`, `app_users`, `memberships`, `contractings`, `related_identifiers`, `contracting_items` e `contracting_events`;
+- identidade externa permanece `auth_issuer + auth_subject`, separada de membership/autorização;
+- responsáveis, criadores, atores, itens e identificadores usam FKs compostas quando necessário para impedir relações cross-team/cross-contracting;
+- cardinalidade múltipla de identificadores por contratação permanece permitida;
+- `stage_key`, `status_key`, `identifier_kind` e `event_type` permanecem extensíveis em `text`, sem `ENUM` físico;
+- nenhuma regra de sinal/faixa/precisão de `quantity` foi inventada;
+- RLS está habilitada e forçada nas sete tabelas internas;
+- a migration não cria policy permissiva e revoga privilégios de tabela de `PUBLIC`;
+- um papel operacional existe somente nos testes descartáveis e recebe grants DML apenas para provar enforcement real de RLS;
+- a CI sobe PostgreSQL efêmero, aplica a migration do zero e executa testes adversariais antes dos gates da aplicação.
 
-Nenhuma migration foi aplicada e nenhuma aplicação está conectada a banco.
+A aplicação continua sem conexão real com banco. Não há Auth, Data API operacional, policy de leitura para membership, banco hospedado nem dados reais.
 
-## Verificação de F04
+## Verificação de F05
 
-- recuperação de `main`, branches e PRs: PASS;
-- leitura direta das fontes obrigatórias de produto, domínio, open questions, arquitetura, segurança e DoD: PASS;
-- validação do `CONTEXT_MANIFEST` antes da edição: PASS;
-- coerência cruzada do desenho com Project Design/Domain/Security/Open Questions: PASS após red-team;
-- red-team estrutural e de segurança: PASS após correções;
-- CI final da PR #6: PASS — run `33546289585`;
-- CI da `main` após squash merge: PASS — run `33546364117`;
+- recuperação do estado real de `main`, branches e PRs: PASS;
+- validação do `CONTEXT_MANIFEST` contra blobs estáveis: PASS;
+- leitura direta de `DATABASE.md`, `SECURITY.md`, ADR-002, DoD e SPEC da F05: PASS;
+- migration em PostgreSQL 17 descartável: PASS;
+- integridade cross-team/cross-contracting: PASS;
+- cardinalidade N de identificadores: PASS;
+- ordinal duplicado por contratação: rejeitado como esperado;
+- ausência deliberada de constraint quantitativa inventada: PASS;
+- RLS habilitada + `FORCE ROW LEVEL SECURITY` nas sete tabelas: PASS;
+- zero policies permissivas na fundação: PASS;
+- papel operacional de teste com grants não lê linhas e não contorna RLS conhecendo UUID: PASS;
+- INSERT/UPDATE/DELETE sob papel operacional sem policy: bloqueados/sem linhas afetadas como esperado;
+- imutabilidade operacional de `contracting_events`: PASS;
+- PR #7, CI final antes do merge: PASS — run `33547766053`;
+- CI da `main` após squash merge: PASS — run `33547862171`;
 - `npm ci`: PASS;
 - lint: PASS;
 - typecheck: PASS;
-- testes da aplicação existentes: PASS;
+- testes da aplicação: PASS;
 - build: PASS;
-- migrations/testes de banco: SKIPPED — ainda não existem por definição da F04;
-- banco/Auth/RLS externo: SKIPPED — explicitamente fora do escopo;
 - dados reais/internos/sensíveis no diff: NÃO ENCONTRADOS;
-- dependências novas: nenhuma.
+- banco/Auth externo: SKIPPED — explicitamente fora do escopo.
 
 ## Red-team e correções
 
-A revisão adversarial encontrou e corrigiu antes da promoção:
+A revisão adversarial da F05 encontrou e corrigiu antes da promoção:
 
-1. **Regra quantitativa inventada:** o primeiro desenho tratava ordinal/quantidade positiva como constraint sem fonte aprovada. A fundação foi corrigida para não codificar faixa, sinal ou precisão de quantidade por convenção técnica.
-2. **Identidade externa ambígua:** `auth_subject` isolado foi substituído conceitualmente por `auth_issuer + auth_subject`, evitando assumir unicidade global entre provedores.
-3. **Integridade histórica:** referências de eventos para item/identificador passaram a exigir desenho composto de equipe + contratação + subentidade, impedindo associação histórica cruzada.
-4. **Teste de RLS:** ficou explícito que grants amplos usados para exercitar RLS pertencem somente ao papel/ambiente de teste; a migration de produção mantém grants mínimos.
-5. **Owner não prova segurança:** papel de migration/owner permanece separado do papel operacional e BYPASSRLS não serve como evidência de autorização.
+1. **Cleanup do papel operacional de teste:** a primeira execução validou os checks, mas falhou ao remover o papel por ACLs remanescentes. O teste passou a executar `DROP OWNED` antes de `DROP ROLE` e a CI ficou verde.
+2. **Cobertura de FKs compostas:** a suíte foi ampliada para tentar também `created_by_membership_id` cross-team, evento ligado diretamente a contratação de outra equipe e evento apontando identificador de outra equipe.
+3. **RLS versus falta de grant:** o papel operacional recebe grants amplos somente no banco descartável de teste, garantindo que o resultado vazio/bloqueado prove RLS e não apenas `permission denied` por ausência de privilégio de tabela.
+4. **Regra quantitativa não aprovada:** um fixture artificial com quantidade negativa confirma que a fundação não introduziu positividade por convenção técnica.
+5. **Superfície pública:** migrations, testes, workflow e PR usam apenas UUIDs artificiais, issuer `.invalid` e textos `DEMO-*`; nenhum secret ou dado operacional foi publicado.
 
-Q-001, Q-002, Q-003, Q-004, Q-005, Q-006, Q-009 e Q-010 permanecem abertas. Nenhuma foi resolvida por conveniência de schema.
+Q-001, Q-002, Q-003, Q-004, Q-005, Q-006, Q-009 e Q-010 permanecem abertas. Nenhuma foi resolvida por conveniência da implementação.
 
 ## Segurança e limites atuais
 
-O repositório continua público e não há autenticação nem banco operacional. Portanto:
+O repositório continua público. A existência da migration e de RLS testada em PostgreSQL efêmero não autoriza uso com dados reais.
 
-- somente dados fictícios/sanitizados podem aparecer em código, migrations futuras, testes, Issues, PRs, logs e artifacts;
-- nenhum uso operacional com dados reais é permitido;
-- `DATABASE.md` é desenho, não evidência de enforcement aplicado;
-- RLS real só será considerada implementada após migration e testes adversariais passarem;
-- nenhuma identidade fornecida pelo cliente será tratada como confiável em produção.
+Antes de qualquer policy permissiva ou integração operacional é necessário derivar a identidade corrente de sessão/claim verificada, mapear essa identidade para `app_users` e membership ativa e provar que IDs fornecidos pelo cliente não ampliam acesso.
+
+A arquitetura mantém Neon como provedor de referência sujeito a revalidação oficial no momento da implementação. A próxima work unit é deliberadamente de pesquisa/desenho: não provisionará banco, Auth ou secret.
 
 ## Context manifest
 
-F04 adicionou `docs/architecture/DATABASE.md` ao `INPUT_MANIFEST` e atualizou `SOURCE_OF_TRUTH.md`. O manifest foi recompilado como `CONTEXT_SCHEMA = 2` e os blobs estáveis coincidem com o estado integrado.
+Os inputs estáveis do `CONTEXT_MANIFEST` não foram alterados pela F05. A validação realizada no início da work unit permanece válida; `CURRENT_STATE`, `NEXT_ACTION`, migration, testes e CI são lidos ao vivo pelo protocolo.
 
 ## Last good
 
-`b5ddfd6d00a196164413bdba2fe9ead719bf71ac` é o `LAST_GOOD_COMMIT` atual, validado pela CI da `main` run `33546364117`.
+`e5118957cd1714bfd6a34dd693e62217f2e1a16d` é o `LAST_GOOD_COMMIT`, validado pela CI da `main` run `33547862171` com os jobs `verify` e `database` em PASS.
 
 ## Próxima ação
 
-Executar `F05-DB-CORE-SCHEMA-01` conforme `docs/ai/NEXT_ACTION.md` e `tasks/F05-DB-CORE-SCHEMA-01/SPEC.md`.
+Executar `F06-TRUSTED-IDENTITY-RLS-DESIGN-01` conforme `docs/ai/NEXT_ACTION.md` e `tasks/F06-TRUSTED-IDENTITY-RLS-DESIGN-01/SPEC.md`.

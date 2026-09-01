@@ -8,11 +8,11 @@ O sistema não substitui os sistemas oficiais de processo administrativo, requis
 
 ## Estado atual
 
-A `Foundation-00`, a fundação executável, a Central do Setor, o detalhe demonstrativo e o desenho da fundação de persistência foram revisados e integrados em `main`.
+A `Foundation-00`, a fundação executável, a Central do Setor, o detalhe demonstrativo, o desenho de persistência e a primeira fundação executável de PostgreSQL foram revisados e integrados em `main`.
 
-Existe uma aplicação executável com jornada demonstrativa `Central → detalhe → Central`, exclusivamente com dados fictícios. O contrato de persistência PostgreSQL está documentado em `docs/architecture/DATABASE.md`, mas ainda não existe migration aplicada, banco hospedado, autenticação, persistência operacional ou deploy de produção.
+Existe uma aplicação executável com jornada demonstrativa `Central → detalhe → Central`, exclusivamente com dados fictícios. O núcleo relacional definido em `docs/architecture/DATABASE.md` agora possui a migration imutável `database/migrations/0001_core_foundation.sql`, testes adversariais de integridade/RLS e verificação em PostgreSQL descartável na CI. A fundação permanece `default-deny`: não há policy permissiva, Auth real, banco hospedado, persistência operacional da aplicação ou deploy de produção.
 
-A próxima ação canônica é `F05-DB-CORE-SCHEMA-01 — Primeira migration do núcleo e RLS default-deny`.
+A próxima ação canônica é `F06-TRUSTED-IDENTITY-RLS-DESIGN-01 — Revalidar Neon e especificar a fronteira de identidade/RLS`.
 
 O repositório está público. Aplicam-se integralmente as restrições de publicação de `AGENTS.md` e `docs/architecture/SECURITY.md`; nenhum dado real ou pré-publicação pode ser usado.
 

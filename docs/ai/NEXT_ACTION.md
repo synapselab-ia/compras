@@ -1,81 +1,86 @@
 # Next Action — Compras
 
-## F07-SERVER-IDENTITY-READ-RLS-01 — Contexto de identidade server-only e policies de leitura
+## F08-SERVER-TRUST-ADAPTER-01 — Integrar sessão server-side e contexto transacional
 
-**Classe:** `T2 — banco/segurança`  
+**Classe:** `T3 — integração externa` com impacto de `T2 — segurança`  
 **Estado:** READY  
-**Objetivo:** implementar e provar, somente em PostgreSQL descartável, a camada de identidade contextual e as primeiras policies permissivas de `SELECT` definidas por ADR-003, sem conectar Auth real, banco hospedado ou UI.
+**Objetivo:** implementar o primeiro adaptador server-only que use a API oficial atual do provedor de Auth para obter uma sessão validada, derive `issuer + subject` sem aceitar identidade do browser e estabeleça esse contexto `LOCAL` dentro de uma transação PostgreSQL compatível com ADR-003 e as policies de F07, sem provisionar infraestrutura nem expor login/signup nesta slice.
 
 ## Fonte da tarefa
 
-Executar conforme `tasks/F07-SERVER-IDENTITY-READ-RLS-01/SPEC.md` e `docs/decisions/ADR-003-trusted-identity-rls-boundary.md`.
+Executar conforme `tasks/F08-SERVER-TRUST-ADAPTER-01/SPEC.md` e `docs/decisions/ADR-003-trusted-identity-rls-boundary.md`.
 
 ## Resultado esperado
 
 Ao final, o repositório deve possuir:
 
-- nova migration ordenada, preferencialmente `database/migrations/0002_trusted_identity_read_policies.sql`;
-- helpers portáveis que leiam somente `issuer + subject` do contexto transacional estabelecido pelo servidor;
-- resolução do `app_user` corrente sem aceitar `user_id`, `membership_id` ou `team_id` do cliente;
-- policy de `app_users` que exponha apenas a própria identidade interna ativa sem recursão de RLS;
-- policies de `memberships` e `teams` baseadas em membership ativa;
-- policies `SELECT` de `contractings`, `related_identifiers`, `contracting_items` e `contracting_events` limitadas aos `team_id` autorizados;
-- zero policy permissiva de `INSERT`, `UPDATE` ou `DELETE`;
-- testes adversariais reproduzíveis com papel não owner e `NOBYPASSRLS`;
-- CI preservando a prova separada da fundação `0001` default-deny e validando `0001 + 0002`.
+- revalidação em documentação oficial atual das APIs server-side de Managed Better Auth e do driver PostgreSQL/Neon usados;
+- dependências externas somente se necessárias e confirmadas oficialmente no momento da execução;
+- módulo `server-only` que obtenha a sessão pela API oficial real do SDK e retorne identidade externa somente após validação bem-sucedida;
+- `auth_issuer` vindo exclusivamente de configuração confiável do servidor e `auth_subject` vindo da sessão validada;
+- nenhum parâmetro de browser capaz de escolher `issuer`, `subject`, `app_user_id`, `membership_id` ou `team_id`;
+- adaptador de banco server-only que abra a unidade transacional e defina `request.jwt.claims` com `SET LOCAL`/`set_config(..., true)` de forma parametrizada antes da consulta protegida;
+- conexão operacional planejada/instanciada sem owner, superuser ou `BYPASSRLS` como fluxo normal;
+- fail-closed quando sessão, issuer configurado, subject ou contexto transacional não puderem ser obtidos com segurança;
+- testes unitários/adversariais que provem a fronteira sem secrets ou recurso hospedado real;
+- nenhuma rota/UI de login ou signup e nenhuma leitura persistente apresentada ao usuário ainda.
 
 ## Regras obrigatórias
 
-- não reescrever `0001_core_foundation.sql`;
-- não instalar nem conectar `@neondatabase/auth` nesta slice;
-- não provisionar Neon, Data API, Vercel ou qualquer recurso externo;
-- não criar secret, cookie real, JWT real, connection string ou usuário real;
-- `request.jwt.claims` em teste é somente transporte artificial; não declarar que uma variável configurável por cliente SQL é identidade confiável;
-- helpers de identidade não recebem IDs de autorização como argumentos;
-- preferir `STABLE`, `SECURITY INVOKER` e `search_path` deliberado; não usar `SECURITY DEFINER` para contornar RLS;
-- não usar owner, superuser, `neondb_owner` ou `BYPASSRLS` como caminho normal ou prova de autorização;
-- Q-009 permanece aberta; membership ativa não cria perfil/role de edição;
-- Q-010 permanece aberta; não adicionar auditoria de leitura;
-- não criar auto-provisionamento de `app_users` ou memberships;
-- usar exclusivamente UUIDs e textos artificiais/sanitizados.
+- revalidar documentação oficial atual antes de afirmar comportamento do SDK/Auth/driver;
+- produção deve chamar a API real do SDK server-side; não criar um provider fictício como caminho principal;
+- testes podem usar mocks/fakes somente nas bordas externas;
+- não provisionar Neon, Auth, Data API, Vercel, banco ou recurso externo;
+- não criar, solicitar, versionar ou logar secret, cookie secret, JWT real ou connection string real;
+- variáveis de ambiente devem ser server-only e nunca possuir prefixo/exposição pública quando contiverem segredo;
+- não expor signup/login nesta slice;
+- não auto-provisionar `app_users` ou memberships;
+- não enviar membership/team/user interno para o contexto como identidade confiável;
+- contexto PostgreSQL deve ser local à transação e não sobreviver a reutilização de conexão;
+- SQL que estabelece contexto deve ser parametrizado; não interpolar claims em comando SQL;
+- não usar owner, `neondb_owner`, superuser ou `BYPASSRLS` como papel operacional;
+- não reduzir ou contornar as policies de F07;
+- Q-009 e Q-010 permanecem abertas;
+- usar somente fixtures fictícias/sanitizadas.
 
 ## Segurança mínima a provar
 
-- ausência de contexto autenticado resulta em zero linhas internas;
-- contexto ausente, incompleto, inválido ou identidade desconhecida falha fechado;
-- `app_user` desabilitado não recebe acesso;
-- usuário conhecido sem membership não lê equipes nem dados operacionais;
-- membership ativa permite apenas o próprio escopo;
-- membership revogada deixa de autorizar sem depender de novo login;
-- conhecer UUID válido de outra equipe não amplia acesso em nenhuma tabela operacional;
-- `app_users` não expõe outros usuários;
-- o papel operacional não consegue escrever por inexistência de policy/grant permissivo de escrita;
-- a policy de `app_users` não entra em recursão com helper de usuário corrente.
+- sessão ausente ou inválida não produz identidade externa utilizável;
+- issuer não pode ser escolhido por header, query, body, cookie arbitrário ou hostname fornecido pelo cliente;
+- subject não pode ser substituído por ID enviado pelo browser;
+- contexto de banco contém somente `iss + sub` derivados da fronteira confiável;
+- falha ao estabelecer transação/contexto impede a consulta protegida;
+- o contexto é `LOCAL` e não vaza entre duas operações consecutivas/reutilização de conexão em teste;
+- nenhum secret/connection string aparece em bundle client-side, fixture, log ou erro serializado;
+- um chamador não consegue injetar `team_id`, `membership_id` ou `app_user_id` para ampliar escopo;
+- adapter não funciona com role owner/BYPASSRLS como configuração normal;
+- signup público continua não exposto.
 
 ## Verificação obrigatória
 
-- migrations `0001 + 0002` aplicadas em PostgreSQL descartável: PASS;
-- prova isolada do estado default-deny de `0001`: PASS;
-- suíte adversarial de leitura/RLS: PASS;
-- red-team de policies, grants, funções e fixtures: PASS;
+- documentação oficial atual consultada e registrada quando houver mudança material;
+- testes do adaptador de identidade: PASS;
+- testes do contexto transacional: PASS;
+- red-team de inputs, env, sessão, SQL e reutilização de conexão: PASS;
+- migrations `0001 + 0002` e testes de RLS continuam PASS;
 - `npm ci`: PASS;
 - lint: PASS;
 - typecheck: PASS;
-- testes da aplicação: PASS;
+- testes: PASS;
 - build: PASS;
 - CI: PASS;
-- nenhum secret, dado real ou recurso externo no diff.
+- diff integral sem secret, dado real ou recurso externo provisionado.
 
 ## Fora do escopo
 
 Não:
 
-- Auth/login/signup real;
-- controle de admissão/convite;
-- banco hospedado;
-- Data API operacional;
-- integração server-side com sessão real;
-- CRUD persistente da aplicação;
+- provisionar projeto Neon/Auth;
+- usar credencial real;
+- login/signup UI;
+- controle de convite/admissão definitivo;
+- conectar a Central/detalhe a dados persistentes reais;
+- criar auto-provisionamento de usuário/membership;
 - policy de escrita ou RPC de mutação;
 - perfis/roles da Q-009;
 - auditoria de leitura da Q-010;
@@ -84,4 +89,4 @@ Não:
 
 ## Critério de encerramento
 
-A tarefa termina quando a camada PostgreSQL de leitura autorizada estiver reproduzível em CI, todos os cenários adversariais previstos passarem sem papel privilegiado, a fundação `0001` continuar verificável e o checkpoint deixar exatamente uma nova `NEXT_ACTION` executável para a próxima fronteira necessária.
+A tarefa termina quando o caminho de produção server-only estiver codificado contra as APIs oficiais atuais, sessão validada for convertida exclusivamente em `issuer + subject`, o contexto transacional for estabelecido de forma local e parametrizada, os testes adversariais provarem fail-closed sem recurso hospedado e existir exatamente uma nova `NEXT_ACTION` executável para conectar uma leitura real da aplicação ou resolver um bloqueio objetivo encontrado.

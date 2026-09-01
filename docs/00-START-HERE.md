@@ -8,13 +8,13 @@ O sistema não substitui os sistemas oficiais de processo administrativo, requis
 
 ## Estado atual
 
-A `Foundation-00`, a fundação executável, a Central do Setor, o detalhe demonstrativo, a fundação PostgreSQL e o desenho da fronteira de identidade/RLS foram revisados e integrados em `main`.
+A `Foundation-00`, a fundação executável, a Central do Setor, o detalhe demonstrativo, a fundação PostgreSQL, o desenho da fronteira de identidade/RLS e a primeira abertura seletiva de leitura por RLS foram revisados e integrados em `main`.
 
-Existe uma aplicação executável com jornada demonstrativa `Central → detalhe → Central`, exclusivamente com dados fictícios. O núcleo relacional possui a migration imutável `database/migrations/0001_core_foundation.sql`, testes adversariais de integridade/RLS e verificação em PostgreSQL descartável na CI. A fundação permanece segura por padrão: RLS está habilitada/forçada e nenhuma policy de escrita foi criada.
+Existe uma aplicação executável com jornada demonstrativa `Central → detalhe → Central`, exclusivamente com dados fictícios. O núcleo relacional possui as migrations imutáveis `database/migrations/0001_core_foundation.sql` e `database/migrations/0002_trusted_identity_read_policies.sql`. A CI prova separadamente o estado `0001` totalmente default-deny e o estado `0001 + 0002` com policies apenas de `SELECT`, usando PostgreSQL descartável e papéis não privilegiados.
 
-ADR-003 registra a fronteira aprovada para futura autenticação: sessão externa validada no servidor → `issuer + subject` confiáveis → `app_user` → membership ativa → escopo de equipe no PostgreSQL. Nenhum Auth, banco hospedado, Data API operacional, secret ou deploy foi provisionado. A documentação atual da Neon foi revalidada na F06; a integração real deverá ser novamente checada no momento de implantação por se tratar de capacidade externa mutável.
+ADR-003 registra a fronteira aprovada: sessão externa validada no servidor → `issuer + subject` confiáveis → `app_user` → membership ativa → escopo de equipe no PostgreSQL. F07 implementou somente a camada PostgreSQL dessa fronteira. Ainda não há Auth ligado à aplicação, conexão operacional server-side, banco hospedado, Data API operacional, secret ou deploy.
 
-A próxima ação canônica é `F07-SERVER-IDENTITY-READ-RLS-01 — Contexto de identidade server-only e policies de leitura`. Ela implementará somente a camada PostgreSQL de leitura autorizada em ambiente descartável, sem Auth real ou infraestrutura externa.
+A próxima ação canônica é `F08-SERVER-TRUST-ADAPTER-01 — Integrar sessão server-side e contexto transacional`. Ela implementará o caminho server-only que obtém sessão pela API oficial atual do SDK, deriva somente `issuer + subject` confiáveis e estabelece esse contexto localmente na transação PostgreSQL, sem provisionar infraestrutura, expor login/signup ou usar credenciais reais nesta slice.
 
 O repositório está público. Aplicam-se integralmente as restrições de publicação de `AGENTS.md` e `docs/architecture/SECURITY.md`; nenhum dado real ou pré-publicação pode ser usado.
 
@@ -75,6 +75,7 @@ A hierarquia detalhada está em `docs/ai/SOURCE_OF_TRUTH.md`.
 - persistência nasce relacional, portátil e deny-by-default;
 - autenticação não é autorização; escopo deriva de membership ativa no banco;
 - IDs fornecidos pelo cliente nunca definem identidade ou escopo por si só;
+- contexto de identidade no banco só é confiável quando estabelecido por servidor autenticador controlado;
 - evitar complexidade prematura;
 - construir por slices pequenas, utilizáveis e verificáveis;
 - qualquer incerteza importante aumenta a investigação, nunca autoriza adivinhação.

@@ -1,103 +1,89 @@
 # Current State — Compras
 
-**PROJECT_STATUS:** READY_FOR_SERVER_IDENTITY_READ_RLS  
-**CURRENT_PHASE:** F07 — Server Identity / Read RLS  
+**PROJECT_STATUS:** READY_FOR_SERVER_TRUST_ADAPTER  
+**CURRENT_PHASE:** F08 — Server Session / Trust Adapter  
 **REPO_VISIBILITY:** PUBLIC  
 **APPLICATION_STATUS:** CENTRAL_AND_DETAIL_PROTOTYPE  
-**DATABASE_STATUS:** CORE_SCHEMA_DEFAULT_DENY_VALIDATED  
-**AUTH_STATUS:** TRUST_BOUNDARY_DESIGNED_NOT_IMPLEMENTED  
+**DATABASE_STATUS:** TRUSTED_READ_RLS_VALIDATED_IN_EPHEMERAL_CI  
+**AUTH_STATUS:** TRUST_BOUNDARY_DESIGNED_NOT_INTEGRATED  
 **DEPLOYMENT_STATUS:** NOT_CONFIGURED  
 **REAL_DATA_ALLOWED:** NO  
 **CONTEXT_STATUS:** VALID  
 **FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`  
-**LAST_GOOD_COMMIT:** `f09f146a6e9dc5db50789e79a9e8e0a911623be4`  
-**LAST_GOOD_CI_RUN:** `33549912472`  
+**LAST_GOOD_COMMIT:** `3fbcfd18a65a5ebce3ca28cb0f4ef8889878dc58`  
+**LAST_GOOD_CI_RUN:** `33560055900`  
 **BLOCKERS:** none  
 **MANUAL_ACTION_REQUIRED:** none
 
 ## Estado real
 
-A work unit `F06-TRUSTED-IDENTITY-RLS-DESIGN-01` foi concluída e integrada à `main` pela PR #8.
+A work unit `F07-SERVER-IDENTITY-READ-RLS-01` foi concluída e integrada à `main` pela PR #9.
 
-A documentação oficial atual da Neon foi revalidada em 2026-09-01 para Managed Better Auth, sessão server-side em Next.js, Data API/JWT+JWKS, Serverless Driver, RLS e `pg_session_jwt`. A decisão resultante está em `docs/decisions/ADR-003-trusted-identity-rls-boundary.md`.
+O PostgreSQL agora possui a segunda migration imutável, `database/migrations/0002_trusted_identity_read_policies.sql`, que implementa somente a parte de banco da fronteira aprovada em ADR-003:
 
-A fronteira aprovada para a primeira integração operacional é:
+- `current_auth_issuer()` e `current_auth_subject()` leem `iss`/`sub` do contexto transacional e retornam `NULL` para contexto ausente, vazio ou JSON inválido;
+- `current_app_user_id()` resolve o par exato `auth_issuer + auth_subject` para `app_users.id` somente quando o usuário interno não está desabilitado;
+- os três helpers são `STABLE`, `SECURITY INVOKER`, fixam `search_path` e tiveram `EXECUTE` revogado de `PUBLIC`;
+- a policy de `app_users` compara diretamente `issuer + subject` e não chama `current_app_user_id()`, evitando recursão de RLS;
+- `memberships` expõe somente vínculo ativo do usuário corrente;
+- `teams`, `contractings`, `related_identifiers`, `contracting_items` e `contracting_events` exigem membership ativa no `team_id` da linha;
+- existem exatamente sete policies permissivas e todas são `SELECT`;
+- não existe policy permissiva de `INSERT`, `UPDATE` ou `DELETE` nem grant operacional de produção nesta migration.
 
-```text
-Browser
-  → sessão/cookie de Auth
-  → Next.js server valida a sessão
-  → issuer + subject verificados
-  → contexto LOCAL mínimo da transação
-  → PostgreSQL com papel server-only, não owner e sem BYPASSRLS
-  → RLS
-```
+`request.jwt.claims` continua sendo apenas um transporte reproduzível no teste. A migration não valida sessão externa e não transforma variável de sessão configurável por cliente SQL em identidade confiável. ADR-003 continua exigindo que um servidor confiável valide a sessão e estabeleça o contexto `LOCAL` dentro da transação usando credencial server-only sem `BYPASSRLS`.
 
-Decisões fixadas pela F06:
+A aplicação ainda não possui Auth, conexão operacional com PostgreSQL ou leitura persistente. Nenhum recurso Neon/Data API/Vercel foi provisionado e nenhum secret ou dado real foi introduzido.
 
-- `auth_subject` é derivado da identidade retornada por sessão validada, não de parâmetro do browser;
-- `auth_issuer` é derivado de configuração confiável do servidor para o provedor/endpoint que validou a sessão, não de hostname ou claim livre do cliente;
-- a sequência autorizadora permanece `issuer + subject → app_user → membership ativa → team_id`;
-- autenticação não cria automaticamente `app_user` nem membership;
-- identidade autenticada desconhecida, `app_user` desabilitado, membership ausente/revogada ou falha de validação resultam em nenhum acesso;
-- a primeira implementação não usará a Data API diretamente do browser como fronteira principal; a Data API permanece opção futura que exigirá integração e red-team próprios;
-- `request.jwt.claims` ou variável equivalente pode servir apenas como transporte transacional definido por servidor confiável depois da validação; não é fonte autônoma de confiança;
-- a próxima camada PostgreSQL deve usar helpers `STABLE`, `SECURITY INVOKER`, sem argumentos de identidade, e evitar recursão de RLS em `app_users`;
-- a primeira abertura de RLS será somente para `SELECT`; nenhuma policy de escrita ou `role` de membership será criada enquanto Q-009 permanecer aberta;
-- credencial de banco e cookie secret permanecem server-only; owner, `neondb_owner` e `BYPASSRLS` não são caminhos operacionais normais.
+## Verificação de F07
 
-Nenhum recurso Neon, Auth, Data API, Vercel ou banco hospedado foi provisionado. Nenhum secret, JWT real, connection string, policy permissiva, migration ou alteração executável de aplicação foi introduzido pela F06.
+- recuperação de `main`, branches e PRs: PASS;
+- nenhuma PR concorrente estava aberta no início da work unit: PASS;
+- `CONTEXT_MANIFEST` validado contra todos os blobs estáveis: PASS;
+- leitura direta de `CURRENT_STATE`, `NEXT_ACTION`, SPEC F07, ADR-003, migration `0001` e CI: PASS;
+- migration `0001` isolada + suíte antiga de default-deny/integridade: PASS;
+- migrations `0001 + 0002` em PostgreSQL 17 descartável: PASS;
+- contexto ausente, inválido, incompleto ou identidade desconhecida: fail-closed — PASS;
+- identidade externa composta `issuer + subject`: PASS;
+- usuário conhecido sem membership: sem acesso de equipe — PASS;
+- `app_user` desabilitado: sem acesso — PASS;
+- membership revogada: sem acesso — PASS;
+- membership ativa: acesso somente ao próprio escopo — PASS;
+- UUID conhecido cross-team em contratação, identificador, item e evento: negado — PASS;
+- `app_users` expõe somente a própria linha ativa: PASS;
+- papel operacional artificial é não owner, `NOSUPERUSER` e `NOBYPASSRLS`: PASS;
+- papel de teste com grants DML amplos não consegue inserir, atualizar ou excluir sem policy de escrita: PASS;
+- `PUBLIC` não executa helpers de identidade: PASS;
+- PR #9 CI final: PASS — run `33559959109`, jobs `verify` e `database`;
+- CI da `main` após squash merge: PASS — run `33560055900`, jobs `verify` e `database`;
+- `npm ci`, lint, typecheck, testes da aplicação e build: PASS;
+- dados reais, secrets ou recursos externos no diff: NÃO ENCONTRADOS.
 
-## Verificação de F06
+## Red-team e correções
 
-- recuperação de `main`, branches, PRs e Issues: PASS;
-- nenhuma frente concorrente aberta encontrada antes da execução: PASS;
-- validação do `CONTEXT_MANIFEST` contra todos os blobs estáveis: PASS;
-- leitura direta de `ARCHITECTURE.md`, `SECURITY.md`, `DATABASE.md`, ADR-002, `OPEN_QUESTIONS.md`, migration/testes atuais e DoD: PASS;
-- documentação oficial atual do Neon consultada e registrada em ADR-003: PASS;
-- coerência com `issuer + subject`, membership ativa, deny-by-default e portabilidade: PASS;
-- Q-009 e Q-010 preservadas sem inferência: PASS;
-- diff integral da PR #8: PASS — somente ADR-003 e SPEC da F07, conteúdo público/sanitizado;
-- secrets, credenciais ou dados reais/internos no diff: NÃO ENCONTRADOS;
-- infraestrutura externa provisionada: NÃO;
-- policy/grant/migration executável alterado: NÃO;
-- CI final da PR #8: PASS — run `33549743602`, jobs `verify` e `database`;
-- CI da `main` após squash merge: PASS — run `33549912472`, jobs `verify` e `database`;
-- `npm ci`: PASS;
-- lint: PASS;
-- typecheck: PASS;
-- testes da aplicação: PASS;
-- build: PASS;
-- migration `0001` + testes de banco existentes: PASS;
-- Auth real / banco hospedado / sessão real: SKIPPED — explicitamente fora do escopo.
+A revisão adversarial encontrou e corrigiu antes da promoção:
 
-## Red-team e achados
+1. **Normalização silenciosa de identidade:** a primeira versão aplicava `btrim` aos valores de `iss` e `sub`. Como ADR-003 exige comparação exata do par verificado, essa normalização foi removida. Testes adicionais provam que issuer diferente com mesmo subject e valores com espaços não resolvem a identidade existente.
+2. **Cobertura integral de negação:** a suíte adicional prova que usuário sem membership, membership revogada e usuário desabilitado não enxergam nenhuma das quatro tabelas operacionais, não apenas a raiz `contractings`.
+3. **RLS versus falta de grant:** o papel principal de teste recebe `SELECT/INSERT/UPDATE/DELETE` somente no banco descartável, garantindo que a negação de escrita seja causada pela ausência de policy permissiva e pelo RLS, não por um teste trivial de ACL.
+4. **Privilégio do executor:** os helpers permanecem `SECURITY INVOKER`; nenhum `SECURITY DEFINER`, owner ou `BYPASSRLS` foi introduzido.
+5. **Fundação preservada:** a CI usa bancos separados para provar `0001` ainda totalmente default-deny antes de testar a abertura seletiva de leitura em `0002`.
 
-A revisão adversarial produziu e registrou os seguintes pontos antes da promoção:
-
-1. **Signup público por padrão:** a documentação atual do Managed Better Auth informa que qualquer pessoa pode se cadastrar por padrão. Isso conflita com a baseline do projeto. A F06 não habilita Auth e mantém fail-closed porque autenticação não autoautoriza `app_user`/membership. Antes de expor Auth real, a futura integração deverá impor admissão controlada além de esconder UI.
-2. **Variável de sessão não é identidade:** claims colocados em `request.jwt.claims` são forjáveis por quem possui credencial SQL. O desenho permite esse mecanismo somente como transporte `LOCAL` definido pelo servidor após validar a sessão; a credencial operacional nunca vai ao browser.
-3. **Papel privilegiado não prova RLS:** owner, superuser, `neondb_owner` ou `BYPASSRLS` permanecem excluídos do caminho normal e dos futuros testes de autorização.
-4. **Revogação não pode depender do cache de sessão:** membership ativa e `disabled_at` serão verificados no PostgreSQL a cada leitura autorizada; dados de autorização não serão congelados no cookie de sessão.
-5. **Recursão de policy:** a futura policy de `app_users` deve comparar diretamente `auth_issuer + auth_subject` ao contexto, sem chamar helper que consulte `app_users` e provoque recursão de RLS.
-6. **Data API não é pressuposto de segurança:** JWT/JWKS e RLS da Data API foram confirmados como capacidades atuais, mas sua adoção direta pelo cliente foi adiada para uma slice própria caso seja necessária.
-
-Q-001, Q-002, Q-003, Q-004, Q-005, Q-006, Q-009 e Q-010 permanecem abertas. F06 não alterou taxonomias, regra de preços, inatividade, Pendência, permissões multiusuário nem auditoria de leitura.
+Q-001, Q-002, Q-003, Q-004, Q-005, Q-006, Q-009 e Q-010 permanecem abertas. F07 não criou role/perfil de membership, auditoria de leitura, taxonomia ou regra de negócio nova.
 
 ## Segurança e limites atuais
 
-O repositório continua público e nenhuma autorização permissiva foi aplicada. A aplicação continua demonstrativa e sem persistência operacional.
+As policies de leitura estão executáveis e validadas, mas ainda não existe uma fonte de identidade confiável ligada à aplicação. Portanto, a existência de `0002` não autoriza uso com dados reais nem conexão direta do browser ao banco.
 
-ADR-003 é um desenho de fronteira de confiança, não evidência de Auth funcionando. Nenhum uso com dados reais está autorizado. A futura integração de Auth deverá revalidar novamente o mecanismo de admissão/signup, secrets, sessão, região e demais capacidades mutáveis do provedor no momento da implementação.
+A próxima fronteira precisa integrar a sessão server-side real ao contrato de ADR-003 e garantir que apenas o servidor consiga estabelecer `issuer + subject` na transação. Signup/admissão, banco hospedado e dados reais continuam fora até revisão específica.
 
 ## Context manifest
 
-Os inputs estáveis do `CONTEXT_MANIFEST` não foram alterados pela F06. Todos os blobs listados continuaram coincidentes no início da work unit; ADR-003 e o novo SPEC não invalidam o fast context.
+Os inputs estáveis do `CONTEXT_MANIFEST` não foram alterados pela F07. Todos os hashes continuam válidos; migrations, testes, CI, `CURRENT_STATE` e `NEXT_ACTION` são lidos ao vivo pelo protocolo.
 
 ## Last good
 
-`f09f146a6e9dc5db50789e79a9e8e0a911623be4` é o `LAST_GOOD_COMMIT`, validado pela CI da `main` run `33549912472` com os jobs `verify` e `database` em PASS.
+`3fbcfd18a65a5ebce3ca28cb0f4ef8889878dc58` é o `LAST_GOOD_COMMIT`, validado pela CI da `main` run `33560055900` com os jobs `verify` e `database` em PASS.
 
 ## Próxima ação
 
-Executar `F07-SERVER-IDENTITY-READ-RLS-01` conforme `docs/ai/NEXT_ACTION.md`, `tasks/F07-SERVER-IDENTITY-READ-RLS-01/SPEC.md` e ADR-003.
+Executar `F08-SERVER-TRUST-ADAPTER-01` conforme `docs/ai/NEXT_ACTION.md`, `tasks/F08-SERVER-TRUST-ADAPTER-01/SPEC.md` e ADR-003.

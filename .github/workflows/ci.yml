@@ -73,4 +73,6 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f database/migrations/0001_core_foundation.sql
 
       - name: Run database tests
-        run: psql -v ON_ERROR_STOP=1 -f database/tests/core_foundation.sql
+        run: |
+          psql -v ON_ERROR_STOP=1 -f database/tests/core_foundation.sql
+          psql -v ON_ERROR_STOP=1 -f database/tests/scope_integrity_red_team.sql

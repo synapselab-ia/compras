@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Compras",
-  description: "Fundação executável do sistema de acompanhamento de contratações.",
+  title: "Compras — Central do Setor",
+  description: "Protótipo demonstrativo da Central do Setor para acompanhamento de contratações.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

@@ -1,55 +1,64 @@
 # Next Action — Compras
 
-## F04-PERSISTENCE-FOUNDATION-DESIGN-01 — Desenhar fundação de persistência segura
+## F05-DB-CORE-SCHEMA-01 — Primeira migration do núcleo e RLS default-deny
 
-**Classe:** `T2 — banco/segurança/design`  
+**Classe:** `T2 — banco/segurança`  
 **Estado:** READY  
-**Objetivo:** transformar as jornadas já prototipadas em um contrato de persistência mínimo, portátil e seguro antes de criar banco externo, migrations definitivas ou autenticação real.
+**Objetivo:** transformar o desenho aprovado de persistência em schema PostgreSQL reproduzível e testes adversariais, mantendo o sistema sem banco hospedado, sem Auth real e sem policy permissiva improvisada.
 
 ## Fonte da tarefa
 
-Executar conforme `tasks/F04-PERSISTENCE-FOUNDATION-DESIGN-01/SPEC.md`.
+Executar conforme `tasks/F05-DB-CORE-SCHEMA-01/SPEC.md`.
 
 ## Resultado esperado
 
-Ao final, o repositório deve possuir um desenho executável para a primeira slice persistente, incluindo:
+Ao final, o repositório deve possuir:
 
-- `docs/architecture/DATABASE.md` com entidades/tabelas candidatas, chaves, relacionamentos, invariantes, índices e estratégia de auditoria necessários ao núcleo atual;
-- fronteiras claras entre identidade autenticada, membership/autorização e dados da contratação;
-- estratégia deny-by-default/RLS para futura implementação;
-- contrato de migrations e testes de banco;
-- decisão explícita sobre o que pode ser modelado já e o que permanece dependente de open questions;
-- uma work unit seguinte pequena o suficiente para implementar a primeira migration/testes sem improvisar arquitetura.
+- `database/migrations/0001_core_foundation.sql`;
+- testes SQL reproduzíveis em PostgreSQL descartável;
+- tabelas `teams`, `app_users`, `memberships`, `contractings`, `related_identifiers`, `contracting_items` e `contracting_events` conforme `DATABASE.md`;
+- FKs/constraints compostas que impeçam relações cross-team/cross-contracting relevantes;
+- índices mínimos para Central/detalhe;
+- RLS habilitada em default-deny, sem policy permissiva dependente de Auth inexistente;
+- CI capaz de subir PostgreSQL efêmero, aplicar migration e executar os testes de banco;
+- gates atuais da aplicação continuando PASS.
 
 ## Regras obrigatórias
 
-- não provisionar Neon, Vercel, banco externo, Auth ou secrets nesta slice;
-- revalidar documentação oficial atual dos componentes externos apenas quando uma decisão depender deles;
-- preservar portabilidade PostgreSQL e evitar acoplamento gratuito a um provedor;
-- não fechar Q-001, Q-002, Q-003 ou Q-009 por conveniência de schema;
-- modelar etapa/status de modo que taxonomias ainda abertas possam evoluir sem migration destrutiva prematura;
-- contratação continua sendo a entidade operacional central;
-- múltiplos identificadores relacionados continuam suportados conceitualmente;
-- responsável e aguardando quem continuam conceitos distintos;
-- histórico relevante deve ser preservável e auditável;
-- segurança deve existir no contrato do banco, não somente na aplicação;
-- nenhuma credencial ou dado real pode ser introduzido enquanto o repositório estiver público.
+- não provisionar Neon, Supabase, Vercel ou qualquer banco externo;
+- não introduzir secret, JWT ou conexão real;
+- não conectar a UI ao banco nesta slice;
+- não implementar Auth real nem aceitar `user_id`/`team_id` fornecido pelo cliente como identidade;
+- não criar `role` de membership enquanto Q-009 estiver aberta;
+- não criar PostgreSQL `ENUM` para etapa/status/tipos abertos;
+- não inventar constraint quantitativa de item;
+- não adicionar Pendência, pesquisa de preços, documentos, importação ou módulos futuros;
+- usar apenas dados artificiais e sanitizados;
+- owner/BYPASSRLS não pode ser usado como prova de autorização;
+- migration aplicada passa a ser história imutável; correções futuras usam nova migration.
+
+## Segurança mínima a provar
+
+- papel operacional de teste sem policy permissiva não lê linha interna mesmo conhecendo UUID válido;
+- o mesmo papel não insere/altera/exclui por ausência de policy permissiva;
+- responsável de outra equipe é rejeitado pela integridade referencial;
+- item/identificador/evento não pode ser ligado a contratação de outro escopo;
+- evento não pode apontar subentidade pertencente a outra contratação/equipe;
+- eventos permanecem imutáveis para o papel operacional.
 
 ## Fora do escopo
 
 Não:
 
-- criar banco hospedado;
-- aplicar migration real;
-- implementar login;
-- criar RLS em ambiente externo;
-- importar planilhas;
-- usar processos/dados reais;
-- implementar pesquisa de preços;
-- implementar regra de ±25%;
-- definir política definitiva de permissões multiusuário;
-- deploy de produção.
+- policy de leitura para membro autorizado;
+- claims/JWT/provider Auth;
+- CRUD persistente da aplicação;
+- RPC/serviço de mutação;
+- banco hospedado;
+- dados reais;
+- pesquisa de preços;
+- deploy.
 
 ## Critério de encerramento
 
-A tarefa termina quando o desenho de persistência estiver coerente com produto, domínio, segurança e protótipos atuais, tiver sido red-teamado contra perda de histórico/vazamento/acoplamento prematuro, o `CONTEXT_MANIFEST` tiver sido reconciliado caso fontes estáveis mudem e existir exatamente uma nova `NEXT_ACTION` para a primeira implementação de banco.
+A tarefa termina quando migration + testes de banco passam em PostgreSQL descartável e CI, o diff passa red-team de integridade/RLS/dados públicos, e o checkpoint deixa exatamente uma nova `NEXT_ACTION` pequena e executável.

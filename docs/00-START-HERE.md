@@ -8,13 +8,13 @@ O sistema não substitui os sistemas oficiais de processo administrativo, requis
 
 ## Estado atual
 
-A `Foundation-00`, a `F01 — Fundação Executável`, a `F02 — Central do Setor Prototype` e a `F03 — Detalhe da Contratação Prototype` foram revisadas, validadas e integradas em `main`.
+A `Foundation-00`, a fundação executável, a Central do Setor, o detalhe demonstrativo e o desenho da fundação de persistência foram revisados e integrados em `main`.
 
-Existe agora uma aplicação executável com uma Central do Setor demonstrativa e uma jornada `Central → detalhe → Central`, usando exclusivamente dados fictícios. A Central possui busca/filtros e o detalhe apresenta contexto operacional, identificadores relacionados, itens e atividade demonstrativa. Não existe banco, autenticação, persistência operacional, integração externa ou deploy de produção.
+Existe uma aplicação executável com jornada demonstrativa `Central → detalhe → Central`, exclusivamente com dados fictícios. O contrato de persistência PostgreSQL está documentado em `docs/architecture/DATABASE.md`, mas ainda não existe migration aplicada, banco hospedado, autenticação, persistência operacional ou deploy de produção.
 
-A próxima ação canônica é `F04-PERSISTENCE-FOUNDATION-DESIGN-01 — Desenhar fundação de persistência segura`.
+A próxima ação canônica é `F05-DB-CORE-SCHEMA-01 — Primeira migration do núcleo e RLS default-deny`.
 
-O repositório está público. Aplicam-se integralmente as restrições de publicação de `AGENTS.md` e `docs/architecture/SECURITY.md`; nenhum dado real ou pré-publicação pode ser usado no protótipo ou na documentação pública.
+O repositório está público. Aplicam-se integralmente as restrições de publicação de `AGENTS.md` e `docs/architecture/SECURITY.md`; nenhum dado real ou pré-publicação pode ser usado.
 
 ## Fonte de verdade
 
@@ -46,7 +46,8 @@ A hierarquia detalhada está em `docs/ai/SOURCE_OF_TRUTH.md`.
 
 - `docs/architecture/ARCHITECTURE.md`;
 - `docs/architecture/SECURITY.md`;
-- `docs/architecture/DATABASE.md` — será criado na próxima slice de design de persistência.
+- `docs/architecture/DATABASE.md` — contrato atual da fundação persistente;
+- `docs/decisions/ADR-002-persistence-foundation.md` — decisões estruturais da persistência/default-deny.
 
 ### Operação por IA
 
@@ -68,6 +69,7 @@ A hierarquia detalhada está em `docs/ai/SOURCE_OF_TRUTH.md`.
 - histórico relevante deve ser rastreável;
 - nenhuma regra crítica existe somente na interface;
 - privacidade e segurança entram desde a primeira tabela;
+- persistência nasce relacional, portátil e deny-by-default;
 - evitar complexidade prematura;
 - construir por slices pequenas, utilizáveis e verificáveis;
 - qualquer incerteza importante aumenta a investigação, nunca autoriza adivinhação.

@@ -1,56 +1,55 @@
 # Next Action — Compras
 
-## F03-CONTRATACAO-DETAIL-PROTOTYPE-01 — Prototipar detalhe navegável da contratação demo
+## F04-PERSISTENCE-FOUNDATION-DESIGN-01 — Desenhar fundação de persistência segura
 
-**Classe:** `T1 — feature/protótipo`  
+**Classe:** `T2 — banco/segurança/design`  
 **Estado:** READY  
-**Objetivo:** complementar a Central do Setor com a primeira jornada `lista → detalhe`, permitindo avaliar quanto contexto operacional deve aparecer ao abrir uma contratação sem sobrecarregar a tabela e sem introduzir persistência ou regras definitivas.
+**Objetivo:** transformar as jornadas já prototipadas em um contrato de persistência mínimo, portátil e seguro antes de criar banco externo, migrations definitivas ou autenticação real.
 
 ## Fonte da tarefa
 
-Executar conforme `tasks/F03-CONTRATACAO-DETAIL-PROTOTYPE-01/SPEC.md`.
+Executar conforme `tasks/F04-PERSISTENCE-FOUNDATION-DESIGN-01/SPEC.md`.
 
 ## Resultado esperado
 
-Ao final, registros `DEMO-*` da Central devem poder abrir um detalhe demonstrativo que preserve o contexto principal e exponha, com dados exclusivamente fictícios:
+Ao final, o repositório deve possuir um desenho executável para a primeira slice persistente, incluindo:
 
-- identificação e objeto;
-- responsável, etapa, status, aguardando, próxima ação e última movimentação;
-- identificadores relacionados demonstrativos;
-- itens demonstrativos;
-- atividade/timeline demonstrativa recente;
-- navegação clara de volta para a Central.
+- `docs/architecture/DATABASE.md` com entidades/tabelas candidatas, chaves, relacionamentos, invariantes, índices e estratégia de auditoria necessários ao núcleo atual;
+- fronteiras claras entre identidade autenticada, membership/autorização e dados da contratação;
+- estratégia deny-by-default/RLS para futura implementação;
+- contrato de migrations e testes de banco;
+- decisão explícita sobre o que pode ser modelado já e o que permanece dependente de open questions;
+- uma work unit seguinte pequena o suficiente para implementar a primeira migration/testes sem improvisar arquitetura.
 
 ## Regras obrigatórias
 
-- continuar sem banco, Auth, RLS ou integração externa;
-- nenhum dado real, derivado de processo real ou com aparência operacional interna;
-- não resolver Q-001, Q-002 ou Q-003 por inferência;
-- tipos/labels de identificadores relacionados, itens e eventos usados no protótipo devem ser explicitamente demonstrativos/provisórios;
-- não adicionar edição, criação, exclusão ou botões que impliquem persistência;
-- reutilizar a fonte de dados demo de forma coerente, evitando duplicação sem necessidade;
-- lidar explicitamente com identificador demo inexistente;
-- manter acessibilidade básica e estratégia responsiva;
-- adicionar testes para a lógica de lookup/seleção que não precise ficar em JSX;
-- executar lint, typecheck, testes e build antes de promoção.
+- não provisionar Neon, Vercel, banco externo, Auth ou secrets nesta slice;
+- revalidar documentação oficial atual dos componentes externos apenas quando uma decisão depender deles;
+- preservar portabilidade PostgreSQL e evitar acoplamento gratuito a um provedor;
+- não fechar Q-001, Q-002, Q-003 ou Q-009 por conveniência de schema;
+- modelar etapa/status de modo que taxonomias ainda abertas possam evoluir sem migration destrutiva prematura;
+- contratação continua sendo a entidade operacional central;
+- múltiplos identificadores relacionados continuam suportados conceitualmente;
+- responsável e aguardando quem continuam conceitos distintos;
+- histórico relevante deve ser preservável e auditável;
+- segurança deve existir no contrato do banco, não somente na aplicação;
+- nenhuma credencial ou dado real pode ser introduzido enquanto o repositório estiver público.
 
 ## Fora do escopo
 
 Não:
 
-- schema definitivo;
-- banco/migrations;
-- login/permissões;
-- timeline persistente;
-- semântica final de tipos de processo relacionado;
-- edição/cadastro;
-- importação de planilhas;
-- documentos;
-- pesquisa de preços;
-- PNCP/Compras.gov;
-- alertas definitivos;
+- criar banco hospedado;
+- aplicar migration real;
+- implementar login;
+- criar RLS em ambiente externo;
+- importar planilhas;
+- usar processos/dados reais;
+- implementar pesquisa de preços;
+- implementar regra de ±25%;
+- definir política definitiva de permissões multiusuário;
 - deploy de produção.
 
 ## Critério de encerramento
 
-A tarefa termina quando a jornada demonstrativa `Central → detalhe → Central` estiver implementada e verificável, todo conteúdo permanecer fictício, os gates de engenharia passarem, o diff for red-teamado e o checkpoint canônico apontar exatamente uma nova `NEXT_ACTION`.
+A tarefa termina quando o desenho de persistência estiver coerente com produto, domínio, segurança e protótipos atuais, tiver sido red-teamado contra perda de histórico/vazamento/acoplamento prematuro, o `CONTEXT_MANIFEST` tiver sido reconciliado caso fontes estáveis mudem e existir exatamente uma nova `NEXT_ACTION` para a primeira implementação de banco.

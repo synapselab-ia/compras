@@ -8,13 +8,13 @@ O sistema não substitui os sistemas oficiais de processo administrativo, requis
 
 ## Estado atual
 
-A `Foundation-00`, a `F01 — Fundação Executável` e a `F02 — Central do Setor Prototype` foram revisadas, validadas e integradas em `main`.
+A `Foundation-00`, a `F01 — Fundação Executável`, a `F02 — Central do Setor Prototype` e a `F03 — Detalhe da Contratação Prototype` foram revisadas, validadas e integradas em `main`.
 
-Existe agora uma aplicação executável com uma Central do Setor demonstrativa: busca, filtros e visualização responsiva sobre registros exclusivamente fictícios. Não existe banco, autenticação, persistência operacional, integração externa ou deploy de produção.
+Existe agora uma aplicação executável com uma Central do Setor demonstrativa e uma jornada `Central → detalhe → Central`, usando exclusivamente dados fictícios. A Central possui busca/filtros e o detalhe apresenta contexto operacional, identificadores relacionados, itens e atividade demonstrativa. Não existe banco, autenticação, persistência operacional, integração externa ou deploy de produção.
 
-A próxima ação canônica é `F03-CONTRATACAO-DETAIL-PROTOTYPE-01 — Prototipar detalhe navegável da contratação demo`.
+A próxima ação canônica é `F04-PERSISTENCE-FOUNDATION-DESIGN-01 — Desenhar fundação de persistência segura`.
 
-O repositório está público. Aplicam-se integralmente as restrições de publicação de `AGENTS.md` e `docs/architecture/SECURITY.md`; nenhum dado real ou pré-publicação pode ser usado no protótipo.
+O repositório está público. Aplicam-se integralmente as restrições de publicação de `AGENTS.md` e `docs/architecture/SECURITY.md`; nenhum dado real ou pré-publicação pode ser usado no protótipo ou na documentação pública.
 
 ## Fonte de verdade
 
@@ -45,7 +45,8 @@ A hierarquia detalhada está em `docs/ai/SOURCE_OF_TRUTH.md`.
 ### Arquitetura e segurança
 
 - `docs/architecture/ARCHITECTURE.md`;
-- `docs/architecture/SECURITY.md`.
+- `docs/architecture/SECURITY.md`;
+- `docs/architecture/DATABASE.md` — será criado na próxima slice de design de persistência.
 
 ### Operação por IA
 

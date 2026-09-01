@@ -6,7 +6,7 @@
 
 ## 1. Objetivo
 
-Definir o contrato mínimo de persistência para sustentar a Central do Setor, o detalhe da contratação, responsabilidade operacional e histórico sem congelar taxonomias ou permissões ainda abertas.
+Definir o contrato mínimo de persistência para sustentar a Central do Setor, o detalhe da contratação, responsabilidade operacional e histórico sem congelar taxonomias, regras quantitativas ou permissões ainda abertas.
 
 Este documento não é migration aplicada. Quando migrations existirem, elas passam a registrar a história executável do schema.
 
@@ -22,6 +22,7 @@ Este documento não é migration aplicada. Quando migrations existirem, elas pas
 - taxonomias abertas não viram `ENUM` físico nesta fase.
 - o núcleo relacional não usa `jsonb` como substituto de relações já conhecidas.
 - autorização falha fechada; políticas permissivas só entram quando houver identidade confiável verificável.
+- constraints de negócio só entram quando sustentadas pelas fontes; convenções técnicas não podem virar regra operacional por inferência.
 
 ## 3. IDs e tipos básicos
 
@@ -63,12 +64,17 @@ Identidade interna correspondente a uma identidade autenticada externa.
 Campos mínimos:
 
 - `id uuid primary key`;
-- `auth_subject text not null unique`;
+- `auth_issuer text not null`;
+- `auth_subject text not null`;
 - `display_name text not null`;
 - `created_at timestamptz not null`;
 - `disabled_at timestamptz null`.
 
-`auth_subject` é um identificador do provedor de identidade, não email e não segredo. A mecânica exata para obter o subject confiável permanece fora desta slice.
+Constraint:
+
+- `unique (auth_issuer, auth_subject)`.
+
+`auth_issuer + auth_subject` identifica a identidade autenticada sem assumir que um `subject` seja globalmente único entre provedores/emissores. Não é email nem segredo. A mecânica exata para obter ambos de uma sessão confiável permanece fora desta slice.
 
 ### 4.3 `memberships`
 
@@ -113,8 +119,9 @@ Campos mínimos candidatos:
 - `archived_at timestamptz null`;
 - `cancelled_at timestamptz null`.
 
-Escopo das referências de membership:
+Constraints estruturais:
 
+- `unique (team_id, id)`;
 - `(team_id, responsible_membership_id)` referencia `(team_id, id)` de `memberships`;
 - `(team_id, created_by_membership_id)` segue o mesmo padrão.
 
@@ -140,9 +147,10 @@ Campos mínimos:
 - `linked_at timestamptz not null`;
 - `unlinked_at timestamptz null`.
 
-FK composta recomendada:
+Constraints estruturais:
 
-- `(team_id, contracting_id)` → `contractings(team_id, id)` após `unique (team_id, id)` em `contractings`.
+- `(team_id, contracting_id)` → `contractings(team_id, id)`;
+- `unique (team_id, contracting_id, id)` para permitir referência de evento preservando a contratação correta.
 
 Não criar enum/constraint de `identifier_kind` nesta fase.
 
@@ -157,19 +165,22 @@ Campos mínimos candidatos:
 - `id uuid primary key`;
 - `team_id uuid not null`;
 - `contracting_id uuid not null`;
-- `ordinal integer not null check (ordinal > 0)`;
+- `ordinal integer not null`;
 - `description text not null`;
-- `quantity numeric(18,6) null check (quantity is null or quantity > 0)`;
+- `quantity numeric null`;
 - `unit text null`;
 - `catalog_code text null`;
 - `created_at timestamptz not null`;
 - `updated_at timestamptz not null`;
 - `retired_at timestamptz null`.
 
-Constraints:
+Constraints estruturais:
 
-- FK composta de equipe/contratação;
-- `unique (contracting_id, ordinal)` para a ordem atual.
+- `(team_id, contracting_id)` → `contractings(team_id, id)`;
+- `unique (contracting_id, ordinal)` para que a ordem atual não tenha duas linhas com o mesmo identificador ordinal;
+- `unique (team_id, contracting_id, id)` para referências históricas de mesmo escopo.
+
+Não codificar nesta fundação faixa, sinal, precisão máxima ou obrigatoriedade de `quantity`, porque essas regras não foram aprovadas como invariantes de negócio. Quando houver fonte operacional suficiente, constraints poderão ser apertadas por nova migration.
 
 Estado da pesquisa de preços, evidências e cálculos não entram nesta tabela nesta fase; pertencem ao módulo futuro de pesquisa.
 
@@ -197,9 +208,10 @@ Campos mínimos candidatos:
 
 Regras:
 
-- FK composta de equipe/contratação;
-- ator, quando presente, deve pertencer à mesma equipe;
-- FKs opcionais para item/identificador devem apontar para a mesma contratação/equipe quando possível via constraints compostas;
+- `(team_id, contracting_id)` → `contractings(team_id, id)`;
+- ator, quando presente, referencia membership da mesma equipe;
+- `(team_id, contracting_id, related_identifier_id)` referencia o identificador da mesma contratação quando presente;
+- `(team_id, contracting_id, item_id)` referencia o item da mesma contratação quando presente;
 - eventos normais são imutáveis para o papel operacional: sem `UPDATE`/`DELETE` permissivos;
 - `event_type` é chave extensível, não enum fechado nesta fase.
 
@@ -215,7 +227,8 @@ Eventos de nota manual podem usar `note` sem `field_key`.
 - catálogos finais de etapa/status;
 - papéis/perfis de permissão;
 - auditoria de leitura, dependente de Q-010;
-- cache de fontes públicas.
+- cache de fontes públicas;
+- constraints de quantidade não sustentadas por fonte aprovada.
 
 Esses módulos podem ser adicionados por migrations posteriores sem alterar a identidade da contratação.
 
@@ -268,7 +281,7 @@ Reabertura/restauração, quando permitida pelo produto, altera o estado corrent
 
 A aplicação precisa distinguir três coisas:
 
-1. **subject autenticado** — identidade validada por provedor/servidor;
+1. **identidade autenticada** — `issuer + subject` validados por provedor/servidor;
 2. **`app_user`** — identidade interna estável;
 3. **membership ativa** — autorização para um `team_id`.
 
@@ -287,16 +300,17 @@ Primeira migration deve:
 - criar tabelas e constraints;
 - habilitar RLS nas tabelas internas que possam futuramente ser expostas;
 - não criar política permissiva dependente de identidade ainda não integrada;
-- manter grants mínimos;
-- provar em teste que um papel operacional sem política não enxerga/modifica linhas, inclusive conhecendo IDs válidos.
+- manter grants de produção mínimos;
+- manter papel proprietário/migration separado de qualquer papel operacional e sem usar `BYPASSRLS` como caminho normal;
+- provar em teste que um papel operacional criado apenas no ambiente de teste, mesmo recebendo grants DML para exercitar o enforcement, continua sem enxergar/modificar linhas pela ausência de policies.
 
-Isso fornece um estado seguro e provider-neutral.
+Assim os testes distinguem `permission denied` de enforcement real de RLS sem obrigar a migration de produção a conceder acesso amplo.
 
 ### Liberação futura de leitura
 
 Somente após existir adaptador de identidade confiável:
 
-- mapear subject autenticado → `app_user`;
+- mapear `issuer + subject` autenticados → `app_user`;
 - resolver memberships ativas;
 - permitir `SELECT` apenas para linhas cujo `team_id` pertença às memberships autorizadas;
 - testar usuário sem membership, membership revogada e ID conhecido de outra equipe.
@@ -337,13 +351,16 @@ A suíte deve conseguir validar por SQL, no mínimo:
 
 - criação do schema do zero;
 - FKs e constraints de mesma equipe;
-- quantidade/ordinal inválidos rejeitados;
 - cardinalidade múltipla de identificadores preservada;
 - tentativa de apontar responsável de outra equipe rejeitada;
+- evento não consegue apontar item/identificador de outra contratação/equipe;
+- ordinal duplicado dentro da mesma contratação é rejeitado;
 - eventos não podem ser alterados/excluídos pelo papel operacional;
-- RLS default-deny para papel sem política;
+- RLS default-deny para papel sem policy permissiva;
 - conhecimento de UUID válido não contorna RLS;
-- membership revogada não deverá conceder acesso quando políticas de leitura forem implementadas.
+- membership revogada não deverá conceder acesso quando policies de leitura forem implementadas.
+
+Não criar teste para uma suposta faixa/positividade de quantidade antes de existir regra aprovada.
 
 Preferir testes SQL simples e reproduzíveis antes de adicionar framework de banco sem necessidade.
 
@@ -352,7 +369,7 @@ Preferir testes SQL simples e reproduzíveis antes de adicionar framework de ban
 Enquanto `REPO_VISIBILITY = PUBLIC`:
 
 - nenhuma migration, fixture, teste, Issue, PR ou log contém processo/nome/CNPJ/valor/documento/caminho real;
-- UUIDs e subjects usados em testes são artificiais;
+- UUIDs, issuers e subjects usados em testes são artificiais;
 - nenhum JWT, token, connection string ou credencial real;
 - eventos de teste usam textos `DEMO-*`/genéricos;
 - logs não imprimem payload interno completo.
@@ -367,13 +384,15 @@ Enquanto `REPO_VISIBILITY = PUBLIC`:
 | Q-004 ±25% | nenhum schema/cálculo nesta fase |
 | Q-005 inatividade | nenhum limiar codificado; eventos permitem calcular depois |
 | Q-006 Pendência | entidade adiada |
-| Q-009 permissões | membership sem `role`; políticas finas adiadas |
+| Q-009 permissões | membership sem `role`; policies finas adiadas |
 | Q-010 auditoria de leitura | não implementada; timeline registra alterações/fatos, não views |
+
+Regras quantitativas de item que não constam dessas questões também não são inventadas por convenção de banco.
 
 ## 14. Primeira implementação recomendada
 
 A primeira migration deve implementar somente esta fundação relacional e o estado **default-deny**, com testes locais/CI.
 
-Ela não deve conectar a UI ao banco nem criar política permissiva baseada em Auth ainda inexistente.
+Ela não deve conectar a UI ao banco nem criar policy permissiva baseada em Auth ainda inexistente.
 
 Depois desse gate, a próxima decisão técnica pode escolher o adaptador de identidade/RLS usando documentação oficial atual do provedor que realmente for adotado.

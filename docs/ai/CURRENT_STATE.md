@@ -80,7 +80,7 @@ A documentação oficial atual eliminou a incerteza sobre o provider: o Neon API
 
 A documentação atual da CLI também registra que `neon api` é um passthrough autenticado para qualquer rota da Neon API e usa credenciais de `neon auth` por padrão.
 
-O runtime disponível nesta sessão, porém, não possui `neon`, `neonctl` ou `vercel` instalados/autenticados. As credenciais dos conectores não são exportadas ao shell e não devem ser solicitadas/copiedas.
+O runtime disponível nesta sessão, porém, não possui `neon`, `neonctl` ou `vercel` instalados/autenticados. As credenciais dos conectores não são exportadas ao shell e não devem ser solicitadas/copiadas.
 
 Portanto `F16-B2` também foi reduzido a uma limitação da superfície de controle desta sessão, não a uma ausência de capacidade do Neon.
 

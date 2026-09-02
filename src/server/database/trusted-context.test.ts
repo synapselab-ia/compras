@@ -141,12 +141,13 @@ describe("withTrustedDatabaseContext", () => {
     expect(pool.end).toHaveBeenCalledOnce();
   });
 
-  it("rejects a superuser, BYPASSRLS role, protected-table owner, or neondb_owner before setting claims", async () => {
+  it("rejects privileged, protected-owner, and capability roles before setting claims", async () => {
     for (const unsafeRole of [
       { ...SAFE_ROLE, rolsuper: true },
       { ...SAFE_ROLE, rolbypassrls: true },
       { ...SAFE_ROLE, owns_protected_tables: true },
       { ...SAFE_ROLE, rolname: "neondb_owner" },
+      { ...SAFE_ROLE, rolname: "compras_team_directory_view_owner" },
     ]) {
       databaseMocks.Pool.mockReset();
       identityMocks.getVerifiedExternalIdentity.mockClear();

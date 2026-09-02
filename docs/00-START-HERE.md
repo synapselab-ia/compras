@@ -8,9 +8,14 @@ O sistema não substitui os sistemas oficiais de processo administrativo, requis
 
 ## Estado atual
 
-A `Foundation-00` e as work units F01 a F11 foram revisadas e integradas em `main`.
+A `Foundation-00` e as work units F01 a F12 foram revisadas e integradas em `main`.
 
-Existe uma aplicação executável com jornada demonstrativa `Central → detalhe → Central`, exclusivamente com dados fictícios. A Central também possui um caminho de leitura persistente server-side, desabilitado por padrão e ativável somente por `COMPRAS_PERSISTENT_READ_ENABLED=true`. Esse caminho usa a fronteira confiável implementada em F08: sessão validada no servidor → `issuer + subject` → contexto transacional LOCAL → PostgreSQL/RLS.
+Existe uma aplicação executável com jornada `Central → detalhe → Central` em dois modos separados:
+
+- **demo**, padrão e exclusivamente fictício;
+- **persistente**, opt-in somente quando `COMPRAS_PERSISTENT_READ_ENABLED=true`.
+
+O caminho persistente usa a fronteira confiável implementada em F08: sessão validada no servidor → `issuer + subject` → contexto transacional LOCAL → PostgreSQL/RLS. A Central e o detalhe usam a mesma semântica de ativação e falham fechados: configuração inválida ou falha protegida não é mascarada por fixture demo.
 
 O núcleo relacional possui as migrations imutáveis:
 
@@ -18,15 +23,15 @@ O núcleo relacional possui as migrations imutáveis:
 - `database/migrations/0002_trusted_identity_read_policies.sql` — helpers de identidade e primeiras policies somente de `SELECT`;
 - `database/migrations/0003_team_member_directory.sql` — capability view mínima para diretório de responsáveis da mesma equipe.
 
-A CI preserva provas separadas do estado `0001`, do estado `0001 + 0002`, do desenho adversarial F10 e da migration `0001 + 0002 + 0003` com role de migration não-superuser, além de testar preexistência insegura da capability e reutilização da role cluster-level em segundo database.
+A F11 implementou `public.team_member_directory`, que expõe somente `team_id`, `membership_id` e `display_name` por uma capability técnica `NOLOGIN`/`NOBYPASSRLS`. A Central e o detalhe persistentes usam somente essa projeção para resolver responsáveis colegas.
 
-A F11 transformou ADR-004 em runtime: `public.team_member_directory` expõe somente `team_id`, `membership_id` e `display_name`, com owner técnico `NOLOGIN`/`NOBYPASSRLS`, grants coluna-a-coluna e policies direcionadas. A Central persistente usa exclusivamente essa view para resolver nomes de responsáveis colegas e o adaptador F08 rejeita a capability como credencial operacional.
+A F12 conectou `/contratacoes/[id]` à leitura persistente protegida. O ID da rota é validado e usado apenas como seletor UUID parametrizado; RLS continua sendo a fronteira autoritativa. Identificadores relacionados, itens e eventos são lidos somente das tabelas protegidas existentes. UUID de outra equipe permanece indistinguível de inexistente e falha de banco/sessão/configuração resulta em indisponibilidade genérica.
 
-ADR-005 registra uma nuance de PostgreSQL 17 necessária à implementação: um `CREATEROLE` não-superuser recebe uma concessão administrativa automática sobre a role que cria. O desenho aceita somente essa relação `ADMIN TRUE / SET FALSE / INHERIT FALSE` para o principal de migration; qualquer membership utilizável ou membership da capability em outra role falha fechado.
+A CI preserva as regressões da fundação `0001`, do estado `0001 + 0002`, do desenho F10, da capability F11 e agora da leitura adversarial do detalhe F12, além de lint, typecheck, testes e build.
 
-Ainda não existe banco/Auth/Vercel hospedado, login/signup, usuário operacional real, secret real ou deploy. O modo persistente existe e é testado somente com dados artificiais; `REAL_DATA_ALLOWED` permanece `NO`.
+Ainda não existe banco/Auth/Vercel hospedado, login/signup operacional, usuário real, configuração operacional real ou deploy. O modo persistente é validado com dados artificiais; `REAL_DATA_ALLOWED` permanece `NO`.
 
-O limite funcional atual é o detalhe: `/contratacoes/[id]` ainda usa fixture demonstrativa. A próxima ação canônica é `F12-PERSISTENT-CONTRACTING-DETAIL-READ-01 — Conectar detalhe à leitura persistente protegida`. Ela deve completar a jornada persistente de leitura sem criar escrita nem infraestrutura.
+O limite atual deixou de ser código de leitura e passou a ser a fronteira do primeiro ambiente hospedado. A próxima ação canônica é `F13-HOSTED-PREVIEW-BOUNDARY-DESIGN-01 — Desenhar a fronteira do primeiro preview hospedado privado`. Ela deve revalidar capacidades atuais dos provedores de referência e fechar o desenho de segurança/ambientes antes de qualquer provisionamento.
 
 O repositório está público. Aplicam-se integralmente as restrições de publicação de `AGENTS.md` e `docs/architecture/SECURITY.md`; nenhum dado real ou pré-publicação pode ser usado.
 
@@ -92,6 +97,7 @@ A hierarquia detalhada está em `docs/ai/SOURCE_OF_TRUTH.md`.
 - contexto de identidade no banco só é confiável quando estabelecido por servidor autenticador controlado;
 - capability técnica de leitura não é credencial operacional e não pode ser assumida pelo aplicativo;
 - falha de leitura protegida não pode ser convertida silenciosamente em sucesso demonstrativo;
+- infraestrutura externa deve ser revalidada e desenhada antes de provisionamento;
 - evitar complexidade prematura;
 - construir por slices pequenas, utilizáveis e verificáveis;
 - qualquer incerteza importante aumenta a investigação, nunca autoriza adivinhação.

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { readPersistentReadMode } from "@/server/persistent-read-mode";
+import { readPersistentReadMode } from "../../server/persistent-read-mode";
 import { demoSectorRecords } from "./demo-data";
 import { readPersistentSectorCentralRecords } from "./persistent-read";
 import type { SectorCentralRecord } from "./types";

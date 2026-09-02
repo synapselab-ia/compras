@@ -1,6 +1,6 @@
 import "server-only";
 
-import { readPersistentReadMode } from "@/server/persistent-read-mode";
+import { readPersistentReadMode } from "../../server/persistent-read-mode";
 import { getDemoContractingDetail } from "./demo-detail-data";
 import {
   isPersistentContractingId,

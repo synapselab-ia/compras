@@ -8,7 +8,7 @@ O sistema não substitui os sistemas oficiais de processo administrativo, requis
 
 ## Estado atual
 
-A `Foundation-00` e as work units F01 a F12 foram revisadas e integradas em `main`.
+A `Foundation-00` e as work units F01 a F13 foram concluídas/revisadas no fluxo canônico.
 
 Existe uma aplicação executável com jornada `Central → detalhe → Central` em dois modos separados:
 
@@ -27,11 +27,17 @@ A F11 implementou `public.team_member_directory`, que expõe somente `team_id`, 
 
 A F12 conectou `/contratacoes/[id]` à leitura persistente protegida. O ID da rota é validado e usado apenas como seletor UUID parametrizado; RLS continua sendo a fronteira autoritativa. Identificadores relacionados, itens e eventos são lidos somente das tabelas protegidas existentes. UUID de outra equipe permanece indistinguível de inexistente e falha de banco/sessão/configuração resulta em indisponibilidade genérica.
 
-A CI preserva as regressões da fundação `0001`, do estado `0001 + 0002`, do desenho F10, da capability F11 e agora da leitura adversarial do detalhe F12, além de lint, typecheck, testes e build.
+A F13 revalidou Vercel e Neon nas fontes oficiais atuais e registrou a ADR-006 para o primeiro preview hospedado privado. O desenho exige Vercel Deployment Protection efetivo, secrets branch-specific, nenhuma production surface pública, Managed Better Auth com signup desabilitado, papéis PostgreSQL separados para bootstrap/migration/runtime e manutenção integral da fronteira F08/RLS.
+
+Um achado importante de F13 é que roles Neon criadas por Console/CLI/API recebem membership em `neon_superuser`, enquanto roles criadas por SQL não recebem esse privilégio automaticamente. Runtime e capability, portanto, devem ser criados/validados por SQL; a role de control plane nunca pode ser `DATABASE_URL` da aplicação.
+
+Managed Better Auth continua compatível com o adaptador server-side existente. A configuração atual do provider oferece `disable_sign_up` para email/senha, mas a aplicação ainda não possui uma jornada canônica de sign-in/sign-out nem uma superfície HTTP que prove a ausência de signup público. Essa lacuna deve ser fechada antes do primeiro Auth hospedado.
+
+A CI preserva as regressões da fundação `0001`, do estado `0001 + 0002`, do desenho F10, da capability F11 e da leitura adversarial F12, além de lint, typecheck, testes e build. A CI da `main` após o checkpoint F12, run `33666664123`, está em PASS.
 
 Ainda não existe banco/Auth/Vercel hospedado, login/signup operacional, usuário real, configuração operacional real ou deploy. O modo persistente é validado com dados artificiais; `REAL_DATA_ALLOWED` permanece `NO`.
 
-O limite atual deixou de ser código de leitura e passou a ser a fronteira do primeiro ambiente hospedado. A próxima ação canônica é `F13-HOSTED-PREVIEW-BOUNDARY-DESIGN-01 — Desenhar a fronteira do primeiro preview hospedado privado`. Ela deve revalidar capacidades atuais dos provedores de referência e fechar o desenho de segurança/ambientes antes de qualquer provisionamento.
+A próxima ação canônica é `F14-PRIVATE-AUTH-ADMISSION-01 — Implementar autenticação privada sem signup público`. Ela deve adicionar a menor jornada de sign-in/sign-out e uma barreira server-side contra signup/endpoints não permitidos, sem provisionar infraestrutura. Somente depois disso o preview hospedado fictício da ADR-006 poderá ser provisionado e provado.
 
 O repositório está público. Aplicam-se integralmente as restrições de publicação de `AGENTS.md` e `docs/architecture/SECURITY.md`; nenhum dado real ou pré-publicação pode ser usado.
 
@@ -69,7 +75,8 @@ A hierarquia detalhada está em `docs/ai/SOURCE_OF_TRUTH.md`.
 - `docs/decisions/ADR-002-persistence-foundation.md` — fundação relacional/default-deny;
 - `docs/decisions/ADR-003-trusted-identity-rls-boundary.md` — fronteira de identidade confiável e autorização de leitura;
 - `docs/decisions/ADR-004-team-directory-rls-capability-view.md` — desenho do diretório mínimo;
-- `docs/decisions/ADR-005-directory-capability-role-lifecycle.md` — lifecycle seguro da role cluster-level.
+- `docs/decisions/ADR-005-directory-capability-role-lifecycle.md` — lifecycle seguro da role cluster-level;
+- `docs/decisions/ADR-006-hosted-preview-boundary.md` — fronteira do primeiro preview privado fictício.
 
 ### Operação por IA
 
@@ -98,6 +105,9 @@ A hierarquia detalhada está em `docs/ai/SOURCE_OF_TRUTH.md`.
 - capability técnica de leitura não é credencial operacional e não pode ser assumida pelo aplicativo;
 - falha de leitura protegida não pode ser convertida silenciosamente em sucesso demonstrativo;
 - infraestrutura externa deve ser revalidada e desenhada antes de provisionamento;
+- preview privado exige proteção efetiva e não apenas URL obscura;
+- signup público deve ser impedido no enforcement real, não apenas omitido da UI;
+- roles privilegiadas do provider nunca são credencial runtime;
 - evitar complexidade prematura;
 - construir por slices pequenas, utilizáveis e verificáveis;
 - qualquer incerteza importante aumenta a investigação, nunca autoriza adivinhação.

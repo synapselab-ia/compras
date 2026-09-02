@@ -1,163 +1,154 @@
 # Current State — Compras
 
-**PROJECT_STATUS:** READY_FOR_PRIVATE_AUTH_ADMISSION  
-**CURRENT_PHASE:** F14 — Private Auth Admission  
+**PROJECT_STATUS:** READY_FOR_HOSTED_PREVIEW_PROVISIONING  
+**CURRENT_PHASE:** F15 — Hosted Preview Provisioning  
 **REPO_VISIBILITY:** PUBLIC  
-**APPLICATION_STATUS:** PERSISTENT_CENTRAL_AND_DETAIL_READ_IMPLEMENTED_OPT_IN_AUTH_ADMISSION_NOT_IMPLEMENTED  
+**APPLICATION_STATUS:** PRIVATE_AUTH_ADMISSION_AND_PERSISTENT_READ_IMPLEMENTED_NOT_HOSTED  
 **DATABASE_STATUS:** PROTECTED_READ_MODEL_AND_TEAM_DIRECTORY_VALIDATED_IN_EPHEMERAL_CI  
-**AUTH_STATUS:** SERVER_TRUST_ADAPTER_IMPLEMENTED_LOGIN_ADMISSION_NOT_IMPLEMENTED  
+**AUTH_STATUS:** PRIVATE_SIGNIN_SIGNOUT_AND_DENY_ALL_ADMISSION_IMPLEMENTED_NOT_PROVISIONED  
 **DEPLOYMENT_STATUS:** NOT_CONFIGURED  
 **REAL_DATA_ALLOWED:** NO  
 **CONTEXT_STATUS:** VALID  
 **FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`  
-**LAST_GOOD_COMMIT:** `bac2f1a9bd9e66137ac8ae146593524d3f026113`  
-**LAST_GOOD_CI_RUN:** `33668523711`  
+**LAST_GOOD_COMMIT:** `6c3891d0e4839daa067741bbcf5eafdea542a329`  
+**LAST_GOOD_CI_RUN:** `33670574481`  
 **BLOCKERS:** none  
 **MANUAL_ACTION_REQUIRED:** none
 
 ## Estado real
 
-A work unit `F13-HOSTED-PREVIEW-BOUNDARY-DESIGN-01` foi concluída e integrada à `main` pela PR #16.
+A work unit `F14-PRIVATE-AUTH-ADMISSION-01` foi concluída e integrada à `main` pela PR #18.
 
-A F13 foi exclusivamente arquitetural/documental: nenhum projeto Vercel, Neon hospedado, Auth operacional, usuário, secret, banco externo ou deploy foi criado. O repositório continua público e somente dados fictícios/sanitizados são permitidos.
+A aplicação agora possui jornada privada de sign-in/sign-out em código, mas nenhum Auth, banco ou hosting externo foi provisionado. O repositório continua público e somente fixtures/dados fictícios ou sanitizados podem ser usados.
 
-A jornada persistente de leitura `Central → detalhe → Central` permanece implementada e opt-in por `COMPRAS_PERSISTENT_READ_ENABLED=true`. O modo demo continua padrão; falha de sessão/configuração/banco continua fail-closed e não retorna fixture como sucesso.
+A jornada persistente `Central → detalhe → Central` continua opt-in por `COMPRAS_PERSISTENT_READ_ENABLED=true`, usando a fronteira F08 `sessão validada -> issuer + subject -> contexto transacional LOCAL -> PostgreSQL/RLS`.
 
-## F13 — fronteira do preview hospedado
+## F14 — admissão privada sem signup público
 
-A ADR-006 revalidou nas fontes oficiais atuais Vercel e Neon e definiu a fronteira mínima do primeiro preview privado fictício.
+### Revalidação externa
 
-### Vercel
+Antes da implementação foram revalidadas as superfícies atuais necessárias do Managed Better Auth/SDK:
 
-Vercel permanece adequado como alvo **condicional** de preview:
+- Neon Next.js Server SDK e overview do Auth;
+- configuração email/senha com `disable_sign_up`;
+- pacote oficial `@neondatabase/auth@0.5.0-beta`, que coincide com a versão fixada no projeto;
+- implementação oficial atual de `createNeonAuth()`, `auth.handler()`, `auth.signIn.email()`, `auth.signOut()` e `auth.getSession()`;
+- formato atual de erros server-side e códigos estáveis de falha de transporte.
 
-- Vercel Authentication é a barreira externa obrigatória de Deployment Protection;
-- `Standard Protection` pode proteger previews, mas não deve ser tratado como proteção de production domain;
-- se qualquer production surface servir a aplicação, ela precisa estar protegida por `All Deployments` ou o provisionamento falha antes de anexar secrets;
-- obscuridade de URL não é controle de acesso;
-- Shareable Links e Deployment Protection Exceptions ficam proibidos no primeiro preview;
-- eventual bypass de automação futuro, se indispensável, deve usar secret por header, nunca query string;
-- secrets de Preview serão branch-specific em uma branch hospedada dedicada, não propagados a todos os PRs do repositório público;
-- retenção e remoção de deployments/snapshots fazem parte do deprovisionamento.
+A evidência confirmou que sign-in/sign-out podem ser usados diretamente no servidor sem montar o handler catch-all, enquanto o handler genérico exporia uma superfície muito maior que a necessária.
 
-### Neon PostgreSQL
+### Fronteira implementada
 
-Neon permanece adequado como PostgreSQL de referência para o preview fictício.
+A ADR-007 fixou a primeira integração de Auth como superfície estreita:
 
-A ADR-006 separa quatro responsabilidades:
+- sign-in somente por email/senha de identidade já admitida;
+- sign-out explícito;
+- leitura de sessão server-only;
+- nenhum signup, OAuth, magic link, OTP, reset, Admin API ou organizações na superfície da aplicação;
+- `/api/auth/[...path]` responde deny-all e não delega a `auth.handler()`;
+- `getVerifiedExternalIdentity()` continua sendo a interface usada por F08 e continua retornando apenas `issuer + subject` derivados de configuração/sessão confiáveis.
 
-1. bootstrap/control-plane potencialmente privilegiado, apenas para provisionamento;
-2. principal de migration criado por SQL, separado do runtime e capaz de aplicar `0001`–`0003`;
-3. role runtime criada por SQL, não-owner, sem superuser/`BYPASSRLS`/`CREATEROLE`, validada pela fronteira F08;
-4. capability `compras_team_directory_view_owner` `NOLOGIN`, criada/reutilizada somente pela migration `0003` e nunca usada como credencial.
+O provider hospedado futuro continua obrigado a usar `disable_sign_up=true`. O deny-all da aplicação não substitui esse controle: ambos são necessários.
 
-A documentação Neon atual registra que roles criadas por Console/CLI/API recebem membership em `neon_superuser`, enquanto roles criadas por SQL seguem privilégios normais do PostgreSQL. Por isso runtime e capability não podem ser criados pelo control plane por conveniência.
+### Estados de sessão
 
-### Managed Better Auth
+O runtime server-only distingue:
 
-Managed Better Auth continua compatível com o adaptador server-side já implementado, condicionado à admissão privada:
+1. `authenticated` — sessão válida com `user.id`; produz somente `issuer + subject`;
+2. `unauthenticated` — ausência de sessão ou sessão rejeitada/expirada;
+3. `unavailable` — configuração inválida, provider/transporte indisponível ou payload inconsistente.
 
-- Managed Better Auth está atualmente disponível em regiões AWS e não em Azure;
-- `createNeonAuth()`/`auth.getSession()` e cookie secret server-side continuam suportados;
-- signup é permitido por padrão, mas a configuração email/senha atual possui `disable_sign_up`;
-- APIs/plugins administrativos existem para gestão/criação administrativa de usuário;
-- métodos adicionais possuem semântica própria de signup e não entram no primeiro preview sem prova específica.
+Em modo persistente, Central e detalhe verificam esse estado antes da primeira consulta de domínio:
 
-A decisão inicial é usar somente email/senha, exigir `disable_sign_up=true` no provider antes da exposição e admitir somente identidades fictícias por caminho administrativo controlado. Login no provider continua separado da autorização do produto: nenhuma identidade ganha acesso sem `app_user` ativo + membership ativa no PostgreSQL.
+- sem sessão -> redirect fixo para `/auth/sign-in`;
+- Auth indisponível -> indisponibilidade genérica;
+- sessão válida -> segue para os readers protegidos e para RLS.
 
-## Ambientes
+O detalhe continua validando UUID malformado antes de Auth/SQL.
 
-### Local/CI
+### Autenticação continua separada de autorização
 
-- dados artificiais;
-- PostgreSQL descartável/local;
-- testes adversariais continuam gate canônico;
-- nenhum secret operacional hospedado.
+F14 não adicionou mutation ou auto-provisionamento.
 
-### Preview hospedado futuro
+Sign-in não cria nem altera:
 
-- não-produção;
-- branch dedicada;
-- dados somente fictícios;
-- Deployment Protection efetivo;
-- Auth interno privado;
-- runtime sujeito a RLS;
-- secrets server-only e branch-specific;
-- migrations canônicas aplicadas por principal separado;
-- seed fictício separado de migrations;
-- nenhuma analytics/session replay externa por padrão;
-- destruição/recriação normal do ambiente.
+- `app_users`;
+- memberships;
+- teams;
+- contratações;
+- policies/migrations.
 
-### Produção futura
+Uma identidade autenticada, mas desconhecida/desabilitada no domínio ou sem membership ativa, continua sem dados pelo enforcement existente do PostgreSQL/RLS.
 
-Permanece fora do escopo. Dados reais continuam proibidos e exigirão revisão formal separada.
+### Redirects
 
-## Configuração sensível prevista
+A aplicação não aceita `callbackURL`/`redirectTo` arbitrário para login ou logout. Os destinos são constantes locais. Campos de issuer, subject, email como identidade de autorização, `app_user_id`, membership ou `team_id` enviados pelo browser não participam da identidade usada por F08.
 
-A ADR-006 classifica:
+## Red-team de F14
 
-- `DATABASE_URL` runtime como secret server-only da branch de Preview;
-- connection string de bootstrap/migration como secret administrativo efêmero, nunca runtime;
-- `NEON_AUTH_COOKIE_SECRET` como secret server-only;
-- `NEON_AUTH_BASE_URL` como configuração server-side confiável;
-- `COMPRAS_PERSISTENT_READ_ENABLED=true` somente depois de Auth/DB/smoke estarem validados;
-- tokens de provider/control plane como secrets administrativos, nunca browser/Git/log.
+A implementação e os testes atacaram deliberadamente:
 
-Nenhum valor operacional real foi criado ou documentado.
+- requisição direta a signup na superfície HTTP da aplicação;
+- OAuth/OTP/admin/reset e outros endpoints laterais;
+- rota persistente sem sessão tentando alcançar banco;
+- sessão 401/403 e sessão malformada;
+- provider/configuração indisponível;
+- `callbackURL` externo e tentativa de open redirect;
+- issuer/subject/IDs de equipe/membership forjados pelo browser;
+- email conhecido tentando substituir o subject da sessão;
+- identidade autenticada sem autorização interna;
+- falha protegida retornando demo silenciosamente;
+- regressão de UUID cross-team/inexistente;
+- exposição acidental de erro bruto do provider;
+- chamadas de signup ou writes de domínio na jornada F14.
 
-## Red-team de F13
+Resultados:
 
-O desenho foi atacado contra:
+- generic Auth API: DENY-ALL;
+- open redirect: NÃO ENCONTRADO;
+- identidade client-supplied: IGNORADA;
+- DB access antes de sessão em caminho persistente: BLOQUEADO;
+- auto-provisionamento de domínio: AUSENTE;
+- fallback demo em falha Auth/persistente: AUSENTE;
+- F08/RLS: PRESERVADOS.
 
-- URL de preview descoberta anonimamente;
-- production domain público sob Standard Protection;
-- proteção existente somente na UI;
-- signup direto no endpoint de Auth apesar da ausência de botão;
-- PR arbitrário recebendo secrets Preview;
-- runtime usando role default/control-plane/owner/`BYPASSRLS`;
-- capability criada pelo control plane e contaminada com `neon_superuser`;
-- mesma credencial para migration e runtime;
-- seed fictício aplicado no ambiente errado;
-- claims/secrets/DB errors chegando a logs ou URLs;
-- bypass por shareable link/query string;
-- deployments/branches órfãos sobrevivendo ao teste.
+## Verificação de F14
 
-Cada cenário possui controle ou critério explícito de bloqueio na ADR-006.
-
-## Verificação de F13
-
-- recuperação de `main`, PRs abertas e branches relacionadas: PASS — nenhuma frente concorrente ativa no início;
+- recuperação de `main`, PRs abertas e branches: PASS — nenhuma frente F14 concorrente existia no início;
 - `CONTEXT_MANIFEST` comparado aos blobs atuais: PASS (`CONTEXT_STATUS = VALID`);
-- CI pós-checkpoint F12 `33666664123`: PASS;
-- SECURITY/DATABASE/ADR-003/004/005 e runtime F08/Auth inspecionados diretamente: PASS;
-- documentação oficial atual de Vercel Deployment Protection, ambientes e secrets: REVALIDADA;
-- documentação oficial atual de Neon Auth, roles/PostgreSQL e Serverless Driver: REVALIDADA;
-- matriz de capacidades, condicionais, riscos e rollback: DOCUMENTADA em ADR-006;
-- diff integral da PR #16: somente documentação/checkpoint/spec, sem migration/runtime/infra: PASS;
-- PR #16 head `c3308747e193ccfeb41f6f4ecde107d6eb33b663`: CI `33668314182` PASS — `verify` e `database`;
-- PR #16 squash-merged em `bac2f1a9bd9e66137ac8ae146593524d3f026113`;
-- CI da `main` após merge `33668523711`: PASS — `verify` e `database`;
-- secret real, dado interno/pré-publicação, account/project ID privado ou URL privada: NÃO ENCONTRADOS;
+- documentação oficial atual necessária ao SDK/Managed Better Auth: REVALIDADA;
+- commit da feature `d2f3885ede1b0daea5c3d9b111553f6d95cf981f`;
+- PR #18 CI `33670463890`: PASS — `verify` e `database`;
+- lint: PASS;
+- typecheck: PASS;
+- testes existentes e novos testes adversariais de Auth: PASS;
+- build: PASS;
+- regressões PostgreSQL F07/F10/F11/F12: PASS;
+- PR #18 squash-merged em `6c3891d0e4839daa067741bbcf5eafdea542a329`;
+- CI da `main` após F14 `33670574481`: PASS — `verify` e `database`;
+- migration/policy nova: NÃO;
+- infraestrutura externa criada: NÃO;
+- secret real ou dado interno/pré-publicação no diff: NÃO;
 - `REAL_DATA_ALLOWED`: continua `NO`.
 
 ## Limite atual
 
-A fronteira de hosting está definida, mas a aplicação ainda não possui jornada operacional de login/admissão.
+A aplicação e a fronteira de Auth necessária ao primeiro preview estão implementadas, mas ainda não existe ambiente hospedado no qual provar os controles da ADR-006/ADR-007 em conjunto.
 
-`src/server/auth/external-identity.ts` sabe validar/consumir uma sessão existente; o `src/app` ainda não possui sign-in/sign-out privado nem uma fronteira HTTP que prove a rejeição de signup público e endpoints laterais.
+A próxima unidade independente é provisionar um preview descartável e fictício somente se for possível provar, antes da exposição, Deployment Protection, signup provider-side desabilitado, secrets restritos, roles PostgreSQL seguras, migrations canônicas, seed artificial e rollback/deprovisionamento.
 
-Provisionar Vercel/Neon antes dessa etapa criaria um ambiente hospedado incapaz de demonstrar o requisito de admissão privada no enforcement real.
+Qualquer limitação de plano, connector ou provider que impeça esses controles deve bloquear F15 em vez de provocar enfraquecimento de segurança.
 
-Q-001, Q-002, Q-003, Q-004, Q-005, Q-006, Q-009 e Q-010 permanecem abertas. F13 não resolveu taxonomia, permissões funcionais ou auditoria de leitura por inferência.
+Q-001, Q-002, Q-003, Q-004, Q-005, Q-006, Q-009 e Q-010 permanecem abertas. F14 não resolveu taxonomia, permissões de escrita ou auditoria de leitura por inferência.
 
 ## Context manifest
 
-Os inputs estáveis do `CONTEXT_MANIFEST` não foram alterados por F13. ADR-006, `CURRENT_STATE`, `NEXT_ACTION` e specs são lidos ao vivo pelo protocolo.
+Os inputs estáveis de `docs/ai/CONTEXT_MANIFEST.md` continuam sem alteração e foram validados antes da implementação F14. ADR-006, ADR-007, `CURRENT_STATE`, `NEXT_ACTION` e specs são lidos ao vivo.
 
 ## Last good
 
-`bac2f1a9bd9e66137ac8ae146593524d3f026113` é o `LAST_GOOD_COMMIT`, validado pela CI da `main` run `33668523711` com `verify` e `database` em PASS.
+`6c3891d0e4839daa067741bbcf5eafdea542a329` é o `LAST_GOOD_COMMIT`, validado pela CI da `main` run `33670574481` com `verify` e `database` em PASS.
 
 ## Próxima ação
 
-Executar `F14-PRIVATE-AUTH-ADMISSION-01` conforme `docs/ai/NEXT_ACTION.md` e `tasks/F14-PRIVATE-AUTH-ADMISSION-01/SPEC.md`.
+Executar `F15-HOSTED-PREVIEW-PROVISION-01` conforme `docs/ai/NEXT_ACTION.md` e `tasks/F15-HOSTED-PREVIEW-PROVISION-01/SPEC.md`.

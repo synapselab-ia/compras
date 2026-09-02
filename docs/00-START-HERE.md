@@ -8,7 +8,7 @@ O sistema não substitui os sistemas oficiais de processo administrativo, requis
 
 ## Estado atual
 
-A `Foundation-00` e as work units F01 a F13 foram concluídas/revisadas no fluxo canônico.
+A `Foundation-00` e as work units F01 a F14 foram concluídas/revisadas e integradas pelo fluxo canônico.
 
 Existe uma aplicação executável com jornada `Central → detalhe → Central` em dois modos separados:
 
@@ -27,17 +27,17 @@ A F11 implementou `public.team_member_directory`, que expõe somente `team_id`, 
 
 A F12 conectou `/contratacoes/[id]` à leitura persistente protegida. O ID da rota é validado e usado apenas como seletor UUID parametrizado; RLS continua sendo a fronteira autoritativa. Identificadores relacionados, itens e eventos são lidos somente das tabelas protegidas existentes. UUID de outra equipe permanece indistinguível de inexistente e falha de banco/sessão/configuração resulta em indisponibilidade genérica.
 
-A F13 revalidou Vercel e Neon nas fontes oficiais atuais e registrou a ADR-006 para o primeiro preview hospedado privado. O desenho exige Vercel Deployment Protection efetivo, secrets branch-specific, nenhuma production surface pública, Managed Better Auth com signup desabilitado, papéis PostgreSQL separados para bootstrap/migration/runtime e manutenção integral da fronteira F08/RLS.
+A F13 definiu na ADR-006 a fronteira do primeiro preview hospedado privado: Deployment Protection obrigatório, secrets branch-specific, nenhuma production surface pública sem proteção compatível, papéis PostgreSQL separados para bootstrap/migration/runtime, Managed Better Auth com signup desabilitado e dados exclusivamente fictícios.
 
-Um achado importante de F13 é que roles Neon criadas por Console/CLI/API recebem membership em `neon_superuser`, enquanto roles criadas por SQL não recebem esse privilégio automaticamente. Runtime e capability, portanto, devem ser criados/validados por SQL; a role de control plane nunca pode ser `DATABASE_URL` da aplicação.
+A F14 implementou a admissão privada no repositório. A aplicação agora possui sign-in email/senha e sign-out por Server Actions server-side. O catch-all `/api/auth/[...path]` é deliberadamente deny-all e não delega a `auth.handler()`, impedindo que signup, OAuth, OTP, reset, Admin API ou outros endpoints laterais apareçam na superfície HTTP da aplicação. Em modo persistente, ausência de sessão é detectada antes da consulta ao banco e leva ao sign-in; falha do provider/configuração permanece indisponibilidade genérica sem fallback demo. Login continua sem criar `app_users`, memberships ou permissões.
 
-Managed Better Auth continua compatível com o adaptador server-side existente. A configuração atual do provider oferece `disable_sign_up` para email/senha, mas a aplicação ainda não possui uma jornada canônica de sign-in/sign-out nem uma superfície HTTP que prove a ausência de signup público. Essa lacuna deve ser fechada antes do primeiro Auth hospedado.
+A ADR-007 registra essa decisão e mantém como requisito independente para o futuro preview que o Managed Better Auth real esteja configurado com `disable_sign_up=true` e métodos adicionais desabilitados. A fronteira F08 e o enforcement PostgreSQL/RLS não foram substituídos.
 
-A CI preserva as regressões da fundação `0001`, do estado `0001 + 0002`, do desenho F10, da capability F11 e da leitura adversarial F12, além de lint, typecheck, testes e build. A CI da `main` após o checkpoint F12, run `33666664123`, está em PASS.
+A CI da `main` após F14, run `33670574481`, passou integralmente em `verify` e `database`, incluindo lint, typecheck, testes, build e todas as regressões PostgreSQL existentes.
 
-Ainda não existe banco/Auth/Vercel hospedado, login/signup operacional, usuário real, configuração operacional real ou deploy. O modo persistente é validado com dados artificiais; `REAL_DATA_ALLOWED` permanece `NO`.
+Ainda não existe banco/Auth/Vercel hospedado, usuário hospedado, secret operacional real, dado real ou deploy. `REAL_DATA_ALLOWED` permanece `NO`.
 
-A próxima ação canônica é `F14-PRIVATE-AUTH-ADMISSION-01 — Implementar autenticação privada sem signup público`. Ela deve adicionar a menor jornada de sign-in/sign-out e uma barreira server-side contra signup/endpoints não permitidos, sem provisionar infraestrutura. Somente depois disso o preview hospedado fictício da ADR-006 poderá ser provisionado e provado.
+A próxima ação canônica é `F15-HOSTED-PREVIEW-PROVISION-01 — Provisionar e provar o primeiro preview hospedado privado fictício`. Ela deve materializar a ADR-006/ADR-007 em infraestrutura descartável, somente se os controles de proteção, signup, roles, migrations, secrets e deprovisionamento puderem ser provados sem enfraquecimento.
 
 O repositório está público. Aplicam-se integralmente as restrições de publicação de `AGENTS.md` e `docs/architecture/SECURITY.md`; nenhum dado real ou pré-publicação pode ser usado.
 
@@ -76,7 +76,8 @@ A hierarquia detalhada está em `docs/ai/SOURCE_OF_TRUTH.md`.
 - `docs/decisions/ADR-003-trusted-identity-rls-boundary.md` — fronteira de identidade confiável e autorização de leitura;
 - `docs/decisions/ADR-004-team-directory-rls-capability-view.md` — desenho do diretório mínimo;
 - `docs/decisions/ADR-005-directory-capability-role-lifecycle.md` — lifecycle seguro da role cluster-level;
-- `docs/decisions/ADR-006-hosted-preview-boundary.md` — fronteira do primeiro preview privado fictício.
+- `docs/decisions/ADR-006-hosted-preview-boundary.md` — fronteira do primeiro preview privado fictício;
+- `docs/decisions/ADR-007-private-auth-admission.md` — admissão privada por Server Actions sem proxy Auth genérico.
 
 ### Operação por IA
 
@@ -103,11 +104,12 @@ A hierarquia detalhada está em `docs/ai/SOURCE_OF_TRUTH.md`.
 - IDs fornecidos pelo cliente nunca definem identidade ou escopo por si só;
 - contexto de identidade no banco só é confiável quando estabelecido por servidor autenticador controlado;
 - capability técnica de leitura não é credencial operacional e não pode ser assumida pelo aplicativo;
-- falha de leitura protegida não pode ser convertida silenciosamente em sucesso demonstrativo;
-- infraestrutura externa deve ser revalidada e desenhada antes de provisionamento;
+- falha protegida não pode ser convertida silenciosamente em sucesso demonstrativo;
+- signup público deve ser impedido no enforcement da aplicação e também no provider hospedado;
+- endpoints de Auth não utilizados permanecem fechados por padrão;
 - preview privado exige proteção efetiva e não apenas URL obscura;
-- signup público deve ser impedido no enforcement real, não apenas omitido da UI;
 - roles privilegiadas do provider nunca são credencial runtime;
+- infraestrutura externa deve ser revalidada antes de provisionamento;
 - evitar complexidade prematura;
 - construir por slices pequenas, utilizáveis e verificáveis;
 - qualquer incerteza importante aumenta a investigação, nunca autoriza adivinhação.

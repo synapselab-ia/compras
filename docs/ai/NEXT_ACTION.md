@@ -1,87 +1,93 @@
 # Next Action — Compras
 
-## F12-PERSISTENT-CONTRACTING-DETAIL-READ-01 — Conectar detalhe à leitura persistente protegida
+## F13-HOSTED-PREVIEW-BOUNDARY-DESIGN-01 — Desenhar a fronteira do primeiro preview hospedado privado
 
-**Classe:** `T1 — feature de leitura` com impacto de `T2 — segurança`  
+**Classe:** `T5 — arquitetura` com impacto de `T2 — segurança` e `T3 — integração externa`  
 **Estado:** READY  
-**Objetivo:** conectar `/contratacoes/[id]` ao caminho persistente server-only já validado, usando somente o ID opaco como seletor do recurso e deixando RLS determinar autorização, sem receber `team_id`/membership/user do browser, sem escrita e sem provisionar infraestrutura.
+**Objetivo:** revalidar nas fontes oficiais atuais as capacidades e limites dos provedores de referência e definir, sem ainda provisionar recursos, o desenho mínimo seguro para um primeiro preview hospedado privado da jornada persistente de leitura, usando exclusivamente dados fictícios/sanitizados.
 
 ## Fonte da tarefa
 
-Executar conforme `tasks/F12-PERSISTENT-CONTRACTING-DETAIL-READ-01/SPEC.md`, ADR-003, ADR-004, ADR-005 e migrations `0001`–`0003`.
+Executar conforme `tasks/F13-HOSTED-PREVIEW-BOUNDARY-DESIGN-01/SPEC.md`, `docs/architecture/ARCHITECTURE.md`, `docs/architecture/SECURITY.md`, `docs/architecture/DATABASE.md`, ADR-003, ADR-004 e ADR-005.
 
 ## Resultado esperado
 
-Ao final, o repositório deve possuir:
+Ao final, o repositório deve possuir uma decisão arquitetural verificável que estabeleça, no mínimo:
 
-- leitura persistente server-side do detalhe executada exclusivamente por `withTrustedDatabaseContext()`;
-- `id` de rota usado somente para localizar a contratação, nunca como prova de autorização;
-- nenhuma API que aceite `team_id`, `membership_id`, `app_user_id`, issuer ou subject do cliente;
-- RLS continuando responsável por tornar UUID conhecido de outra equipe invisível;
-- responsável resolvido somente por `public.team_member_directory`;
-- identificadores relacionados, itens e eventos lidos somente pelas tabelas já protegidas e pelas policies existentes;
-- separação explícita entre detalhe demo, detalhe persistente, não encontrado e indisponível;
-- falha persistente sem fallback silencioso para fixtures demo;
-- Central em modo persistente podendo voltar a oferecer navegação para o detalhe persistente correspondente;
-- nenhuma migration/policy de escrita nova salvo se uma necessidade estrutural objetiva e estritamente de leitura for descoberta e justificada.
+- se Neon continua adequado como referência para PostgreSQL/identidade necessários ao preview e quais capacidades atuais serão realmente usadas;
+- se Vercel continua adequado como alvo do preview e qual mecanismo atual impede acesso público não autenticado à aplicação;
+- separação explícita entre ambiente local/CI, preview hospedado e eventual produção futura;
+- estratégia de admissão privada sem signup público;
+- papéis de banco separados para migration/administração e runtime, preservando F08/RLS e impedindo owner/superuser/`BYPASSRLS` no aplicativo;
+- categorias de secrets e onde cada uma pode existir, sem registrar valores reais no GitHub;
+- caminho de aplicação das migrations `0001`–`0003` em banco hospedado sem depender de painel como fonte canônica;
+- estratégia de seed/smoke test exclusivamente fictícia para provar `Central → detalhe → Central` persistente;
+- política mínima de logs, analytics e URLs para evitar exposição de metadados internos;
+- plano de rollback/deprovisionamento do preview;
+- critérios objetivos para uma futura work unit de provisionamento, ou blocker explícito caso algum provedor/plano não satisfaça a fronteira.
 
 ## Regras obrigatórias
 
-- reutilizar a fronteira F08 e `COMPRAS_PERSISTENT_READ_ENABLED`; não criar um segundo modo de ativação divergente;
-- se necessário, extrair apenas um helper server-only mínimo para compartilhar a seleção demo/persistente entre Central e detalhe;
-- validar o `id` opaco antes de passá-lo à query; usar parâmetro SQL, nunca interpolação;
-- não aceitar ou derivar autorização de `team_id` fornecido por URL, query, body ou header;
-- um registro inexistente e um registro existente fora do escopo devem resultar no mesmo estado externo de não encontrado, sem oracle de autorização;
-- erro de sessão/configuração/banco/contexto deve resultar em estado indisponível genérico, não `not found` e não demo;
-- não serializar erro, cookie, sessão, claim ou connection string;
-- usar `team_member_directory` para nome de responsável e não reabrir `app_users`/`memberships` para colegas;
-- não inventar taxonomias finais para etapa, status, tipo de identificador ou evento;
-- Q-009 e Q-010 permanecem abertas;
-- nenhum login/signup/admissão, infraestrutura hospedada, secret real ou dado real.
+- revalidar documentação oficial atual dos provedores antes de fechar qualquer decisão; não confiar apenas na arquitetura de referência histórica;
+- preferir documentação oficial e registrar links/versões/datas suficientes para auditoria da decisão;
+- não provisionar projeto, banco, Auth, domínio ou deploy nesta work unit;
+- não criar usuário operacional real nem publicar identificadores de conta/projeto;
+- não criar ou versionar secret, token, connection string, cookie, issuer/subject real ou credencial de provider;
+- não habilitar signup público;
+- não aceitar proteção apenas na UI como controle de acesso ao preview;
+- preservar o contrato F08: sessão validada no servidor, contexto LOCAL e runtime não privilegiado sujeito a RLS;
+- preservar migrations como fonte canônica do schema;
+- dados usados em exemplos, testes e documentação devem ser artificiais;
+- manter `REAL_DATA_ALLOWED = NO`;
+- não resolver Q-009, Q-010 ou taxonomias abertas por inferência;
+- se a capacidade necessária depender de plano, setting ou limitação não confirmada, registrar a incerteza em vez de assumir.
 
-## Segurança mínima a provar
+## Red-team mínimo
 
-- UUID válido da própria equipe retorna somente o detalhe autorizado;
-- UUID válido conhecido de outra equipe fica invisível por RLS e é indistinguível de inexistente;
-- ID malformado não chega a SQL interpolado e não produz detalhe demo em modo persistente;
-- tentativa de passar `team_id`, membership ou user por argumento/cast não altera escopo;
-- responsável de colega ativo da mesma equipe é resolvido pela capability view;
-- membership responsável revogada ou app_user desabilitado permanece fallback genérico;
-- `related_identifiers`, `contracting_items` e `contracting_events` permanecem limitados ao registro/equipe autorizado;
-- nenhum owner, superuser, `BYPASSRLS`, `neondb_owner` ou capability role é usado pela aplicação;
-- falha do banco/sessão não vaza detalhes e não cai para demo;
-- nenhum dado sensível entra em URL além do ID opaco já necessário à rota.
+O desenho deve ser atacado contra, no mínimo:
+
+- preview acessível anonimamente por URL descoberta;
+- signup/admissão aberta por configuração padrão;
+- runtime usando owner, superuser, `BYPASSRLS`, `neondb_owner` ou capability role;
+- migrations executadas com credencial runtime ou credencial administrativa usada pela aplicação;
+- secrets chegando ao browser, GitHub público, Actions log, artifact ou URL;
+- branch/preview de PR recebendo secrets ou dados além do necessário;
+- seed fictício sendo confundido com dado real ou sendo aplicado em ambiente errado;
+- fallback demo mascarando falha de leitura persistente hospedada;
+- logs/analytics capturando IDs, claims ou conteúdo operacional desnecessário;
+- provider lock-in desnecessário contrariando a portabilidade definida na arquitetura;
+- ausência de rollback/deprovisionamento.
 
 ## Verificação obrigatória
 
-- regressões `0001 + 0002 + 0003` e suites F07/F08/F10/F11: PASS;
-- testes unitários/adversariais da leitura persistente do detalhe: PASS;
-- testes de seleção de fonte/estados demo-persistent-not-found-unavailable: PASS;
-- navegação da Central consistente com o modo selecionado: PASS;
-- `npm ci`: PASS;
-- lint: PASS;
-- typecheck: PASS;
-- testes: PASS;
-- build: PASS;
+- documentação oficial atual dos provedores relevantes: REVALIDADA;
+- matriz de capacidades/limitações e riscos: DOCUMENTADA;
+- ADR da fronteira do preview: COMPLETA;
+- compatibilidade com SECURITY/DATABASE/ADR-003/004/005: PASS;
+- nenhuma mudança de runtime, migration ou infraestrutura: CONFIRMADA;
+- diff integral sem secret, dado real, account/project ID ou URL privada: PASS;
+- lint/test/build aplicáveis à documentação: PASS/NOT APPLICABLE conforme CI;
 - CI: PASS;
-- diff integral sem secret, dado real ou infraestrutura provisionada.
+- exatamente uma nova `NEXT_ACTION` executável ao encerrar F13.
 
 ## Fora do escopo
 
 Não:
 
-- mutations, CRUD ou policy/RPC de escrita;
-- edição do detalhe;
-- perfil/role funcional da Q-009;
-- auditoria de leitura da Q-010;
-- login/signup/admissão;
-- criação de usuário real;
-- provisionamento Neon/Auth/Vercel;
-- deploy;
-- dados reais;
-- fechamento de taxonomias ainda abertas;
+- criar projeto Vercel/Neon ou qualquer outro recurso externo;
+- adicionar secrets a Vercel, GitHub ou provider;
+- aplicar migrations em banco hospedado;
+- criar identidade operacional real;
+- convidar usuário;
+- deploy ou domínio;
+- habilitar `COMPRAS_PERSISTENT_READ_ENABLED` em ambiente hospedado;
+- mutations, CRUD ou policy de escrita;
+- decidir perfis funcionais da Q-009;
+- decidir auditoria de leitura da Q-010;
+- usar dados reais;
+- tornar o repositório privado como efeito colateral;
 - pesquisa de preços.
 
 ## Critério de encerramento
 
-A tarefa termina quando Central e detalhe possuem uma jornada de leitura persistente opt-in coerente, o ID da rota é apenas seletor de recurso e nunca escopo/autorização, registros cross-team permanecem invisíveis por RLS, falhas protegidas são indistinguíveis de sucesso demo e existe exatamente uma nova `NEXT_ACTION` executável para a próxima fronteira necessária.
+A tarefa termina quando existe uma decisão arquitetural atualizada, baseada em fontes oficiais, que permita provisionar um preview privado fictício sem adivinhações de segurança/provedor, com riscos e rollback explícitos, e quando o checkpoint deixa exatamente uma próxima work unit pequena e executável.

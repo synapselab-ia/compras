@@ -1,123 +1,101 @@
 # Current State — Compras
 
-**PROJECT_STATUS:** READY_FOR_PERSISTENT_DETAIL_READ  
-**CURRENT_PHASE:** F12 — Persistent Contracting Detail Read  
+**PROJECT_STATUS:** READY_FOR_HOSTED_PREVIEW_DESIGN  
+**CURRENT_PHASE:** F13 — Hosted Preview Boundary Design  
 **REPO_VISIBILITY:** PUBLIC  
-**APPLICATION_STATUS:** CENTRAL_PERSISTENT_READ_WITH_TEAM_DIRECTORY_IMPLEMENTED_OPT_IN  
-**DATABASE_STATUS:** TEAM_DIRECTORY_CAPABILITY_IMPLEMENTED_AND_VALIDATED_IN_EPHEMERAL_CI  
+**APPLICATION_STATUS:** PERSISTENT_CENTRAL_AND_DETAIL_READ_IMPLEMENTED_OPT_IN  
+**DATABASE_STATUS:** PROTECTED_READ_MODEL_AND_TEAM_DIRECTORY_VALIDATED_IN_EPHEMERAL_CI  
 **AUTH_STATUS:** SERVER_TRUST_ADAPTER_IMPLEMENTED_NOT_PROVISIONED  
 **DEPLOYMENT_STATUS:** NOT_CONFIGURED  
 **REAL_DATA_ALLOWED:** NO  
 **CONTEXT_STATUS:** VALID  
 **FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`  
-**LAST_GOOD_COMMIT:** `41f069fb0c5e52ec2b92fdf3223ed75c842afd67`  
-**LAST_GOOD_CI_RUN:** `33663331813`  
+**LAST_GOOD_COMMIT:** `8a771dcf7f98d7000ed746afd5e5f5f9a87bdc88`  
+**LAST_GOOD_CI_RUN:** `33666134609`  
 **BLOCKERS:** none  
 **MANUAL_ACTION_REQUIRED:** none
 
 ## Estado real
 
-A work unit `F11-TEAM-DIRECTORY-RLS-IMPLEMENT-01` foi concluída e integrada à `main` pela PR #13.
+A work unit `F12-PERSISTENT-CONTRACTING-DETAIL-READ-01` foi concluída e integrada à `main` pela PR #14.
 
-O caminho persistente da Central continua opt-in por `COMPRAS_PERSISTENT_READ_ENABLED=true`, usa exclusivamente a fronteira F08 (`sessão validada -> issuer + subject -> contexto transacional LOCAL -> PostgreSQL/RLS`) e agora consegue resolver com segurança o nome de outro membro responsável da mesma equipe por uma projeção mínima de diretório.
+A jornada `Central → detalhe → Central` agora possui um caminho persistente completo de **leitura**, opt-in por `COMPRAS_PERSISTENT_READ_ENABLED=true`, usando a fronteira F08 (`sessão validada -> issuer + subject -> contexto transacional LOCAL -> PostgreSQL/RLS`) tanto na Central quanto em `/contratacoes/[id]`.
 
-Nenhum banco/Auth/Vercel hospedado foi provisionado. O modo persistente continua desabilitado por padrão e somente dados fictícios/sanitizados são permitidos nesta fase.
+O modo demo continua sendo o default. Configuração inválida ou falha de sessão/banco/contexto em modo persistente produz indisponibilidade genérica e nunca cai silenciosamente para fixtures.
 
-## F11 — capability do diretório de equipe
+Nenhum banco/Auth/Vercel hospedado foi provisionado. Não existe login/signup operacional, secret real, dado real ou deploy. O repositório continua público e somente dados fictícios/sanitizados são permitidos.
 
-A migration imutável `database/migrations/0003_team_member_directory.sql` foi adicionada depois de `0001` e `0002`.
+## F12 — detalhe persistente protegido
 
-Ela implementa:
+A implementação adicionou uma leitura server-only do detalhe que:
 
-- role cluster-level `compras_team_directory_view_owner` com `NOLOGIN`, `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOINHERIT`, `NOREPLICATION` e `NOBYPASSRLS`;
-- preflight fail-closed para role preexistente com atributos/configuração incompatíveis;
-- rejeição de qualquer membership em que a capability seja membro de outra role;
-- rejeição de qualquer concessão persistente que permita `SET ROLE` ou herança da capability;
-- grants coluna-a-coluna somente em `memberships(id, team_id, user_id, revoked_at)` e `app_users(id, display_name, disabled_at)`;
-- nenhuma leitura de `auth_issuer`/`auth_subject` pela capability;
-- policies `SELECT` direcionadas somente à capability para membership não revogada e app_user não desabilitado;
-- view `public.team_member_directory` com `security_barrier=true`, `security_invoker=false`, owner dedicado e somente `team_id`, `membership_id`, `display_name`;
-- escopo do diretório derivado exclusivamente de `current_app_user_id()` + membership ativa do chamador no mesmo `team_id`;
-- `FORCE ROW LEVEL SECURITY` intacto nas sete tabelas-base;
-- nenhuma policy de escrita.
+- executa exclusivamente por `withTrustedDatabaseContext()`;
+- valida o identificador da rota antes da consulta e usa UUID apenas como seletor de recurso;
+- usa SQL parametrizado com `$1::uuid`, sem interpolação;
+- não recebe `team_id`, `membership_id`, `app_user_id`, issuer ou subject do browser;
+- deixa PostgreSQL/RLS decidir se o recurso é visível;
+- torna UUID inexistente e UUID conhecido de outra equipe externamente equivalentes como `not found`;
+- resolve responsável somente por `public.team_member_directory`;
+- lê identificadores relacionados ativos, itens ativos e eventos somente das tabelas protegidas existentes;
+- deriva a última movimentação de `contracting_events.occurred_at`, não de `updated_at`;
+- mantém fallback genérico quando o responsável não é exposto pelo diretório;
+- não introduz mutation, CRUD, policy de escrita ou migration nova.
 
-## ADR-005 — lifecycle da role cluster-level
+Foi extraído um helper `server-only` mínimo para compartilhar a semântica exata de `COMPRAS_PERSISTENT_READ_ENABLED` entre Central e detalhe: ausente/`false` = demo, exatamente `true` = persistente e qualquer outro valor = configuração inválida/indisponível.
 
-Durante a implementação foi revalidada uma nuance material de PostgreSQL 17: um principal não-superuser com `CREATEROLE` recebe automaticamente uma concessão administrativa sobre uma role recém-criada com `ADMIN TRUE`, `SET FALSE` e `INHERIT FALSE`.
+A Central persistente voltou a oferecer navegação para o detalhe correspondente. A tela do detalhe distingue explicitamente fonte demo de leitura persistente e permanece somente leitura.
 
-A ADR-005 registra o refinamento seguro da ADR-004: a propriedade exigida é **zero membership utilizável**, não literalmente zero linhas em `pg_auth_members`.
+## Red-team de F12
 
-A única relação tolerada é a concessão administrativa automática para o mesmo principal de migration, sem `SET` e sem herança. Para transferir ownership da view, a migration cria uma concessão `SET TRUE` adicional somente dentro da própria transação, transfere o owner e revoga essa concessão antes do commit. O postflight falha se qualquer concessão utilizável persistir.
+A prova adversarial cobre deliberadamente:
 
-Isso evita exigir superuser de produção e também rejeita uma capability criada por caminho de provedor que a coloque como membro de role privilegiada.
+- ID malformado rejeitado antes de entrar no contexto confiável ou chegar a SQL;
+- UUID próprio visível e UUID cross-team invisível mesmo quando conhecido;
+- inexistente e cross-team produzindo o mesmo estado externo;
+- tentativa de fornecer argumentos extras de escopo sem efeito sobre a consulta;
+- query usando bind parameter e sem reabrir `app_users`/`memberships` para colegas;
+- responsável ativo da mesma equipe resolvido pela capability view;
+- responsável revogado/desabilitado permanecendo fallback genérico;
+- identificadores desvinculados e itens aposentados excluídos da leitura ativa;
+- identificadores, itens e eventos cross-team permanecendo invisíveis;
+- timeline ordenada por `occurred_at`;
+- caller sem contexto, desconhecido, sem membership, desabilitado ou revogado permanecendo sem acesso pelas regressões RLS;
+- falha protegida retornando apenas estado indisponível, sem serializar erro ou retornar fixture demo;
+- nenhuma credencial owner/superuser/`BYPASSRLS`/capability usada como role operacional.
 
-## Integração da Central
+Durante a primeira execução da PR, o red-team/CI encontrou uma incompatibilidade de resolução de alias no Vitest para o novo helper compartilhado. A correção foi reduzida a imports relativos nos dois seletores de fonte; nenhuma fronteira de segurança foi afrouxada. A segunda execução da PR passou integralmente.
 
-`src/features/sector-central/persistent-read.ts` deixou de consultar `memberships`/`app_users` diretamente para descobrir responsável.
+## Verificação de F12
 
-A consulta agora faz `LEFT JOIN public.team_member_directory` por `team_id + responsible_membership_id` e usa somente `display_name` da projeção autorizada.
-
-Com isso:
-
-- responsável ativo da mesma equipe pode ser exibido pelo nome;
-- `responsible_membership_id IS NULL` continua `Sem responsável`;
-- referência que o diretório corretamente não exponha continua `Responsável não disponível`;
-- nenhuma identidade ou escopo é recebida do browser;
-- `MAX(contracting_events.occurred_at)` continua sendo a última movimentação;
-- `updated_at` continua não sendo tratado como evento.
-
-O adaptador F08 passou a rejeitar explicitamente `compras_team_directory_view_owner` como role operacional, além de continuar rejeitando superuser, `BYPASSRLS`, owner das tabelas protegidas e `neondb_owner`.
-
-## Red-team de F11
-
-A CI prova deliberadamente:
-
-- role homônima preexistente com `LOGIN`: migration rejeitada;
-- role homônima preexistente com `BYPASSRLS`: migration rejeitada;
-- concessão `SET TRUE` da capability a outro principal: migration/regras estruturais rejeitam;
-- migration completa executada por database owner não-superuser com `CREATEROLE`;
-- mesma capability cluster-level reutilizada com segurança ao aplicar `0001 + 0002 + 0003` em segundo database do mesmo cluster;
-- papel operacional real simulado com `SET SESSION AUTHORIZATION` não consegue `SET ROLE` para a capability;
-- capability não consegue selecionar `auth_issuer`/`auth_subject`;
-- remoção de `security_barrier`, ativação de `security_invoker` e owner incorreto são detectados;
-- A1 vê A1/A2 da equipe A e não B1, mesmo conhecendo seu UUID;
-- target revogado/desabilitado não aparece;
-- caller sem contexto, desconhecido, sem membership, desabilitado ou revogado recebe diretório vazio;
-- acesso direto operacional a `memberships`/`app_users` continua self-only;
-- nenhuma policy de escrita foi criada.
-
-## Verificação de F11
-
-- recuperação de `main`, branches e PRs: PASS;
-- `CONTEXT_MANIFEST` comparado ao tree de `main`: PASS;
-- fontes estáveis mantiveram os blobs esperados: `CONTEXT_STATUS = VALID`;
-- documentação PostgreSQL 17 e Neon relativa a roles/membership/ownership revalidada antes da decisão ADR-005: PASS;
-- diff integral da PR #13 revisado: PASS;
-- CI da PR #13 run `33663106823`: PASS — `verify` e `database`;
-- PR #13 squash-merged em `41f069fb0c5e52ec2b92fdf3223ed75c842afd67`;
-- CI da `main` após merge run `33663331813`: PASS — `verify` e `database`;
+- recuperação de `main`, branches e PRs antes da implementação: PASS;
+- `CONTEXT_MANIFEST` comparado às fontes estáveis: PASS (`CONTEXT_STATUS = VALID`);
+- diff integral da PR #14 revisado: PASS;
+- primeira CI da PR detectou falha de resolução de módulo em testes: DETECTADA E CORRIGIDA;
+- CI final da PR #14 run `33665994543`: PASS — `verify` e `database`;
+- PR #14 squash-merged em `8a771dcf7f98d7000ed746afd5e5f5f9a87bdc88`;
+- CI da `main` após merge run `33666134609`: PASS;
 - `npm ci`, lint, typecheck, testes e build: PASS;
-- prova isolada de `0001` default-deny: PASS;
-- regressões `0001 + 0002`/F07/F08/F10: PASS;
-- preflight adversarial F11 e `0001 + 0002 + 0003`: PASS;
+- regressões PostgreSQL `0001`, `0001 + 0002`, F07/F08/F10/F11 e `0001 + 0002 + 0003`: PASS;
+- prova adversarial F12 de detalhe protegido: PASS;
+- testes de seleção `demo/persistent/not-found/unavailable`: PASS;
 - secret real, dado interno/pré-publicação ou infraestrutura externa: NÃO ENCONTRADOS.
 
 ## Limite atual
 
-A Central possui caminho persistente de leitura completo para os campos já modelados e diretório mínimo de responsáveis. O detalhe em `/contratacoes/[id]`, porém, ainda usa exclusivamente fixtures demonstrativas; por isso o modo persistente ainda não deve navegar para uma tela que pareça mostrar o mesmo registro persistente.
+O repositório agora possui uma jornada persistente de leitura coerente e verificável, mas somente contra bancos efêmeros da CI. A arquitetura de referência cita PostgreSQL/Neon e Vercel, porém permanece explicitamente **não provisionada** e exige revalidação das capacidades/termos atuais antes de implementação externa.
 
-A próxima fronteira independente é conectar o detalhe, em modo opt-in, às mesmas policies RLS e à mesma fronteira server-only, mantendo o modo demo separado e sem provisionar infraestrutura.
+Antes de criar recursos hospedados ou um primeiro preview autenticado, a próxima fronteira independente é fechar o desenho operacional e de segurança desse ambiente: separação de ambientes/roles, admissão privada, secrets, execução de migrations, dados exclusivamente fictícios, logging/analytics e rollback/deprovisionamento.
 
-Q-001, Q-002, Q-003, Q-004, Q-005, Q-006, Q-009 e Q-010 permanecem abertas. Nenhuma foi resolvida por inferência em F11.
+F13 não deve resolver por inferência as taxonomias nem as questões de permissão/auditoria de leitura. `Q-009` e `Q-010` permanecem abertas, assim como as demais questões ainda marcadas como abertas em `docs/product/OPEN_QUESTIONS.md`.
 
 ## Context manifest
 
-Os inputs estáveis do `CONTEXT_MANIFEST` não foram alterados por F11. ADR-005, migration `0003`, testes, código runtime, `CURRENT_STATE` e `NEXT_ACTION` são lidos ao vivo pelo protocolo.
+Os inputs estáveis do `CONTEXT_MANIFEST` não foram alterados por F12. Código runtime, testes F12, `CURRENT_STATE`, `NEXT_ACTION` e specs de work units são lidos ao vivo pelo protocolo.
 
 ## Last good
 
-`41f069fb0c5e52ec2b92fdf3223ed75c842afd67` é o `LAST_GOOD_COMMIT`, validado pela CI da `main` run `33663331813` com `verify` e `database` em PASS.
+`8a771dcf7f98d7000ed746afd5e5f5f9a87bdc88` é o `LAST_GOOD_COMMIT`, validado pela CI da `main` run `33666134609` em PASS.
 
 ## Próxima ação
 
-Executar `F12-PERSISTENT-CONTRACTING-DETAIL-READ-01` conforme `docs/ai/NEXT_ACTION.md` e `tasks/F12-PERSISTENT-CONTRACTING-DETAIL-READ-01/SPEC.md`.
+Executar `F13-HOSTED-PREVIEW-BOUNDARY-DESIGN-01` conforme `docs/ai/NEXT_ACTION.md` e `tasks/F13-HOSTED-PREVIEW-BOUNDARY-DESIGN-01/SPEC.md`.

@@ -142,3 +142,17 @@ jobs:
           dropdb compras_directory_ci
           psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_team_directory_view_owner;"
           psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_migrator_ci;"
+
+      - name: Verify F12 protected contracting detail read
+        run: |
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_f12_migrator_ci LOGIN CREATEROLE NOINHERIT PASSWORD 'DEMO-F12-MIGRATOR-PASSWORD';"
+          createdb -O compras_f12_migrator_ci compras_detail_ci
+
+          PGUSER=compras_f12_migrator_ci PGPASSWORD='DEMO-F12-MIGRATOR-PASSWORD' PGDATABASE=compras_detail_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0001_core_foundation.sql
+          PGUSER=compras_f12_migrator_ci PGPASSWORD='DEMO-F12-MIGRATOR-PASSWORD' PGDATABASE=compras_detail_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0002_trusted_identity_read_policies.sql
+          PGUSER=compras_f12_migrator_ci PGPASSWORD='DEMO-F12-MIGRATOR-PASSWORD' PGDATABASE=compras_detail_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0003_team_member_directory.sql
+          PGDATABASE=compras_detail_ci psql -v ON_ERROR_STOP=1 -f database/tests/persistent_contracting_detail_read.sql
+
+          dropdb compras_detail_ci
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_team_directory_view_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_f12_migrator_ci;"

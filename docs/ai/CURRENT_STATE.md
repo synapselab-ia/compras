@@ -1,154 +1,135 @@
 # Current State — Compras
 
-**PROJECT_STATUS:** READY_FOR_HOSTED_PREVIEW_PROVISIONING  
-**CURRENT_PHASE:** F15 — Hosted Preview Provisioning  
+**PROJECT_STATUS:** BLOCKED_HOSTED_PREVIEW_CONTROL_PLANE  
+**CURRENT_PHASE:** F15 — Hosted Preview Provisioning (BLOCKED no preflight de controle)  
 **REPO_VISIBILITY:** PUBLIC  
 **APPLICATION_STATUS:** PRIVATE_AUTH_ADMISSION_AND_PERSISTENT_READ_IMPLEMENTED_NOT_HOSTED  
 **DATABASE_STATUS:** PROTECTED_READ_MODEL_AND_TEAM_DIRECTORY_VALIDATED_IN_EPHEMERAL_CI  
 **AUTH_STATUS:** PRIVATE_SIGNIN_SIGNOUT_AND_DENY_ALL_ADMISSION_IMPLEMENTED_NOT_PROVISIONED  
-**DEPLOYMENT_STATUS:** NOT_CONFIGURED  
+**DEPLOYMENT_STATUS:** NOT_CONFIGURED_BLOCKED_PRE_PROVISIONING  
 **REAL_DATA_ALLOWED:** NO  
 **CONTEXT_STATUS:** VALID  
 **FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`  
 **LAST_GOOD_COMMIT:** `6c3891d0e4839daa067741bbcf5eafdea542a329`  
 **LAST_GOOD_CI_RUN:** `33670574481`  
-**BLOCKERS:** none  
-**MANUAL_ACTION_REQUIRED:** none
+**BLOCKERS:** `F15-B1` Vercel control-plane insuficiente para provar/configurar a fronteira antes de secrets; `F15-B2` Neon control-plane insuficiente para configurar e provar `disable_sign_up=true` e métodos adicionais desabilitados  
+**MANUAL_ACTION_REQUIRED:** disponibilizar uma superfície de controle verificável que satisfaça F16 sem expor secrets; eventual ajuste de plano/provider somente se necessário para cumprir a fronteira
 
 ## Estado real
 
-A work unit `F14-PRIVATE-AUTH-ADMISSION-01` foi concluída e integrada à `main` pela PR #18.
+A work unit `F15-HOSTED-PREVIEW-PROVISION-01` foi iniciada pelo protocolo canônico e encerrada com **BLOCKER SEGURO antes de qualquer provisionamento**.
 
-A aplicação agora possui jornada privada de sign-in/sign-out em código, mas nenhum Auth, banco ou hosting externo foi provisionado. O repositório continua público e somente fixtures/dados fictícios ou sanitizados podem ser usados.
+Nenhum projeto, deployment, banco, branch, Auth, usuário, secret, migration hospedada ou seed foi criado para Compras. O bloqueio ocorreu na etapa 1 da sequência de segurança: revalidação de provider/plano/conectores.
 
-A jornada persistente `Central → detalhe → Central` continua opt-in por `COMPRAS_PERSISTENT_READ_ENABLED=true`, usando a fronteira F08 `sessão validada -> issuer + subject -> contexto transacional LOCAL -> PostgreSQL/RLS`.
+A aplicação continua no last-good F14: sign-in email/senha e sign-out por Server Actions, catch-all Auth deny-all, gate de sessão antes do banco, identidade `issuer + subject` derivada no servidor e autorização final por `app_users` + membership + PostgreSQL/RLS.
 
-## F14 — admissão privada sem signup público
+## Recuperação e contexto de F15
 
-### Revalidação externa
+- `main` recuperada em `3e8c7f8eff1584edba9e87eb2c76fcebe6afeade` no início da work unit;
+- nenhuma PR aberta/branch F15 concorrente foi localizada;
+- todos os blobs estáveis de `CONTEXT_MANIFEST` continuam iguais ao manifest esperado;
+- `CONTEXT_STATUS = VALID`;
+- `REAL_DATA_ALLOWED = NO` permaneceu ativo durante todo o preflight.
 
-Antes da implementação foram revalidadas as superfícies atuais necessárias do Managed Better Auth/SDK:
+## Revalidação Vercel
 
-- Neon Next.js Server SDK e overview do Auth;
-- configuração email/senha com `disable_sign_up`;
-- pacote oficial `@neondatabase/auth@0.5.0-beta`, que coincide com a versão fixada no projeto;
-- implementação oficial atual de `createNeonAuth()`, `auth.handler()`, `auth.signIn.email()`, `auth.signOut()` e `auth.getSession()`;
-- formato atual de erros server-side e códigos estáveis de falha de transporte.
+O estado da conta foi lido pelo conector oficial disponível:
 
-A evidência confirmou que sign-in/sign-out podem ser usados diretamente no servidor sem montar o handler catch-all, enquanto o handler genérico exporia uma superfície muito maior que a necessária.
+- existe uma única equipe acessível no plano **Hobby**;
+- não existe projeto Vercel ligado ao repositório `synapselab-ia/compras`;
+- os projetos existentes são alheios a esta work unit e não foram alterados.
 
-### Fronteira implementada
+A documentação oficial atual foi revalidada:
 
-A ADR-007 fixou a primeira integração de Auth como superfície estreita:
+- Vercel Authentication/Standard Protection está disponível em todos os planos, inclusive Hobby;
+- Standard Protection protege previews e deployment URLs, mas **não deve ser tratado como proteção do production domain**;
+- a API/documentação suporta escopos de SSO como `preview`, `prod_deployment_urls_and_all_previews` e `all`;
+- proteção de toda superfície de produção exige capacidade adicional ou, alternativamente, uma topologia que prove que nenhuma production surface recebe a aplicação/configuração privada.
 
-- sign-in somente por email/senha de identidade já admitida;
-- sign-out explícito;
-- leitura de sessão server-only;
-- nenhum signup, OAuth, magic link, OTP, reset, Admin API ou organizações na superfície da aplicação;
-- `/api/auth/[...path]` responde deny-all e não delega a `auth.handler()`;
-- `getVerifiedExternalIdentity()` continua sendo a interface usada por F08 e continua retornando apenas `issuer + subject` derivados de configuração/sessão confiáveis.
+### Blocker `F15-B1`
 
-O provider hospedado futuro continua obrigado a usar `disable_sign_up=true`. O deny-all da aplicação não substitui esse controle: ambos são necessários.
+O conector Vercel atualmente disponível permite listar equipes/projetos/deployments, obter detalhes/logs e acionar um deploy genérico, mas **não expõe ações para**:
 
-### Estados de sessão
+- criar/importar explicitamente o projeto `compras` com alvo controlado;
+- configurar ou atualizar `ssoProtection`/Deployment Protection;
+- criar environment variables server-only com escopo Preview + branch dedicado;
+- provar antes do deploy que uma production surface não será criada/receberá configuração privada;
+- remover/deprovisionar projeto/deployment por uma ação controlada e verificável.
 
-O runtime server-only distingue:
+Usar `deploy_to_vercel` nessas condições inverteria a ordem de segurança da ADR-006/F15: um deployment poderia existir antes de ser possível configurar e provar a proteção exigida. Portanto **nenhum deploy foi tentado**.
 
-1. `authenticated` — sessão válida com `user.id`; produz somente `issuer + subject`;
-2. `unauthenticated` — ausência de sessão ou sessão rejeitada/expirada;
-3. `unavailable` — configuração inválida, provider/transporte indisponível ou payload inconsistente.
+Também foi pesquisado o catálogo de plugins disponível para uma integração Vercel mais capaz e nenhuma alternativa instalável compatível foi encontrada.
 
-Em modo persistente, Central e detalhe verificam esse estado antes da primeira consulta de domínio:
+## Revalidação Neon
 
-- sem sessão -> redirect fixo para `/auth/sign-in`;
-- Auth indisponível -> indisponibilidade genérica;
-- sessão válida -> segue para os readers protegidos e para RLS.
+O estado da conta Neon foi lido pelo conector oficial disponível:
 
-O detalhe continua validando UUID malformado antes de Auth/SQL.
+- a organização acessível está no plano **Free**;
+- não existe projeto Neon dedicado a Compras;
+- os projetos existentes são alheios à work unit e não foram alterados;
+- Managed Better Auth continua disponível em projetos AWS/Free segundo a documentação pública atual.
 
-### Autenticação continua separada de autorização
+O conector possui operações de projeto, branch, SQL, roles, provisionamento de Managed Better Auth, usuários, trusted domains e leitura da configuração Auth.
 
-F14 não adicionou mutation ou auto-provisionamento.
+### Blocker `F15-B2`
 
-Sign-in não cria nem altera:
+A fronteira F15 exige **antes da exposição** prova provider-side de:
 
-- `app_users`;
-- memberships;
-- teams;
-- contratações;
-- policies/migrations.
+- `disable_sign_up=true` para email/senha;
+- métodos adicionais/autocriação desabilitados.
 
-Uma identidade autenticada, mas desconhecida/desabilitada no domínio ou sem membership ativa, continua sem dados pelo enforcement existente do PostgreSQL/RLS.
+A superfície de escrita Auth atualmente exposta pelo conector não oferece esses campos: `update_auth_config` permite apenas atualizar o nome da configuração. `get_neon_auth_config` pode ler configuração depois do provisionamento, mas não existe ação disponível para definir de forma verificável `disable_sign_up` e os métodos exigidos.
 
-### Redirects
+Provisionar Auth apenas para descobrir depois que signup está habilitado violaria a ordem fail-closed da work unit. Portanto **nenhum projeto/Auth Neon foi criado**.
 
-A aplicação não aceita `callbackURL`/`redirectTo` arbitrário para login ou logout. Os destinos são constantes locais. Campos de issuer, subject, email como identidade de autorização, `app_user_id`, membership ou `team_id` enviados pelo browser não participam da identidade usada por F08.
+Também foi pesquisado o catálogo de plugins para uma integração Neon Auth mais capaz e nenhuma alternativa instalável compatível foi encontrada.
 
-## Red-team de F14
+## Red-team de F15
 
-A implementação e os testes atacaram deliberadamente:
+O preflight foi atacado contra os principais caminhos de enfraquecimento:
 
-- requisição direta a signup na superfície HTTP da aplicação;
-- OAuth/OTP/admin/reset e outros endpoints laterais;
-- rota persistente sem sessão tentando alcançar banco;
-- sessão 401/403 e sessão malformada;
-- provider/configuração indisponível;
-- `callbackURL` externo e tentativa de open redirect;
-- issuer/subject/IDs de equipe/membership forjados pelo browser;
-- email conhecido tentando substituir o subject da sessão;
-- identidade autenticada sem autorização interna;
-- falha protegida retornando demo silenciosamente;
-- regressão de UUID cross-team/inexistente;
-- exposição acidental de erro bruto do provider;
-- chamadas de signup ou writes de domínio na jornada F14.
+- assumir que URL obscura ou default do provider equivale a proteção: REJEITADO;
+- criar deployment primeiro e configurar proteção depois: REJEITADO;
+- confiar que Hobby/Standard protege production domain: REJEITADO;
+- anexar secrets antes de proteção observável: NÃO EXECUTADO;
+- criar Neon e aceitar signup default temporariamente: REJEITADO;
+- confiar somente no deny-all da aplicação e ignorar `disable_sign_up` provider-side: REJEITADO;
+- usar projeto/banco já existente e alheio para contornar o blocker: REJEITADO;
+- reutilizar credencial/role privilegiada disponível por conveniência: NÃO EXECUTADO;
+- publicar account IDs, connection strings, secrets ou URLs privadas no GitHub: NÃO EXECUTADO;
+- procurar integração alternativa antes de declarar ausência de capacidade: EXECUTADO, sem resultado compatível.
 
-Resultados:
+Resultado do red-team: avançar para provisionamento com as ferramentas atuais exigiria remover pelo menos um controle explícito de ADR-006/ADR-007/F15. O protocolo proíbe esse enfraquecimento.
 
-- generic Auth API: DENY-ALL;
-- open redirect: NÃO ENCONTRADO;
-- identidade client-supplied: IGNORADA;
-- DB access antes de sessão em caminho persistente: BLOQUEADO;
-- auto-provisionamento de domínio: AUSENTE;
-- fallback demo em falha Auth/persistente: AUSENTE;
-- F08/RLS: PRESERVADOS.
+## Verificação de F15
 
-## Verificação de F14
-
-- recuperação de `main`, PRs abertas e branches: PASS — nenhuma frente F14 concorrente existia no início;
-- `CONTEXT_MANIFEST` comparado aos blobs atuais: PASS (`CONTEXT_STATUS = VALID`);
-- documentação oficial atual necessária ao SDK/Managed Better Auth: REVALIDADA;
-- commit da feature `d2f3885ede1b0daea5c3d9b111553f6d95cf981f`;
-- PR #18 CI `33670463890`: PASS — `verify` e `database`;
-- lint: PASS;
-- typecheck: PASS;
-- testes existentes e novos testes adversariais de Auth: PASS;
-- build: PASS;
-- regressões PostgreSQL F07/F10/F11/F12: PASS;
-- PR #18 squash-merged em `6c3891d0e4839daa067741bbcf5eafdea542a329`;
-- CI da `main` após F14 `33670574481`: PASS — `verify` e `database`;
-- migration/policy nova: NÃO;
-- infraestrutura externa criada: NÃO;
-- secret real ou dado interno/pré-publicação no diff: NÃO;
+- recuperação de `main` e PRs abertas: PASS;
+- `CONTEXT_MANIFEST`: PASS / VALID;
+- Vercel account/plan/projects: INSPECIONADOS por conector oficial;
+- Neon org/plan/projects: INSPECIONADOS por conector oficial;
+- documentação Vercel Deployment Protection atual: REVALIDADA;
+- documentação Neon Managed Better Auth atual: REVALIDADA;
+- Vercel project/deployment de Compras criado: NÃO;
+- Neon project/branch/Auth de Compras criado: NÃO;
+- secret real criado/anexado: NÃO;
+- dado real/interno/pré-publicação enviado: NÃO;
+- migration/seed hospedado executado: NÃO;
+- alteração em projetos alheios: NÃO;
+- blocker compatível com critério explícito de F15: SIM;
 - `REAL_DATA_ALLOWED`: continua `NO`.
 
 ## Limite atual
 
-A aplicação e a fronteira de Auth necessária ao primeiro preview estão implementadas, mas ainda não existe ambiente hospedado no qual provar os controles da ADR-006/ADR-007 em conjunto.
+F14 tornou o código apto à primeira prova hospedada, porém o control-plane disponível nesta sessão não consegue demonstrar os controles necessários **antes** da criação/exposição dos recursos.
 
-A próxima unidade independente é provisionar um preview descartável e fictício somente se for possível provar, antes da exposição, Deployment Protection, signup provider-side desabilitado, secrets restritos, roles PostgreSQL seguras, migrations canônicas, seed artificial e rollback/deprovisionamento.
+O próximo passo não é relaxar F15 nem provisionar parcialmente. É desbloquear uma superfície de controle auditável para Vercel e Neon que permita configurar e verificar os controles críticos sem expor secrets.
 
-Qualquer limitação de plano, connector ou provider que impeça esses controles deve bloquear F15 em vez de provocar enfraquecimento de segurança.
-
-Q-001, Q-002, Q-003, Q-004, Q-005, Q-006, Q-009 e Q-010 permanecem abertas. F14 não resolveu taxonomia, permissões de escrita ou auditoria de leitura por inferência.
-
-## Context manifest
-
-Os inputs estáveis de `docs/ai/CONTEXT_MANIFEST.md` continuam sem alteração e foram validados antes da implementação F14. ADR-006, ADR-007, `CURRENT_STATE`, `NEXT_ACTION` e specs são lidos ao vivo.
+Q-001, Q-002, Q-003, Q-004, Q-005, Q-006, Q-009 e Q-010 permanecem abertas.
 
 ## Last good
 
-`6c3891d0e4839daa067741bbcf5eafdea542a329` é o `LAST_GOOD_COMMIT`, validado pela CI da `main` run `33670574481` com `verify` e `database` em PASS.
+`6c3891d0e4839daa067741bbcf5eafdea542a329` continua sendo o `LAST_GOOD_COMMIT`, validado pela CI da `main` run `33670574481` com `verify` e `database` em PASS. F15 não alterou código nem infraestrutura e parou antes de qualquer write externo.
 
 ## Próxima ação
 
-Executar `F15-HOSTED-PREVIEW-PROVISION-01` conforme `docs/ai/NEXT_ACTION.md` e `tasks/F15-HOSTED-PREVIEW-PROVISION-01/SPEC.md`.
+Executar `F16-HOSTED-PREVIEW-CONTROL-PLANE-UNBLOCK-01` conforme `docs/ai/NEXT_ACTION.md` e `tasks/F16-HOSTED-PREVIEW-CONTROL-PLANE-UNBLOCK-01/SPEC.md`.

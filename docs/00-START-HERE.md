@@ -10,6 +10,8 @@ O sistema não substitui os sistemas oficiais de processo administrativo, requis
 
 A `Foundation-00` e as work units F01 a F14 foram concluídas/revisadas e integradas pelo fluxo canônico.
 
+A F15 (`Hosted Preview Provisioning`) foi executada até o preflight obrigatório e **parou com blocker seguro antes de qualquer provisionamento**. Nenhum projeto/deployment/banco/Auth/secret de Compras foi criado.
+
 Existe uma aplicação executável com jornada `Central → detalhe → Central` em dois modos separados:
 
 - **demo**, padrão e exclusivamente fictício;
@@ -29,15 +31,22 @@ A F12 conectou `/contratacoes/[id]` à leitura persistente protegida. O ID da ro
 
 A F13 definiu na ADR-006 a fronteira do primeiro preview hospedado privado: Deployment Protection obrigatório, secrets branch-specific, nenhuma production surface pública sem proteção compatível, papéis PostgreSQL separados para bootstrap/migration/runtime, Managed Better Auth com signup desabilitado e dados exclusivamente fictícios.
 
-A F14 implementou a admissão privada no repositório. A aplicação agora possui sign-in email/senha e sign-out por Server Actions server-side. O catch-all `/api/auth/[...path]` é deliberadamente deny-all e não delega a `auth.handler()`, impedindo que signup, OAuth, OTP, reset, Admin API ou outros endpoints laterais apareçam na superfície HTTP da aplicação. Em modo persistente, ausência de sessão é detectada antes da consulta ao banco e leva ao sign-in; falha do provider/configuração permanece indisponibilidade genérica sem fallback demo. Login continua sem criar `app_users`, memberships ou permissões.
+A F14 implementou a admissão privada no repositório. A aplicação possui sign-in email/senha e sign-out por Server Actions server-side. O catch-all `/api/auth/[...path]` é deliberadamente deny-all e não delega a `auth.handler()`, impedindo signup, OAuth, OTP, reset, Admin API ou endpoints laterais na superfície HTTP da aplicação. Em modo persistente, ausência de sessão é detectada antes da consulta ao banco e leva ao sign-in; falha do provider/configuração permanece indisponibilidade genérica sem fallback demo. Login não cria `app_users`, memberships ou permissões.
 
-A ADR-007 registra essa decisão e mantém como requisito independente para o futuro preview que o Managed Better Auth real esteja configurado com `disable_sign_up=true` e métodos adicionais desabilitados. A fronteira F08 e o enforcement PostgreSQL/RLS não foram substituídos.
+A ADR-007 mantém como requisito independente para o preview real que o Managed Better Auth esteja configurado com `disable_sign_up=true` e métodos adicionais desabilitados. A fronteira F08 e o enforcement PostgreSQL/RLS não foram substituídos.
 
-A CI da `main` após F14, run `33670574481`, passou integralmente em `verify` e `database`, incluindo lint, typecheck, testes, build e todas as regressões PostgreSQL existentes.
+## Blocker atual do preview hospedado
 
-Ainda não existe banco/Auth/Vercel hospedado, usuário hospedado, secret operacional real, dado real ou deploy. `REAL_DATA_ALLOWED` permanece `NO`.
+O preflight F15 revalidou estado real dos providers e encontrou duas lacunas de control-plane:
 
-A próxima ação canônica é `F15-HOSTED-PREVIEW-PROVISION-01 — Provisionar e provar o primeiro preview hospedado privado fictício`. Ela deve materializar a ADR-006/ADR-007 em infraestrutura descartável, somente se os controles de proteção, signup, roles, migrations, secrets e deprovisionamento puderem ser provados sem enfraquecimento.
+- **Vercel:** a conta acessível está em Hobby e não existe projeto `compras`; a integração atual permite inspeção/deploy genérico, mas não permite criar/importar projeto com alvo controlado, configurar/verificar `ssoProtection`, gravar env vars Preview/branch-specific nem deprovisionar de forma verificável. Não é seguro fazer o primeiro deploy e tentar proteger depois.
+- **Neon:** a organização acessível está em Free e não existe projeto `compras`; a integração atual consegue provisionar Auth e ler configuração, porém não expõe escrita dos campos necessários para definir e provar provider-side `disable_sign_up=true` e métodos adicionais desabilitados.
+
+Por isso F15 não avançou para projeto, banco, Auth, migrations, seed, secrets ou deploy. O blocker está registrado em `docs/ai/CURRENT_STATE.md`.
+
+A CI da `main` após F14, run `33670574481`, permanece o last-good funcional. `REAL_DATA_ALLOWED` continua `NO`.
+
+A próxima ação canônica é `F16-HOSTED-PREVIEW-CONTROL-PLANE-UNBLOCK-01 — Desbloquear o control-plane seguro do preview hospedado`. Ela deve obter e provar as capacidades faltantes sem colar tokens/secrets em GitHub ou chat e sem relaxar ADR-006/ADR-007.
 
 O repositório está público. Aplicam-se integralmente as restrições de publicação de `AGENTS.md` e `docs/architecture/SECURITY.md`; nenhum dado real ou pré-publicação pode ser usado.
 
@@ -110,6 +119,7 @@ A hierarquia detalhada está em `docs/ai/SOURCE_OF_TRUTH.md`.
 - preview privado exige proteção efetiva e não apenas URL obscura;
 - roles privilegiadas do provider nunca são credencial runtime;
 - infraestrutura externa deve ser revalidada antes de provisionamento;
+- ausência de ferramenta de controle é blocker, não autorização para ordem insegura;
 - evitar complexidade prematura;
 - construir por slices pequenas, utilizáveis e verificáveis;
 - qualquer incerteza importante aumenta a investigação, nunca autoriza adivinhação.

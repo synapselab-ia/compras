@@ -29,7 +29,7 @@ const SAFE_ROLE = {
 };
 
 function createDatabaseDouble(role = SAFE_ROLE) {
-  const query = vi.fn(async (text: string) => {
+  const query = vi.fn(async (text: string, _values?: unknown[]) => {
     if (text.includes("FROM pg_catalog.pg_roles AS r")) {
       return { rows: [role] };
     }
@@ -82,6 +82,21 @@ describe("withTrustedDatabaseContext", () => {
     ).rejects.toBeInstanceOf(TrustedDatabaseContextError);
 
     expect(databaseMocks.Pool).not.toHaveBeenCalled();
+  });
+
+  it("wraps driver construction failures without serializing driver details", async () => {
+    databaseMocks.Pool.mockImplementationOnce(() => {
+      throw new Error("driver detail that must not escape");
+    });
+
+    await expect(
+      withTrustedDatabaseContext(async () => "unreachable"),
+    ).rejects.toEqual(
+      expect.objectContaining({
+        name: "TrustedDatabaseContextError",
+        message: "Trusted database context is unavailable.",
+      }),
+    );
   });
 
   it("sets only iss and sub with a parameterized LOCAL context before the protected operation", async () => {
@@ -149,7 +164,7 @@ describe("withTrustedDatabaseContext", () => {
 
   it("rolls back and never runs the protected operation when context establishment fails", async () => {
     const { query } = createDatabaseDouble();
-    query.mockImplementation(async (text: string) => {
+    query.mockImplementation(async (text: string, _values?: unknown[]) => {
       if (text.includes("FROM pg_catalog.pg_roles AS r")) {
         return { rows: [SAFE_ROLE] };
       }

@@ -8,13 +8,17 @@ O sistema não substitui os sistemas oficiais de processo administrativo, requis
 
 ## Estado atual
 
-A `Foundation-00`, a fundação executável, a Central do Setor, o detalhe demonstrativo, a fundação PostgreSQL, o desenho da fronteira de identidade/RLS e a primeira abertura seletiva de leitura por RLS foram revisados e integrados em `main`.
+A `Foundation-00` e as work units F01 a F09 foram revisadas e integradas em `main`.
 
-Existe uma aplicação executável com jornada demonstrativa `Central → detalhe → Central`, exclusivamente com dados fictícios. O núcleo relacional possui as migrations imutáveis `database/migrations/0001_core_foundation.sql` e `database/migrations/0002_trusted_identity_read_policies.sql`. A CI prova separadamente o estado `0001` totalmente default-deny e o estado `0001 + 0002` com policies apenas de `SELECT`, usando PostgreSQL descartável e papéis não privilegiados.
+Existe uma aplicação executável com jornada demonstrativa `Central → detalhe → Central`, exclusivamente com dados fictícios. A Central também possui agora um primeiro caminho de leitura persistente server-side, desabilitado por padrão e ativável somente por configuração server-only explícita. Esse caminho usa a fronteira confiável implementada em F08: sessão validada no servidor → `issuer + subject` → contexto transacional LOCAL → PostgreSQL/RLS.
 
-ADR-003 registra a fronteira aprovada: sessão externa validada no servidor → `issuer + subject` confiáveis → `app_user` → membership ativa → escopo de equipe no PostgreSQL. F07 implementou somente a camada PostgreSQL dessa fronteira. Ainda não há Auth ligado à aplicação, conexão operacional server-side, banco hospedado, Data API operacional, secret ou deploy.
+O núcleo relacional possui as migrations imutáveis `database/migrations/0001_core_foundation.sql` e `database/migrations/0002_trusted_identity_read_policies.sql`. A CI prova separadamente o estado `0001` totalmente default-deny e o estado `0001 + 0002` com policies apenas de `SELECT`, usando PostgreSQL descartável e papéis não privilegiados.
 
-A próxima ação canônica é `F08-SERVER-TRUST-ADAPTER-01 — Integrar sessão server-side e contexto transacional`. Ela implementará o caminho server-only que obtém sessão pela API oficial atual do SDK, deriva somente `issuer + subject` confiáveis e estabelece esse contexto localmente na transação PostgreSQL, sem provisionar infraestrutura, expor login/signup ou usar credenciais reais nesta slice.
+A F08 adicionou o adaptador server-only de Auth/PostgreSQL sem provisionar infraestrutura: identidade externa é derivada apenas de configuração confiável e sessão validada, o contexto contém somente `iss + sub`, a transação é `READ ONLY` e o caminho operacional rejeita owner, superuser e `BYPASSRLS`.
+
+A F09 conectou a Central a esse adaptador por um modo persistente opt-in. Falha de sessão, banco ou configuração no modo persistente não é mascarada por fixtures demo. A primeira leitura também revelou um limite real das policies atuais: elas autorizam contratações por equipe, mas `memberships`/`app_users` expõem somente a própria identidade, então a Central ainda não pode resolver com segurança o nome de outro membro responsável.
+
+A próxima ação canônica é `F10-TEAM-DIRECTORY-RLS-DESIGN-01 — Projetar leitura segura do diretório de responsáveis`. Ela deve definir — e implementar quando seguro — a menor projeção de membros necessária à Central, sem expor identificadores externos de Auth, sem aceitar escopo do cliente e sem enfraquecer RLS.
 
 O repositório está público. Aplicam-se integralmente as restrições de publicação de `AGENTS.md` e `docs/architecture/SECURITY.md`; nenhum dado real ou pré-publicação pode ser usado.
 
@@ -76,6 +80,7 @@ A hierarquia detalhada está em `docs/ai/SOURCE_OF_TRUTH.md`.
 - autenticação não é autorização; escopo deriva de membership ativa no banco;
 - IDs fornecidos pelo cliente nunca definem identidade ou escopo por si só;
 - contexto de identidade no banco só é confiável quando estabelecido por servidor autenticador controlado;
+- falha de leitura protegida não pode ser convertida silenciosamente em sucesso demonstrativo;
 - evitar complexidade prematura;
 - construir por slices pequenas, utilizáveis e verificáveis;
 - qualquer incerteza importante aumenta a investigação, nunca autoriza adivinhação.

@@ -14,6 +14,11 @@ const PROTECTED_TABLES = [
   "contracting_events",
 ] as const;
 
+const FORBIDDEN_OPERATIONAL_ROLES = new Set([
+  "neondb_owner",
+  "compras_team_directory_view_owner",
+]);
+
 export type ScopedDatabaseClient = Pick<PoolClient, "query">;
 
 type RoleSafetyRow = {
@@ -76,7 +81,7 @@ async function assertOperationalRole(client: PoolClient): Promise<void> {
     role.rolsuper ||
     role.rolbypassrls ||
     role.owns_protected_tables ||
-    role.rolname === "neondb_owner"
+    FORBIDDEN_OPERATIONAL_ROLES.has(role.rolname)
   ) {
     throw new TrustedDatabaseContextError();
   }

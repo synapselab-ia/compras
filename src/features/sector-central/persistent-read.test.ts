@@ -23,14 +23,14 @@ describe("readPersistentSectorCentralRecords", () => {
     );
   });
 
-  it("executes the domain query only through the trusted database context", async () => {
+  it("executes the domain query only through trusted context and the minimal directory view", async () => {
     query.mockResolvedValue({
       rows: [
         {
           id: "00000000-0000-4000-8000-000000000901",
           object: "Contratação fictícia persistente",
           responsible_membership_id: "00000000-0000-4000-8000-000000000902",
-          responsible_self_name: "Pessoa Demo",
+          responsible_name: "Pessoa Demo Colega",
           stage: "analise-demo",
           status: "em-andamento-demo",
           waiting_type: "setor",
@@ -45,7 +45,7 @@ describe("readPersistentSectorCentralRecords", () => {
       {
         id: "00000000-0000-4000-8000-000000000901",
         object: "Contratação fictícia persistente",
-        responsible: "Pessoa Demo",
+        responsible: "Pessoa Demo Colega",
         stage: "analise-demo",
         status: "em-andamento-demo",
         waitingOn: "Setor Demo",
@@ -59,7 +59,11 @@ describe("readPersistentSectorCentralRecords", () => {
 
     const [sql, values] = query.mock.calls[0];
     expect(sql).toContain("FROM public.contractings AS c");
+    expect(sql).toContain("LEFT JOIN public.team_member_directory");
+    expect(sql).toContain("responsible_directory.display_name AS responsible_name");
     expect(sql).toContain("MAX(e.occurred_at) AS latest_event_at");
+    expect(sql).not.toContain("public.memberships");
+    expect(sql).not.toContain("public.app_users");
     expect(sql).not.toContain("updated_at");
     expect(values).toBeUndefined();
   });
@@ -79,14 +83,14 @@ describe("readPersistentSectorCentralRecords", () => {
     expect(values).toBeUndefined();
   });
 
-  it("keeps teammate identity unavailable instead of bypassing the current RLS boundary", async () => {
+  it("keeps a non-exposed membership generic and preserves the null-responsible state", async () => {
     query.mockResolvedValue({
       rows: [
         {
           id: "00000000-0000-4000-8000-000000000903",
-          object: "Registro fictício de equipe",
+          object: "Registro fictício inconsistente",
           responsible_membership_id: "00000000-0000-4000-8000-000000000904",
-          responsible_self_name: null,
+          responsible_name: null,
           stage: null,
           status: null,
           waiting_type: "entidade-demo",
@@ -98,7 +102,7 @@ describe("readPersistentSectorCentralRecords", () => {
           id: "00000000-0000-4000-8000-000000000905",
           object: "Registro fictício sem responsável",
           responsible_membership_id: null,
-          responsible_self_name: null,
+          responsible_name: null,
           stage: "",
           status: "",
           waiting_type: null,
@@ -112,7 +116,7 @@ describe("readPersistentSectorCentralRecords", () => {
     await expect(readPersistentSectorCentralRecords()).resolves.toEqual([
       {
         id: "00000000-0000-4000-8000-000000000903",
-        object: "Registro fictício de equipe",
+        object: "Registro fictício inconsistente",
         responsible: "Responsável não disponível",
         stage: "Não informado",
         status: "Não informado",

@@ -90,3 +90,55 @@ jobs:
           PGDATABASE=compras_directory_design_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0001_core_foundation.sql
           PGDATABASE=compras_directory_design_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0002_trusted_identity_read_policies.sql
           PGDATABASE=compras_directory_design_ci psql -v ON_ERROR_STOP=1 -f database/tests/team_directory_rls_design.sql
+
+      - name: Red-team F11 capability migration preflight
+        run: |
+          createdb compras_directory_preflight_ci
+          PGDATABASE=compras_directory_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0001_core_foundation.sql
+          PGDATABASE=compras_directory_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0002_trusted_identity_read_policies.sql
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_team_directory_view_owner LOGIN;"
+          if PGDATABASE=compras_directory_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0003_team_member_directory.sql; then
+            echo "unsafe LOGIN capability was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_team_directory_view_owner;"
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_team_directory_view_owner NOLOGIN BYPASSRLS;"
+          if PGDATABASE=compras_directory_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0003_team_member_directory.sql; then
+            echo "unsafe BYPASSRLS capability was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_team_directory_view_owner;"
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_team_directory_view_owner NOLOGIN NOINHERIT NOBYPASSRLS;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_directory_preflight_member NOLOGIN;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "GRANT compras_team_directory_view_owner TO compras_directory_preflight_member WITH INHERIT FALSE, SET TRUE;"
+          if PGDATABASE=compras_directory_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0003_team_member_directory.sql; then
+            echo "SET-capable capability membership was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "REVOKE compras_team_directory_view_owner FROM compras_directory_preflight_member;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_directory_preflight_member;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_team_directory_view_owner;"
+          dropdb compras_directory_preflight_ci
+
+      - name: Verify 0001 + 0002 + 0003 team directory capability
+        run: |
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_migrator_ci LOGIN CREATEROLE NOINHERIT PASSWORD 'DEMO-F11-MIGRATOR-PASSWORD';"
+          createdb -O compras_migrator_ci compras_directory_ci
+
+          PGUSER=compras_migrator_ci PGPASSWORD='DEMO-F11-MIGRATOR-PASSWORD' PGDATABASE=compras_directory_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0001_core_foundation.sql
+          PGUSER=compras_migrator_ci PGPASSWORD='DEMO-F11-MIGRATOR-PASSWORD' PGDATABASE=compras_directory_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0002_trusted_identity_read_policies.sql
+          PGUSER=compras_migrator_ci PGPASSWORD='DEMO-F11-MIGRATOR-PASSWORD' PGDATABASE=compras_directory_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0003_team_member_directory.sql
+          PGDATABASE=compras_directory_ci psql -v ON_ERROR_STOP=1 -f database/tests/team_member_directory.sql
+
+          createdb -O compras_migrator_ci compras_directory_reuse_ci
+          PGUSER=compras_migrator_ci PGPASSWORD='DEMO-F11-MIGRATOR-PASSWORD' PGDATABASE=compras_directory_reuse_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0001_core_foundation.sql
+          PGUSER=compras_migrator_ci PGPASSWORD='DEMO-F11-MIGRATOR-PASSWORD' PGDATABASE=compras_directory_reuse_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0002_trusted_identity_read_policies.sql
+          PGUSER=compras_migrator_ci PGPASSWORD='DEMO-F11-MIGRATOR-PASSWORD' PGDATABASE=compras_directory_reuse_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0003_team_member_directory.sql
+
+          dropdb compras_directory_reuse_ci
+          dropdb compras_directory_ci
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_team_directory_view_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_migrator_ci;"

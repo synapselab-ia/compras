@@ -10,7 +10,7 @@ type PersistentSectorCentralRow = {
   id: string;
   object: string;
   responsible_membership_id: string | null;
-  responsible_self_name: string | null;
+  responsible_name: string | null;
   stage: string | null;
   status: string | null;
   waiting_type: string | null;
@@ -24,7 +24,7 @@ const SECTOR_CENTRAL_READ_SQL = `
     c.id::text AS id,
     c.object,
     c.responsible_membership_id::text AS responsible_membership_id,
-    responsible_self_user.display_name AS responsible_self_name,
+    responsible_directory.display_name AS responsible_name,
     c.stage_key AS stage,
     c.status_key AS status,
     c.waiting_type,
@@ -32,11 +32,9 @@ const SECTOR_CENTRAL_READ_SQL = `
     c.next_action,
     MAX(e.occurred_at) AS latest_event_at
   FROM public.contractings AS c
-  LEFT JOIN public.memberships AS responsible_self
-    ON responsible_self.team_id = c.team_id
-   AND responsible_self.id = c.responsible_membership_id
-  LEFT JOIN public.app_users AS responsible_self_user
-    ON responsible_self_user.id = responsible_self.user_id
+  LEFT JOIN public.team_member_directory AS responsible_directory
+    ON responsible_directory.team_id = c.team_id
+   AND responsible_directory.membership_id = c.responsible_membership_id
   LEFT JOIN public.contracting_events AS e
     ON e.team_id = c.team_id
    AND e.contracting_id = c.id
@@ -46,7 +44,7 @@ const SECTOR_CENTRAL_READ_SQL = `
     c.id,
     c.object,
     c.responsible_membership_id,
-    responsible_self_user.display_name,
+    responsible_directory.display_name,
     c.stage_key,
     c.status_key,
     c.waiting_type,
@@ -78,7 +76,7 @@ function formatLastMovement(value: Date | string | null): string {
 
 function mapPersistentRow(row: PersistentSectorCentralRow): SectorCentralRecord {
   const responsible = row.responsible_membership_id
-    ? nonEmptyOr(row.responsible_self_name, "Responsável não disponível")
+    ? nonEmptyOr(row.responsible_name, "Responsável não disponível")
     : "Sem responsável";
 
   return {

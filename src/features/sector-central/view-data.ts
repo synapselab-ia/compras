@@ -1,5 +1,6 @@
 import "server-only";
 
+import { readPrivateAuthSessionState } from "../../server/auth/runtime";
 import { readPersistentReadMode } from "../../server/persistent-read-mode";
 import { demoSectorRecords } from "./demo-data";
 import { readPersistentSectorCentralRecords } from "./persistent-read";
@@ -15,13 +16,18 @@ export type SectorCentralViewData =
       records: SectorCentralRecord[];
     }>
   | Readonly<{
+      kind: "sign-in-required";
+      records: [];
+    }>
+  | Readonly<{
       kind: "unavailable";
       records: [];
     }>;
 
 /**
- * Selects the server-side source. Persistent failures never fall back to demo,
- * avoiding a misleading success state when protected data is unavailable.
+ * Selects the server-side source. Persistent mode verifies that an authenticated
+ * provider session exists before attempting the RLS-protected database read.
+ * Protected failures never fall back to demo.
  */
 export async function loadSectorCentralViewData(): Promise<SectorCentralViewData> {
   const mode = readPersistentReadMode();
@@ -31,6 +37,16 @@ export async function loadSectorCentralViewData(): Promise<SectorCentralViewData
   }
 
   if (mode === "invalid") {
+    return { kind: "unavailable", records: [] };
+  }
+
+  const session = await readPrivateAuthSessionState();
+
+  if (session.kind === "unauthenticated") {
+    return { kind: "sign-in-required", records: [] };
+  }
+
+  if (session.kind === "unavailable") {
     return { kind: "unavailable", records: [] };
   }
 

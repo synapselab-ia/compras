@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
+
 import { ContractingDetail } from "@/features/contracting-detail/components/contracting-detail";
 import { loadContractingDetailViewData } from "@/features/contracting-detail/view-data";
-import { notFound } from "next/navigation";
 
 type ContractingDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -13,6 +14,10 @@ export default async function ContractingDetailPage({ params }: ContractingDetai
   const { id } = await params;
   const viewData = await loadContractingDetailViewData(id);
 
+  if (viewData.kind === "sign-in-required") {
+    redirect("/auth/sign-in");
+  }
+
   if (viewData.kind === "not-found") {
     notFound();
   }
@@ -22,7 +27,7 @@ export default async function ContractingDetailPage({ params }: ContractingDetai
       <main className="detail-shell">
         <section className="prototype-banner" role="note" aria-label="Estado da fonte de dados">
           <strong>Dados protegidos indisponíveis.</strong>
-          <span>Falhas de sessão, configuração ou banco não são substituídas por dados demonstrativos.</span>
+          <span>Falhas de Auth, sessão, configuração ou banco não são substituídas por dados demonstrativos.</span>
         </section>
         <section className="detail-not-found" aria-labelledby="unavailable-title">
           <p className="eyebrow">Leitura protegida indisponível</p>

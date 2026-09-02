@@ -1,72 +1,63 @@
 # Next Action — Compras
 
-## F11-TEAM-DIRECTORY-RLS-IMPLEMENT-01 — Implementar capability view do diretório de equipe
+## F12-PERSISTENT-CONTRACTING-DETAIL-READ-01 — Conectar detalhe à leitura persistente protegida
 
-**Classe:** `T2 — banco/segurança` com impacto de `T5 — arquitetura`  
+**Classe:** `T1 — feature de leitura` com impacto de `T2 — segurança`  
 **Estado:** READY  
-**Objetivo:** transformar o desenho validado pela F10 em migration canônica segura e integrar a Central persistente ao diretório mínimo de responsáveis, sem abrir identidade externa, aceitar escopo do browser, criar escrita ou usar papel operacional privilegiado.
+**Objetivo:** conectar `/contratacoes/[id]` ao caminho persistente server-only já validado, usando somente o ID opaco como seletor do recurso e deixando RLS determinar autorização, sem receber `team_id`/membership/user do browser, sem escrita e sem provisionar infraestrutura.
 
 ## Fonte da tarefa
 
-Executar conforme `tasks/F11-TEAM-DIRECTORY-RLS-IMPLEMENT-01/SPEC.md` e `docs/decisions/ADR-004-team-directory-rls-capability-view.md`.
+Executar conforme `tasks/F12-PERSISTENT-CONTRACTING-DETAIL-READ-01/SPEC.md`, ADR-003, ADR-004, ADR-005 e migrations `0001`–`0003`.
 
 ## Resultado esperado
 
 Ao final, o repositório deve possuir:
 
-- migration ordenada `database/migrations/0003_team_member_directory.sql`;
-- capability role técnica dedicada, preferencialmente `compras_team_directory_view_owner`, com `NOLOGIN`, `NOSUPERUSER`, `NOBYPASSRLS`, `NOCREATEDB`, `NOCREATEROLE` e `NOINHERIT`;
-- validação fail-closed se uma role homônima cluster-level já existir com atributos incompatíveis;
-- grants coluna-a-coluna mínimos sobre `memberships` e `app_users`, sem acesso a `auth_issuer`/`auth_subject`;
-- policies `SELECT` dirigidas somente à capability para memberships não revogadas e app_users não desabilitados;
-- view `public.team_member_directory`, de propriedade da capability, `security_barrier=true`, `security_invoker=false`, contendo somente `team_id`, `membership_id`, `display_name`;
-- escopo da view derivado de `current_app_user_id()` + membership ativa do chamador no mesmo `team_id`, sem parâmetro ou claim de escopo;
-- adaptador F08 rejeitando explicitamente a capability como role operacional normal;
-- Central persistente resolvendo `responsible_membership_id` pela view mínima, sem abrir `memberships`/`app_users` diretamente para colegas;
-- testes PostgreSQL e de aplicação cobrindo ownership, role isolation, revogação, desabilitação, cross-team e regressões anteriores.
+- leitura persistente server-side do detalhe executada exclusivamente por `withTrustedDatabaseContext()`;
+- `id` de rota usado somente para localizar a contratação, nunca como prova de autorização;
+- nenhuma API que aceite `team_id`, `membership_id`, `app_user_id`, issuer ou subject do cliente;
+- RLS continuando responsável por tornar UUID conhecido de outra equipe invisível;
+- responsável resolvido somente por `public.team_member_directory`;
+- identificadores relacionados, itens e eventos lidos somente pelas tabelas já protegidas e pelas policies existentes;
+- separação explícita entre detalhe demo, detalhe persistente, não encontrado e indisponível;
+- falha persistente sem fallback silencioso para fixtures demo;
+- Central em modo persistente podendo voltar a oferecer navegação para o detalhe persistente correspondente;
+- nenhuma migration/policy de escrita nova salvo se uma necessidade estrutural objetiva e estritamente de leitura for descoberta e justificada.
 
 ## Regras obrigatórias
 
-- não reescrever migrations `0001` ou `0002`;
-- tratar roles PostgreSQL como cluster-level e não confiar somente no nome de uma role preexistente;
-- falhar fechado se a capability preexistente tiver `LOGIN`, superuser, `BYPASSRLS`, `CREATEDB`, `CREATEROLE` ou configuração incompatível;
-- não conceder membership permanente do principal de migration ou do papel operacional à capability;
-- capability não pode ser owner de `memberships`, `app_users` nem qualquer tabela protegida;
-- manter `FORCE ROW LEVEL SECURITY` nas tabelas-base;
-- não criar `SECURITY DEFINER` para contornar o desenho aprovado;
-- não criar policy permissiva de `INSERT`, `UPDATE`, `DELETE` ou `ALL`;
-- não conceder `SELECT` de `auth_issuer` ou `auth_subject` à capability;
-- não adicionar `team_id`, `membership_id` ou `app_user_id` ao contexto confiável;
-- não aceitar IDs de escopo/identidade do browser;
-- não usar owner, superuser, `neondb_owner`, `BYPASSRLS` ou a capability como credencial operacional da aplicação;
+- reutilizar a fronteira F08 e `COMPRAS_PERSISTENT_READ_ENABLED`; não criar um segundo modo de ativação divergente;
+- se necessário, extrair apenas um helper server-only mínimo para compartilhar a seleção demo/persistente entre Central e detalhe;
+- validar o `id` opaco antes de passá-lo à query; usar parâmetro SQL, nunca interpolação;
+- não aceitar ou derivar autorização de `team_id` fornecido por URL, query, body ou header;
+- um registro inexistente e um registro existente fora do escopo devem resultar no mesmo estado externo de não encontrado, sem oracle de autorização;
+- erro de sessão/configuração/banco/contexto deve resultar em estado indisponível genérico, não `not found` e não demo;
+- não serializar erro, cookie, sessão, claim ou connection string;
+- usar `team_member_directory` para nome de responsável e não reabrir `app_users`/`memberships` para colegas;
+- não inventar taxonomias finais para etapa, status, tipo de identificador ou evento;
 - Q-009 e Q-010 permanecem abertas;
-- usar somente fixtures artificiais/sanitizadas;
-- nenhum recurso externo, secret ou dado real.
+- nenhum login/signup/admissão, infraestrutura hospedada, secret real ou dado real.
 
 ## Segurança mínima a provar
 
-- migration `0001 + 0002 + 0003` aplica do zero em PostgreSQL descartável;
-- capability possui exatamente os atributos de segurança esperados e nenhuma membership incompatível;
-- capability não possui ownership de tabelas protegidas;
-- view possui owner correto, `security_barrier=true` e semântica owner (`security_invoker=false`);
-- capability não consegue selecionar `auth_issuer`/`auth_subject`;
-- papel operacional autenticado de teste não consegue `SET ROLE` para capability;
-- sem contexto, identidade desconhecida, usuário sem membership, usuário desabilitado ou caller com membership revogada recebem diretório vazio;
-- A1 ativo vê A1 e A2 ativos da equipe A e não vê B1, mesmo conhecendo UUID;
-- membership target revogada e usuário target desabilitado não aparecem;
-- SELECT direto do papel operacional em `memberships`/`app_users` continua self-only;
-- nenhuma nova policy de escrita existe;
-- `assertOperationalRole()` rejeita explicitamente a capability;
-- a Central usa somente a view para nome de responsável colega.
+- UUID válido da própria equipe retorna somente o detalhe autorizado;
+- UUID válido conhecido de outra equipe fica invisível por RLS e é indistinguível de inexistente;
+- ID malformado não chega a SQL interpolado e não produz detalhe demo em modo persistente;
+- tentativa de passar `team_id`, membership ou user por argumento/cast não altera escopo;
+- responsável de colega ativo da mesma equipe é resolvido pela capability view;
+- membership responsável revogada ou app_user desabilitado permanece fallback genérico;
+- `related_identifiers`, `contracting_items` e `contracting_events` permanecem limitados ao registro/equipe autorizado;
+- nenhum owner, superuser, `BYPASSRLS`, `neondb_owner` ou capability role é usado pela aplicação;
+- falha do banco/sessão não vaza detalhes e não cai para demo;
+- nenhum dado sensível entra em URL além do ID opaco já necessário à rota.
 
 ## Verificação obrigatória
 
-- prova isolada de `0001` default-deny: PASS;
-- regressões `0001 + 0002`/F07/F08: PASS;
-- migration `0001 + 0002 + 0003`: PASS;
-- suíte adversarial do diretório: PASS;
-- testes da leitura persistente F09/F11: PASS;
-- red-team de role preexistente insegura, ownership, grants, `SET ROLE`, auth columns, cross-team e adapter: PASS;
+- regressões `0001 + 0002 + 0003` e suites F07/F08/F10/F11: PASS;
+- testes unitários/adversariais da leitura persistente do detalhe: PASS;
+- testes de seleção de fonte/estados demo-persistent-not-found-unavailable: PASS;
+- navegação da Central consistente com o modo selecionado: PASS;
 - `npm ci`: PASS;
 - lint: PASS;
 - typecheck: PASS;
@@ -79,17 +70,18 @@ Ao final, o repositório deve possuir:
 
 Não:
 
-- policy de escrita ou RPC de mutação;
-- CRUD de membership/app_user;
+- mutations, CRUD ou policy/RPC de escrita;
+- edição do detalhe;
 - perfil/role funcional da Q-009;
 - auditoria de leitura da Q-010;
 - login/signup/admissão;
-- criação de usuários reais;
-- banco/Auth/Data API/Vercel hospedados;
-- detalhe persistente;
+- criação de usuário real;
+- provisionamento Neon/Auth/Vercel;
 - deploy;
-- dados reais.
+- dados reais;
+- fechamento de taxonomias ainda abertas;
+- pesquisa de preços.
 
 ## Critério de encerramento
 
-A tarefa termina quando a capability role + view estiverem versionadas em migration segura, a Central persistente resolver responsáveis ativos da própria equipe exclusivamente pela projeção mínima, o papel operacional continuar incapaz de ler identidade externa ou assumir a capability, todos os gates passarem e o checkpoint deixar exatamente uma nova `NEXT_ACTION` executável para a próxima fronteira necessária.
+A tarefa termina quando Central e detalhe possuem uma jornada de leitura persistente opt-in coerente, o ID da rota é apenas seletor de recurso e nunca escopo/autorização, registros cross-team permanecem invisíveis por RLS, falhas protegidas são indistinguíveis de sucesso demo e existe exatamente uma nova `NEXT_ACTION` executável para a próxima fronteira necessária.

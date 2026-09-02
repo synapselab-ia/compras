@@ -8,17 +8,25 @@ O sistema não substitui os sistemas oficiais de processo administrativo, requis
 
 ## Estado atual
 
-A `Foundation-00` e as work units F01 a F10 foram revisadas e integradas em `main`.
+A `Foundation-00` e as work units F01 a F11 foram revisadas e integradas em `main`.
 
-Existe uma aplicação executável com jornada demonstrativa `Central → detalhe → Central`, exclusivamente com dados fictícios. A Central também possui um primeiro caminho de leitura persistente server-side, desabilitado por padrão e ativável somente por configuração server-only explícita. Esse caminho usa a fronteira confiável de F08: sessão validada no servidor → `issuer + subject` → contexto transacional LOCAL → PostgreSQL/RLS.
+Existe uma aplicação executável com jornada demonstrativa `Central → detalhe → Central`, exclusivamente com dados fictícios. A Central também possui um caminho de leitura persistente server-side, desabilitado por padrão e ativável somente por `COMPRAS_PERSISTENT_READ_ENABLED=true`. Esse caminho usa a fronteira confiável implementada em F08: sessão validada no servidor → `issuer + subject` → contexto transacional LOCAL → PostgreSQL/RLS.
 
-O núcleo relacional possui as migrations imutáveis `database/migrations/0001_core_foundation.sql` e `database/migrations/0002_trusted_identity_read_policies.sql`. A CI prova separadamente o estado `0001` totalmente default-deny e o estado `0001 + 0002` com policies somente de `SELECT`, usando PostgreSQL descartável e papéis não privilegiados.
+O núcleo relacional possui as migrations imutáveis:
 
-F09 conectou a Central a esse adaptador por um modo persistente opt-in. A leitura já respeita escopo de equipe das contratações, mas as policies atuais de `memberships`/`app_users` são deliberadamente self-only, de modo que o runtime ainda não consegue resolver o nome de um responsável colega da mesma equipe sem uma projeção adicional.
+- `database/migrations/0001_core_foundation.sql` — schema + `FORCE RLS` default-deny;
+- `database/migrations/0002_trusted_identity_read_policies.sql` — helpers de identidade e primeiras policies somente de `SELECT`;
+- `database/migrations/0003_team_member_directory.sql` — capability view mínima para diretório de responsáveis da mesma equipe.
 
-F10 estudou e provou essa projeção em PostgreSQL 17. ADR-004 rejeita policy autorreferente por recursão, confirma que uma view `security_invoker` isolada continua self-only e escolhe uma **capability view**: role técnica `NOLOGIN`/`NOBYPASSRLS`, grants coluna-a-coluna sem identificadores externos de Auth, policies `SELECT` exclusivas da capability e uma security-barrier view que devolve somente `team_id`, `membership_id` e `display_name` quando o usuário corrente possui membership ativa no mesmo escopo.
+A CI preserva provas separadas do estado `0001`, do estado `0001 + 0002`, do desenho adversarial F10 e da migration `0001 + 0002 + 0003` com role de migration não-superuser, além de testar preexistência insegura da capability e reutilização da role cluster-level em segundo database.
 
-Esse desenho foi validado somente em ambiente descartável. Nenhuma migration de produção, role persistente de diretório ou alteração da consulta runtime foi introduzida pela F10. A próxima ação canônica é `F11-TEAM-DIRECTORY-RLS-IMPLEMENT-01 — Implementar capability view do diretório de equipe`, que transformará o padrão em migration `0003`, endurecerá a rejeição da capability no adaptador operacional e fará a Central consultar a projeção mínima.
+A F11 transformou ADR-004 em runtime: `public.team_member_directory` expõe somente `team_id`, `membership_id` e `display_name`, com owner técnico `NOLOGIN`/`NOBYPASSRLS`, grants coluna-a-coluna e policies direcionadas. A Central persistente usa exclusivamente essa view para resolver nomes de responsáveis colegas e o adaptador F08 rejeita a capability como credencial operacional.
+
+ADR-005 registra uma nuance de PostgreSQL 17 necessária à implementação: um `CREATEROLE` não-superuser recebe uma concessão administrativa automática sobre a role que cria. O desenho aceita somente essa relação `ADMIN TRUE / SET FALSE / INHERIT FALSE` para o principal de migration; qualquer membership utilizável ou membership da capability em outra role falha fechado.
+
+Ainda não existe banco/Auth/Vercel hospedado, login/signup, usuário operacional real, secret real ou deploy. O modo persistente existe e é testado somente com dados artificiais; `REAL_DATA_ALLOWED` permanece `NO`.
+
+O limite funcional atual é o detalhe: `/contratacoes/[id]` ainda usa fixture demonstrativa. A próxima ação canônica é `F12-PERSISTENT-CONTRACTING-DETAIL-READ-01 — Conectar detalhe à leitura persistente protegida`. Ela deve completar a jornada persistente de leitura sem criar escrita nem infraestrutura.
 
 O repositório está público. Aplicam-se integralmente as restrições de publicação de `AGENTS.md` e `docs/architecture/SECURITY.md`; nenhum dado real ou pré-publicação pode ser usado.
 
@@ -55,7 +63,8 @@ A hierarquia detalhada está em `docs/ai/SOURCE_OF_TRUTH.md`.
 - `docs/architecture/DATABASE.md` — contrato da fundação persistente;
 - `docs/decisions/ADR-002-persistence-foundation.md` — fundação relacional/default-deny;
 - `docs/decisions/ADR-003-trusted-identity-rls-boundary.md` — fronteira de identidade confiável e autorização de leitura;
-- `docs/decisions/ADR-004-team-directory-rls-capability-view.md` — diretório mínimo de equipe por capability view sob RLS.
+- `docs/decisions/ADR-004-team-directory-rls-capability-view.md` — desenho do diretório mínimo;
+- `docs/decisions/ADR-005-directory-capability-role-lifecycle.md` — lifecycle seguro da role cluster-level.
 
 ### Operação por IA
 
@@ -81,8 +90,7 @@ A hierarquia detalhada está em `docs/ai/SOURCE_OF_TRUTH.md`.
 - autenticação não é autorização; escopo deriva de membership ativa no banco;
 - IDs fornecidos pelo cliente nunca definem identidade ou escopo por si só;
 - contexto de identidade no banco só é confiável quando estabelecido por servidor autenticador controlado;
-- capability técnica não é credencial operacional e não substitui controle de role/RLS;
-- minimização de dados é requisito: diretórios não devem expor identificadores externos de Auth sem necessidade;
+- capability técnica de leitura não é credencial operacional e não pode ser assumida pelo aplicativo;
 - falha de leitura protegida não pode ser convertida silenciosamente em sucesso demonstrativo;
 - evitar complexidade prematura;
 - construir por slices pequenas, utilizáveis e verificáveis;

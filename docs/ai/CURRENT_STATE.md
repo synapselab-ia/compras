@@ -1,127 +1,123 @@
 # Current State — Compras
 
-**PROJECT_STATUS:** READY_FOR_TEAM_DIRECTORY_RLS_IMPLEMENTATION  
-**CURRENT_PHASE:** F11 — Team Directory Capability / RLS Implementation  
+**PROJECT_STATUS:** READY_FOR_PERSISTENT_DETAIL_READ  
+**CURRENT_PHASE:** F12 — Persistent Contracting Detail Read  
 **REPO_VISIBILITY:** PUBLIC  
-**APPLICATION_STATUS:** CENTRAL_PERSISTENT_READ_PATH_IMPLEMENTED_OPT_IN  
-**DATABASE_STATUS:** TEAM_DIRECTORY_RLS_DESIGN_VALIDATED_NOT_IMPLEMENTED  
+**APPLICATION_STATUS:** CENTRAL_PERSISTENT_READ_WITH_TEAM_DIRECTORY_IMPLEMENTED_OPT_IN  
+**DATABASE_STATUS:** TEAM_DIRECTORY_CAPABILITY_IMPLEMENTED_AND_VALIDATED_IN_EPHEMERAL_CI  
 **AUTH_STATUS:** SERVER_TRUST_ADAPTER_IMPLEMENTED_NOT_PROVISIONED  
 **DEPLOYMENT_STATUS:** NOT_CONFIGURED  
 **REAL_DATA_ALLOWED:** NO  
 **CONTEXT_STATUS:** VALID  
 **FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`  
-**LAST_GOOD_COMMIT:** `8c7c77e855b8d6a367a726a0a5c8ad8a010bbcf3`  
-**LAST_GOOD_CI_RUN:** `33657182891`  
+**LAST_GOOD_COMMIT:** `41f069fb0c5e52ec2b92fdf3223ed75c842afd67`  
+**LAST_GOOD_CI_RUN:** `33663331813`  
 **BLOCKERS:** none  
 **MANUAL_ACTION_REQUIRED:** none
 
 ## Estado real
 
-A work unit `F10-TEAM-DIRECTORY-RLS-DESIGN-01` foi concluída e integrada à `main` pela PR #12.
+A work unit `F11-TEAM-DIRECTORY-RLS-IMPLEMENT-01` foi concluída e integrada à `main` pela PR #13.
 
-F08/F09 continuam válidas: a Central possui leitura persistente server-only opt-in pela fronteira sessão validada → `issuer + subject` → contexto transacional LOCAL → PostgreSQL/RLS, sem receber identidade ou escopo do browser. O modo persistente continua desabilitado por padrão e falha fechado sem fallback silencioso para fixtures.
+O caminho persistente da Central continua opt-in por `COMPRAS_PERSISTENT_READ_ENABLED=true`, usa exclusivamente a fronteira F08 (`sessão validada -> issuer + subject -> contexto transacional LOCAL -> PostgreSQL/RLS`) e agora consegue resolver com segurança o nome de outro membro responsável da mesma equipe por uma projeção mínima de diretório.
 
-A lacuna revelada por F09 também permanece objetiva: as policies F07 autorizam `contractings` por equipe, mas `memberships` e `app_users` continuam self-only para o papel operacional. Portanto a Central ainda não resolve, em runtime, o `display_name` de uma membership responsável colega da mesma equipe.
+Nenhum banco/Auth/Vercel hospedado foi provisionado. O modo persistente continua desabilitado por padrão e somente dados fictícios/sanitizados são permitidos nesta fase.
 
-## Decisão de F10
+## F11 — capability do diretório de equipe
 
-ADR-004 (`docs/decisions/ADR-004-team-directory-rls-capability-view.md`) registra o desenho escolhido depois de comparar e provar alternativas em PostgreSQL 17 descartável.
+A migration imutável `database/migrations/0003_team_member_directory.sql` foi adicionada depois de `0001` e `0002`.
 
-Alternativas descartadas:
+Ela implementa:
 
-- policy autorreferente em `memberships`: PostgreSQL reproduziu `infinite recursion detected in policy` (`42P17`);
-- view `security_invoker=true`: segura, mas continua limitada às policies self-only e não resolve colegas;
-- segunda consulta server-only com o mesmo papel: continua sujeita às mesmas policies;
-- `SECURITY DEFINER`/papel privilegiado: adiciona fronteira privilegiada desnecessária;
-- tabela/projeção materializada: duplicaria estado de membership/display name e criaria risco de revogação/desabilitação stale antes de existir lifecycle de escrita autorizado.
+- role cluster-level `compras_team_directory_view_owner` com `NOLOGIN`, `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE`, `NOINHERIT`, `NOREPLICATION` e `NOBYPASSRLS`;
+- preflight fail-closed para role preexistente com atributos/configuração incompatíveis;
+- rejeição de qualquer membership em que a capability seja membro de outra role;
+- rejeição de qualquer concessão persistente que permita `SET ROLE` ou herança da capability;
+- grants coluna-a-coluna somente em `memberships(id, team_id, user_id, revoked_at)` e `app_users(id, display_name, disabled_at)`;
+- nenhuma leitura de `auth_issuer`/`auth_subject` pela capability;
+- policies `SELECT` direcionadas somente à capability para membership não revogada e app_user não desabilitado;
+- view `public.team_member_directory` com `security_barrier=true`, `security_invoker=false`, owner dedicado e somente `team_id`, `membership_id`, `display_name`;
+- escopo do diretório derivado exclusivamente de `current_app_user_id()` + membership ativa do chamador no mesmo `team_id`;
+- `FORCE ROW LEVEL SECURITY` intacto nas sete tabelas-base;
+- nenhuma policy de escrita.
 
-O desenho preferido é uma **capability view com owner técnico dedicado**:
+## ADR-005 — lifecycle da role cluster-level
 
-1. role técnica `NOLOGIN`, `NOSUPERUSER`, `NOBYPASSRLS`, `NOCREATEDB`, `NOCREATEROLE`, `NOINHERIT`, sem membership operacional;
-2. grants coluna-a-coluna somente no necessário de `memberships` e `app_users`, sem `auth_issuer`/`auth_subject`;
-3. policies `SELECT` direcionadas exclusivamente à capability, limitando targets a membership não revogada e usuário não desabilitado;
-4. view `security_barrier=true`, `security_invoker=false`, de propriedade da capability;
-5. projeção somente `team_id`, `membership_id`, `display_name`;
-6. escopo derivado no banco por `current_app_user_id()` + membership ativa do chamador no mesmo `team_id`;
-7. papel operacional lê somente a view e continua self-only ao consultar diretamente `memberships`/`app_users`.
+Durante a implementação foi revalidada uma nuance material de PostgreSQL 17: um principal não-superuser com `CREATEROLE` recebe automaticamente uma concessão administrativa sobre uma role recém-criada com `ADMIN TRUE`, `SET FALSE` e `INHERIT FALSE`.
 
-Nenhum `team_id` foi adicionado aos claims. `FORCE ROW LEVEL SECURITY` permanece intacto. Nenhuma policy de escrita ou migration de produção de diretório foi criada por F10.
+A ADR-005 registra o refinamento seguro da ADR-004: a propriedade exigida é **zero membership utilizável**, não literalmente zero linhas em `pg_auth_members`.
 
-## Prova descartável de F10
+A única relação tolerada é a concessão administrativa automática para o mesmo principal de migration, sem `SET` e sem herança. Para transferir ownership da view, a migration cria uma concessão `SET TRUE` adicional somente dentro da própria transação, transfere o owner e revoga essa concessão antes do commit. O postflight falha se qualquer concessão utilizável persistir.
 
-`database/tests/team_directory_rls_design.sql` foi integrado à CI como prova isolada sobre `0001 + 0002`.
+Isso evita exigir superuser de produção e também rejeita uma capability criada por caminho de provedor que a coloque como membro de role privilegiada.
 
-A prova confirma:
+## Integração da Central
 
-- view `security_invoker` não amplia as policies F07;
-- policy autorreferente de `memberships` falha por recursão e é rejeitada;
-- capability role de prova é `NOLOGIN`, não superuser, `NOBYPASSRLS`, não owner das tabelas-base e sem role membership;
-- capability não possui privilégio de coluna em `auth_issuer`/`auth_subject`;
-- view possui ownership/opções de segurança esperados e não contém colunas de Auth externo;
-- um principal operacional real simulado com `SET SESSION AUTHORIZATION` não pode `SET ROLE` para a capability;
-- A1 vê A1 e A2 ativos da equipe A;
-- UUID conhecido de B1 não amplia escopo;
-- target com membership revogada ou `app_user` desabilitado não aparece;
-- B1 vê somente a equipe B;
-- caller sem membership, desabilitado, revogado ou desconhecido recebe diretório vazio;
-- acesso direto do papel operacional a `memberships`/`app_users` continua self-only.
+`src/features/sector-central/persistent-read.ts` deixou de consultar `memberships`/`app_users` diretamente para descobrir responsável.
 
-## Red-team e correções
+A consulta agora faz `LEFT JOIN public.team_member_directory` por `team_id + responsible_membership_id` e usa somente `display_name` da projeção autorizada.
 
-A primeira CI da PR #12 (`33656705847`) encontrou uma deficiência na própria prova: o teste de `SET ROLE` rodava após `SET ROLE compras_directory_probe`, mas a sessão autenticada original ainda era `postgres`; como `SET ROLE` é autorizado em relação ao `session_user`, o superuser conseguia trocar para a capability e invalidava a tentativa de provar isolamento.
+Com isso:
 
-O teste foi corrigido para usar `SET SESSION AUTHORIZATION compras_directory_probe`, modelando um principal realmente não privilegiado. A CI seguinte da PR (`33657028400`) passou integralmente, incluindo a impossibilidade de escalar para a capability. Esse achado não exigiu relaxar o desenho; endureceu a validade da prova.
+- responsável ativo da mesma equipe pode ser exibido pelo nome;
+- `responsible_membership_id IS NULL` continua `Sem responsável`;
+- referência que o diretório corretamente não exponha continua `Responsável não disponível`;
+- nenhuma identidade ou escopo é recebida do browser;
+- `MAX(contracting_events.occurred_at)` continua sendo a última movimentação;
+- `updated_at` continua não sendo tratado como evento.
 
-Outros pontos red-team preservados:
+O adaptador F08 passou a rejeitar explicitamente `compras_team_directory_view_owner` como role operacional, além de continuar rejeitando superuser, `BYPASSRLS`, owner das tabelas protegidas e `neondb_owner`.
 
-- nenhum owner/superuser/`BYPASSRLS` é credencial operacional;
-- nenhum `SECURITY DEFINER` entrou no desenho aprovado;
-- nenhuma coluna de identidade externa é projetada no diretório;
-- nenhum scope ID vem do browser ou de claim adicional;
-- revogação/desabilitação são lidas da fonte canônica, sem cópia assíncrona;
-- Q-009 e Q-010 não foram resolvidas por inferência;
-- somente fixtures artificiais `DEMO-*`/UUIDs sintéticos foram usadas.
+## Red-team de F11
 
-## Verificação de F10
+A CI prova deliberadamente:
 
-- recuperação de `main`, branches, PRs e Issues: PASS;
-- nenhuma frente concorrente aberta no início: PASS;
-- `CONTEXT_MANIFEST` validado contra o tree de `main`: PASS;
-- documentação/código de F07, F08 e F09 revisados diretamente: PASS;
-- documentação oficial PostgreSQL 17 para RLS, views, segurança de funções e atributos de roles revalidada: PASS;
-- ADR-004 + prova descartável + SPEC da F11: PASS;
-- diff final da PR #12: PASS — somente ADR, teste de design, CI e SPEC da próxima work unit;
-- secret, dado real/interno ou infraestrutura externa: NÃO ENCONTRADOS;
-- migration de produção/policy de escrita/runtime da Central alterado em F10: NÃO;
-- primeira CI da PR `33656705847`: FAIL controlado — prova de `SET ROLE` inválida por `session_user` superuser; corrigida;
-- CI final da PR `33657028400`: PASS — `verify` e `database`;
-- PR #12 squash-merged em `8c7c77e855b8d6a367a726a0a5c8ad8a010bbcf3`;
-- CI da `main` após merge: run `33657182891`, jobs `verify` e `database`: PASS;
-- prova isolada `0001` default-deny: PASS;
-- regressões `0001 + 0002`, RLS/red-team e transporte F08: PASS;
-- prova F10 do diretório: PASS;
-- `npm ci`, lint, typecheck, testes e build: PASS.
+- role homônima preexistente com `LOGIN`: migration rejeitada;
+- role homônima preexistente com `BYPASSRLS`: migration rejeitada;
+- concessão `SET TRUE` da capability a outro principal: migration/regras estruturais rejeitam;
+- migration completa executada por database owner não-superuser com `CREATEROLE`;
+- mesma capability cluster-level reutilizada com segurança ao aplicar `0001 + 0002 + 0003` em segundo database do mesmo cluster;
+- papel operacional real simulado com `SET SESSION AUTHORIZATION` não consegue `SET ROLE` para a capability;
+- capability não consegue selecionar `auth_issuer`/`auth_subject`;
+- remoção de `security_barrier`, ativação de `security_invoker` e owner incorreto são detectados;
+- A1 vê A1/A2 da equipe A e não B1, mesmo conhecendo seu UUID;
+- target revogado/desabilitado não aparece;
+- caller sem contexto, desconhecido, sem membership, desabilitado ou revogado recebe diretório vazio;
+- acesso direto operacional a `memberships`/`app_users` continua self-only;
+- nenhuma policy de escrita foi criada.
 
-## Limite arquitetural para F11
+## Verificação de F11
 
-A implementação real criará uma role PostgreSQL cluster-level e ownership de view. F11 deve tratar explicitamente criação/reuso seguro dessa role, atributos inseguros preexistentes, privilégios necessários ao principal de migration, ausência de memberships, ownership final, grants mínimos e rejeição da capability pelo adaptador F08 como role operacional.
+- recuperação de `main`, branches e PRs: PASS;
+- `CONTEXT_MANIFEST` comparado ao tree de `main`: PASS;
+- fontes estáveis mantiveram os blobs esperados: `CONTEXT_STATUS = VALID`;
+- documentação PostgreSQL 17 e Neon relativa a roles/membership/ownership revalidada antes da decisão ADR-005: PASS;
+- diff integral da PR #13 revisado: PASS;
+- CI da PR #13 run `33663106823`: PASS — `verify` e `database`;
+- PR #13 squash-merged em `41f069fb0c5e52ec2b92fdf3223ed75c842afd67`;
+- CI da `main` após merge run `33663331813`: PASS — `verify` e `database`;
+- `npm ci`, lint, typecheck, testes e build: PASS;
+- prova isolada de `0001` default-deny: PASS;
+- regressões `0001 + 0002`/F07/F08/F10: PASS;
+- preflight adversarial F11 e `0001 + 0002 + 0003`: PASS;
+- secret real, dado interno/pré-publicação ou infraestrutura externa: NÃO ENCONTRADOS.
 
-A migration não pode substituir esses invariantes por owner/superuser/BYPASSRLS operacional apenas para simplificar deployment.
+## Limite atual
 
-## Segurança e limites atuais
+A Central possui caminho persistente de leitura completo para os campos já modelados e diretório mínimo de responsáveis. O detalhe em `/contratacoes/[id]`, porém, ainda usa exclusivamente fixtures demonstrativas; por isso o modo persistente ainda não deve navegar para uma tela que pareça mostrar o mesmo registro persistente.
 
-Nenhum banco/Auth hospedado, secret, usuário operacional real, deploy ou dado pré-publicação foi criado. O diretório de equipe está **desenhado e provado**, mas ainda não existe como migration/runtime de produção.
+A próxima fronteira independente é conectar o detalhe, em modo opt-in, às mesmas policies RLS e à mesma fronteira server-only, mantendo o modo demo separado e sem provisionar infraestrutura.
 
-`docs/product/OPEN_QUESTIONS.md` permanece canônico para questões não resolvidas; F10 não resolveu taxonomias, regra de preços, inatividade, pendências, permissões funcionais, auditoria de leitura, integrações públicas ou IA.
+Q-001, Q-002, Q-003, Q-004, Q-005, Q-006, Q-009 e Q-010 permanecem abertas. Nenhuma foi resolvida por inferência em F11.
 
 ## Context manifest
 
-Os inputs estáveis do `CONTEXT_MANIFEST` não foram alterados por F10 e os blobs permanecem válidos. ADR-004, testes, CI, CURRENT_STATE e NEXT_ACTION são lidos ao vivo pelo protocolo.
+Os inputs estáveis do `CONTEXT_MANIFEST` não foram alterados por F11. ADR-005, migration `0003`, testes, código runtime, `CURRENT_STATE` e `NEXT_ACTION` são lidos ao vivo pelo protocolo.
 
 ## Last good
 
-`8c7c77e855b8d6a367a726a0a5c8ad8a010bbcf3` é o `LAST_GOOD_COMMIT`, validado pela CI da `main` run `33657182891` com os jobs `verify` e `database` em PASS.
+`41f069fb0c5e52ec2b92fdf3223ed75c842afd67` é o `LAST_GOOD_COMMIT`, validado pela CI da `main` run `33663331813` com `verify` e `database` em PASS.
 
 ## Próxima ação
 
-Executar `F11-TEAM-DIRECTORY-RLS-IMPLEMENT-01` conforme `docs/ai/NEXT_ACTION.md`, `tasks/F11-TEAM-DIRECTORY-RLS-IMPLEMENT-01/SPEC.md` e ADR-004.
+Executar `F12-PERSISTENT-CONTRACTING-DETAIL-READ-01` conforme `docs/ai/NEXT_ACTION.md` e `tasks/F12-PERSISTENT-CONTRACTING-DETAIL-READ-01/SPEC.md`.

@@ -29,13 +29,17 @@ const SAFE_ROLE = {
 };
 
 function createDatabaseDouble(role = SAFE_ROLE) {
-  const query = vi.fn(async (text: string, _values?: unknown[]) => {
-    if (text.includes("FROM pg_catalog.pg_roles AS r")) {
-      return { rows: [role] };
-    }
+  const query = vi.fn(
+    async (...args: [text: string, values?: unknown[]]) => {
+      const [text] = args;
 
-    return { rows: [] };
-  });
+      if (text.includes("FROM pg_catalog.pg_roles AS r")) {
+        return { rows: [role] };
+      }
+
+      return { rows: [] };
+    },
+  );
   const client = {
     query,
     release: vi.fn(),
@@ -45,7 +49,9 @@ function createDatabaseDouble(role = SAFE_ROLE) {
     end: vi.fn().mockResolvedValue(undefined),
   };
 
-  databaseMocks.Pool.mockReturnValue(pool);
+  databaseMocks.Pool.mockImplementation(function MockPool() {
+    return pool;
+  });
 
   return { client, pool, query };
 }
@@ -53,6 +59,7 @@ function createDatabaseDouble(role = SAFE_ROLE) {
 describe("withTrustedDatabaseContext", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    databaseMocks.Pool.mockReset();
     process.env.DATABASE_URL = "postgresql://db.demo.invalid/compras";
     identityMocks.getVerifiedExternalIdentity.mockResolvedValue({
       issuer: "https://auth.demo.invalid/neondb/auth",
@@ -85,7 +92,7 @@ describe("withTrustedDatabaseContext", () => {
   });
 
   it("wraps driver construction failures without serializing driver details", async () => {
-    databaseMocks.Pool.mockImplementationOnce(() => {
+    databaseMocks.Pool.mockImplementationOnce(function MockPoolFailure() {
       throw new Error("driver detail that must not escape");
     });
 
@@ -141,7 +148,8 @@ describe("withTrustedDatabaseContext", () => {
       { ...SAFE_ROLE, owns_protected_tables: true },
       { ...SAFE_ROLE, rolname: "neondb_owner" },
     ]) {
-      vi.clearAllMocks();
+      databaseMocks.Pool.mockReset();
+      identityMocks.getVerifiedExternalIdentity.mockClear();
       identityMocks.getVerifiedExternalIdentity.mockResolvedValue({
         issuer: "https://auth.demo.invalid/neondb/auth",
         subject: "DEMO-SUBJECT",
@@ -164,15 +172,19 @@ describe("withTrustedDatabaseContext", () => {
 
   it("rolls back and never runs the protected operation when context establishment fails", async () => {
     const { query } = createDatabaseDouble();
-    query.mockImplementation(async (text: string, _values?: unknown[]) => {
-      if (text.includes("FROM pg_catalog.pg_roles AS r")) {
-        return { rows: [SAFE_ROLE] };
-      }
-      if (text === "SELECT set_config('request.jwt.claims', $1, true)") {
-        throw new Error("context failed");
-      }
-      return { rows: [] };
-    });
+    query.mockImplementation(
+      async (...args: [text: string, values?: unknown[]]) => {
+        const [text] = args;
+
+        if (text.includes("FROM pg_catalog.pg_roles AS r")) {
+          return { rows: [SAFE_ROLE] };
+        }
+        if (text === "SELECT set_config('request.jwt.claims', $1, true)") {
+          throw new Error("context failed");
+        }
+        return { rows: [] };
+      },
+    );
     const operation = vi.fn(async () => "unreachable");
 
     await expect(withTrustedDatabaseContext(operation)).rejects.toBeInstanceOf(

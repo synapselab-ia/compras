@@ -1,4 +1,4 @@
-import type { SectorCentralRecord } from "./demo-data";
+import type { SectorCentralRecord } from "./types";
 
 export type SectorCentralFilters = {
   query: string;

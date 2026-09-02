@@ -2,17 +2,37 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { demoSectorRecords, type SectorCentralRecord } from "../demo-data";
 import { filterSectorRecords, getSectorFilterOptions } from "../filtering";
+import type { SectorCentralRecord, SectorCentralSource } from "../types";
 
-const filterOptions = getSectorFilterOptions(demoSectorRecords);
+type SectorCentralProps = Readonly<{
+  records: SectorCentralRecord[];
+  source: SectorCentralSource;
+}>;
 
-function RecordTable({ records }: Readonly<{ records: SectorCentralRecord[] }>) {
+function DetailAccess({ record, source }: Readonly<{
+  record: SectorCentralRecord;
+  source: SectorCentralSource;
+}>) {
+  if (source === "persistent") {
+    return <span className="provisional-note">Somente Central nesta etapa</span>;
+  }
+
+  return (
+    <Link className="record-detail-link" href={`/contratacoes/${record.id}`}>
+      Ver detalhe<span className="sr-only"> de {record.id}</span>
+    </Link>
+  );
+}
+
+function RecordTable({ records, source }: SectorCentralProps) {
   return (
     <div className="records-table-wrap">
       <table className="records-table">
         <caption className="sr-only">
-          Registros fictícios da Central do Setor com valores provisórios de demonstração.
+          {source === "demo"
+            ? "Registros fictícios da Central do Setor com valores provisórios de demonstração."
+            : "Contratações autorizadas carregadas por leitura persistente server-side."}
         </caption>
         <thead>
           <tr>
@@ -31,9 +51,7 @@ function RecordTable({ records }: Readonly<{ records: SectorCentralRecord[] }>) 
             <tr key={record.id}>
               <td>
                 <strong className="record-id">{record.id}</strong>
-                <Link className="record-detail-link" href={`/contratacoes/${record.id}`}>
-                  Ver detalhe<span className="sr-only"> de {record.id}</span>
-                </Link>
+                <DetailAccess record={record} source={source} />
               </td>
               <td className="object-cell">{record.object}</td>
               <td>{record.responsible}</td>
@@ -52,9 +70,9 @@ function RecordTable({ records }: Readonly<{ records: SectorCentralRecord[] }>) 
   );
 }
 
-function RecordCards({ records }: Readonly<{ records: SectorCentralRecord[] }>) {
+function RecordCards({ records, source }: SectorCentralProps) {
   return (
-    <div className="record-cards" aria-label="Registros fictícios em visualização compacta">
+    <div className="record-cards" aria-label="Registros da Central em visualização compacta">
       {records.map((record) => (
         <article className="record-card" key={record.id}>
           <div className="record-card-heading">
@@ -88,33 +106,39 @@ function RecordCards({ records }: Readonly<{ records: SectorCentralRecord[] }>) 
             </div>
           </dl>
 
-          <Link className="record-detail-link card-detail-link" href={`/contratacoes/${record.id}`}>
-            Abrir detalhe demonstrativo<span className="sr-only"> de {record.id}</span>
-          </Link>
+          {source === "demo" ? (
+            <Link className="record-detail-link card-detail-link" href={`/contratacoes/${record.id}`}>
+              Abrir detalhe demonstrativo<span className="sr-only"> de {record.id}</span>
+            </Link>
+          ) : (
+            <p className="provisional-note">Detalhe persistente ainda não habilitado.</p>
+          )}
         </article>
       ))}
     </div>
   );
 }
 
-export function SectorCentral() {
+export function SectorCentral({ records, source }: SectorCentralProps) {
   const [query, setQuery] = useState("");
   const [responsible, setResponsible] = useState("");
   const [stage, setStage] = useState("");
   const [status, setStatus] = useState("");
 
+  const filterOptions = useMemo(() => getSectorFilterOptions(records), [records]);
   const filteredRecords = useMemo(
     () =>
-      filterSectorRecords(demoSectorRecords, {
+      filterSectorRecords(records, {
         query,
         responsible,
         stage,
         status,
       }),
-    [query, responsible, stage, status],
+    [query, records, responsible, stage, status],
   );
 
   const hasActiveFilters = Boolean(query || responsible || stage || status);
+  const hasSourceRecords = records.length > 0;
 
   function clearFilters() {
     setQuery("");
@@ -129,10 +153,12 @@ export function SectorCentral() {
         <div className="filters-heading">
           <div>
             <p className="section-kicker">Localizar e comparar</p>
-            <h2 id="filters-title">Fila demonstrativa</h2>
+            <h2 id="filters-title">
+              {source === "demo" ? "Fila demonstrativa" : "Fila autorizada"}
+            </h2>
           </div>
           <p className="result-count" aria-live="polite">
-            {filteredRecords.length} de {demoSectorRecords.length} registros
+            {filteredRecords.length} de {records.length} registros
           </p>
         </div>
 
@@ -143,7 +169,7 @@ export function SectorCentral() {
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="DEMO-001, objeto ou responsável"
+              placeholder={source === "demo" ? "DEMO-001, objeto ou responsável" : "Identificador, objeto ou responsável"}
               autoComplete="off"
             />
           </label>
@@ -201,21 +227,37 @@ export function SectorCentral() {
             <p className="section-kicker">Visão compartilhada</p>
             <h2 id="records-title">Trabalho do setor</h2>
           </div>
-          <p className="provisional-note">Etapas e status abaixo são valores demo, não taxonomia final.</p>
+          <p className="provisional-note">
+            {source === "demo"
+              ? "Etapas e status abaixo são valores demo, não taxonomia final."
+              : "Leitura somente autorizada; etapa e status continuam com taxonomias finais em aberto."}
+          </p>
         </div>
 
         {filteredRecords.length > 0 ? (
           <>
-            <RecordTable records={filteredRecords} />
-            <RecordCards records={filteredRecords} />
+            <RecordTable records={filteredRecords} source={source} />
+            <RecordCards records={filteredRecords} source={source} />
           </>
         ) : (
           <div className="empty-state" role="status">
-            <strong>Nenhum registro demonstrativo encontrado.</strong>
-            <p>Ajuste a busca ou limpe os filtros para restaurar a visão completa.</p>
-            <button type="button" className="secondary-button" onClick={clearFilters}>
-              Restaurar visão completa
-            </button>
+            <strong>
+              {hasSourceRecords
+                ? "Nenhum registro encontrado com os filtros atuais."
+                : source === "persistent"
+                  ? "Nenhuma contratação ativa está visível para esta sessão."
+                  : "Nenhum registro demonstrativo encontrado."}
+            </strong>
+            <p>
+              {hasSourceRecords
+                ? "Ajuste a busca ou limpe os filtros para restaurar a visão disponível."
+                : "A Central não recebeu registros para apresentar neste modo."}
+            </p>
+            {hasSourceRecords && hasActiveFilters ? (
+              <button type="button" className="secondary-button" onClick={clearFilters}>
+                Restaurar visão completa
+              </button>
+            ) : null}
           </div>
         )}
       </section>

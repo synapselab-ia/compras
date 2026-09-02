@@ -1,145 +1,128 @@
 # Next Action — Compras
 
-## F15-HOSTED-PREVIEW-PROVISION-01 — Provisionar e provar o primeiro preview hospedado privado fictício
+## F16-HOSTED-PREVIEW-CONTROL-PLANE-UNBLOCK-01 — Desbloquear o control-plane seguro do preview hospedado
 
 **Classe:** `T3 — integração externa` com impacto de `T2 — segurança`  
-**Estado:** READY  
-**Objetivo:** materializar, em ambiente descartável e exclusivamente fictício, a fronteira definida nas ADR-006/ADR-007, provisionando o primeiro preview hospedado privado somente se Deployment Protection, Auth sem signup, separação de papéis PostgreSQL, migrations, secrets, smoke adversarial e deprovisionamento puderem ser provados sem enfraquecer os invariantes existentes.
+**Estado:** READY / BLOCKER-RESOLUTION  
+**Objetivo:** obter e provar, sem provisionar dados reais nem enfraquecer ADR-006/ADR-007, uma superfície de controle auditável que permita à próxima work unit criar o preview privado com Deployment Protection configurável, secrets com escopo restrito e Managed Better Auth com `disable_sign_up=true` e métodos adicionais desabilitados.
 
 ## Fonte da tarefa
 
-Executar conforme `tasks/F15-HOSTED-PREVIEW-PROVISION-01/SPEC.md`, ADR-003, ADR-005, ADR-006, ADR-007, `docs/architecture/SECURITY.md` e as fronteiras F08/F11/F14.
+Executar conforme `tasks/F16-HOSTED-PREVIEW-CONTROL-PLANE-UNBLOCK-01/SPEC.md`, ADR-006, ADR-007 e o blocker registrado em `docs/ai/CURRENT_STATE.md`.
+
+## Contexto
+
+F15 parou corretamente antes de qualquer provisionamento porque as integrações atualmente disponíveis não permitem provar todos os controles críticos antes da exposição:
+
+- Vercel: o conector atual não cria/importa projeto com alvo controlado, não altera `ssoProtection`, não cria env vars branch-specific e não oferece deprovisionamento verificável;
+- Neon: o conector atual não oferece escrita dos campos necessários para provar provider-side `disable_sign_up=true` e métodos adicionais desabilitados;
+- nenhum projeto/deployment/banco/Auth de Compras foi criado e nenhum secret foi anexado.
 
 ## Resultado esperado
 
-Ao final, deve existir um preview hospedado **não produtivo, privado, descartável e com dados somente fictícios**, ou um blocker explícito e seguro caso o provider/plano/conector não permita cumprir a fronteira.
+Ao final, deve existir **capacidade de controle verificável**, e não necessariamente o preview em si.
 
-O encerramento bem-sucedido deve provar, no mínimo:
+A F16 fecha quando for possível demonstrar, por ferramenta/connector/CLI/API autorizada e observável, todos os itens abaixo:
 
-- proteção externa efetiva do deployment antes de qualquer uso operacional;
-- nenhuma production surface pública contendo a aplicação/configuração privada;
-- secrets server-only e limitados à branch/ambiente de Preview necessário;
-- Neon/PostgreSQL com principal runtime não privilegiado e distinto de bootstrap/migration;
-- migrations canônicas `0001`–`0003` aplicadas pelo caminho administrativo apropriado;
-- Managed Better Auth com email/senha e `disable_sign_up=true` confirmado provider-side;
-- métodos adicionais de signup/autocriação desabilitados;
-- usuário de teste exclusivamente fictício admitido por caminho administrativo controlado;
-- `app_user`/membership fictícios criados separadamente no banco do produto, sem auto-provisionamento por login;
-- `COMPRAS_PERSISTENT_READ_ENABLED=true` somente depois de Auth, banco e proteção estarem prontos;
-- smoke adversarial de sessão, signup, RLS/cross-team, sign-out e fail-closed;
-- plano de rollback/deprovisionamento executável e testado quando aplicável;
-- nenhum dado real, interno ou pré-publicação em provider, logs, GitHub ou artifacts.
+### Vercel
+
+- criar/importar explicitamente um projeto ligado a `synapselab-ia/compras` sem depender de deploy genérico não controlado;
+- ler e alterar Deployment Protection/Vercel Authentication;
+- provar Vercel Authentication antes de secrets;
+- garantir uma destas fronteiras:
+  - `All Deployments`/proteção equivalente sobre toda production surface que possa servir a aplicação; **ou**
+  - topologia verificável em que nenhuma production surface recebe a aplicação/configuração privada e somente Preview protegido é usado;
+- criar environment variables server-only limitadas a Preview e, quando suportado, à branch hospedada dedicada;
+- listar deployment alvo e sua classificação real (`preview`/`production`);
+- possuir caminho verificável para rollback/deprovisionamento do recurso criado.
+
+### Neon
+
+- criar projeto/branch dedicado somente quando a etapa Vercel acima estiver comprovada;
+- provisionar Managed Better Auth;
+- **definir e ler de volta** `disable_sign_up=true` para email/senha;
+- **definir e ler de volta** que OAuth, magic link, OTP, reset e demais métodos não permitidos estão desabilitados;
+- configurar/inspecionar trusted domains necessários sem wildcard desnecessário;
+- manter suporte às operações já disponíveis de SQL, roles, migrations e usuários fictícios;
+- não expor connection strings, passwords ou tokens em GitHub/chat/log/artifact.
+
+## Caminhos aceitáveis de desbloqueio
+
+F16 pode ser concluída por qualquer um destes caminhos, desde que o resultado seja verificável:
+
+1. os conectores oficiais instalados ganham as ações faltantes;
+2. é disponibilizada uma integração oficial adicional capaz de executar as ações faltantes;
+3. uma CLI/API oficial já autenticada e segura fica acessível à sessão sem copiar token/secret para GitHub ou chat;
+4. o plano/configuração do provider é ajustado, quando necessário, para tornar a proteção exigida disponível e verificável.
+
+Não assumir que upgrade de plano é obrigatório se uma topologia Preview-only realmente puder ser provada. Também não assumir que Hobby/Free são suficientes sem prova dos controles exigidos.
 
 ## Regras obrigatórias
 
-- revalidar documentação/capacidades atuais de Vercel e Neon imediatamente antes de qualquer provisionamento;
-- usar os conectores oficiais disponíveis quando a ação for sobre recursos da conta, em vez de inferir estado pelo web público;
-- não criar ou anexar secret antes de provar a proteção externa necessária;
-- não aceitar URL obscura como proteção;
-- não usar Shareable Links, Deployment Protection Exceptions ou query-string bypass;
-- se qualquer production domain/deployment servir a aplicação, ele deve possuir proteção compatível com `All Deployments`; sem isso, bloquear antes dos secrets;
-- limitar variáveis de Preview à branch hospedada dedicada sempre que o provider suportar esse escopo;
-- runtime PostgreSQL não pode ser owner, superuser, `BYPASSRLS`, `CREATEROLE`, `neondb_owner` ou a capability `compras_team_directory_view_owner`;
-- runtime e capability devem ser criados/validados por SQL, não por caminho de control plane que lhes conceda `neon_superuser`;
-- migration principal e runtime devem usar credenciais distintas;
-- schema hospedado deve vir das migrations Git canônicas, nunca de edição manual de tabelas/policies no painel;
-- seed fictício deve ser separado das migrations e possuir guard explícito contra ambiente errado;
-- provider Auth deve ter `disable_sign_up=true` confirmado antes de exposição;
-- OAuth, magic link, OTP, reset, MFA e outros métodos permanecem desabilitados nesta primeira prova;
-- nenhum secret, token, connection string, cookie ou credencial pode ser persistido em GitHub público, chat, log ou artifact;
-- preservar F08: browser não define issuer, subject, `app_user_id`, membership ou `team_id`;
-- preservar F11/RLS e todas as regressões existentes;
-- `REAL_DATA_ALLOWED = NO` durante toda a work unit;
-- não resolver Q-009/Q-010 ou outras taxonomias abertas.
-
-## Sequência de segurança
-
-A ordem é parte do requisito:
-
-1. revalidar provider/plano/conectores;
-2. provisionar superfície descartável sem dados reais;
-3. ativar e provar Deployment Protection;
-4. criar/configurar Postgres/Auth e papéis administrativos necessários;
-5. aplicar migrations canônicas;
-6. configurar Auth com signup desabilitado e métodos adicionais desligados;
-7. criar somente identidade e dados fictícios necessários ao smoke;
-8. anexar secrets server-only ao Preview protegido;
-9. habilitar leitura persistente;
-10. executar smoke funcional e adversarial;
-11. registrar evidência sanitizada;
-12. provar rollback/deprovisionamento ou remover recursos temporários que não devam permanecer.
-
-Se qualquer etapa crítica falhar, não avançar para a seguinte quando isso ampliar exposição.
+- revalidar ferramentas disponíveis antes de concluir que o blocker persiste;
+- pesquisar integrações/plugins oficiais adicionais antes de propor workaround manual;
+- não solicitar nem registrar API token, password, connection string ou cookie secret em mensagem/repositório;
+- não usar browser client-side como fonte de segredo;
+- não criar projeto/deployment apenas para “ver o que acontece” se a proteção não puder ser configurada antes da exposição relevante;
+- não provisionar Managed Better Auth se `disable_sign_up` não puder ser definido e verificado;
+- não alterar projetos Vercel/Neon alheios a Compras;
+- não reutilizar os projetos já existentes da conta;
+- não converter Standard Protection em sinônimo de production-domain protection;
+- não usar Shareable Links, protection exceptions ou query-string bypass como solução;
+- manter `REAL_DATA_ALLOWED = NO`;
+- não resolver Q-009/Q-010 nem iniciar mutations.
 
 ## Red-team mínimo
 
 Atacar deliberadamente:
 
-- URL de deployment em navegador anônimo/incógnito;
-- production URL gerada automaticamente;
-- preview sem Deployment Protection;
-- signup direto pela superfície da aplicação;
-- signup direto no endpoint gerenciado do provider;
-- OAuth/OTP/reset ou método lateral habilitado por default;
-- secret propagado para PR/branch não autorizada;
-- runtime usando role control-plane/owner/`neon_superuser`/`BYPASSRLS`;
-- capability contaminada por membership privilegiada;
-- mesma credencial usada para migration e runtime;
-- seed executado em ambiente ou branch indevida;
-- sessão inexistente/expirada tentando alcançar dados;
-- identidade provider válida sem `app_user`/membership interna;
-- UUID conhecido de outra equipe;
-- membership revogada/usuário interno desabilitado;
-- sign-out seguido de tentativa de reutilizar acesso;
-- falha de Auth/DB virando demo silencioso;
-- logs, URLs, erro de build ou artifacts contendo secrets/claims/connection strings;
-- preview/branch/deployment órfão após rollback.
+- nova ferramenta que só lê proteção, mas não consegue configurá-la;
+- ferramenta que configura proteção mas não permite verificar estado final;
+- deploy que aparece como production apesar de solicitado como preview;
+- production alias criado automaticamente e deixado público;
+- env var configurada para todos os previews/PRs do repo público em vez da branch dedicada;
+- secret exibido na resposta do conector/log;
+- Neon Auth provisionado com signup default e tentativa de corrigir depois;
+- configuração que desliga signup somente na UI e não no provider;
+- OAuth/OTP/reset permanecendo ativos por default;
+- reutilização de projeto alheio para evitar o blocker;
+- proposta de colar token/API key no chat para liberar automação.
 
 ## Verificação obrigatória
 
-- capacidades atuais dos providers: REVALIDADAS;
-- proteção anônima do deployment: PROVADA;
-- ausência de production surface pública desprotegida: PROVADA;
-- `disable_sign_up=true` provider-side: PROVADO;
-- métodos adicionais desabilitados: PROVADOS;
-- papéis PostgreSQL e memberships técnicas: INSPECIONADOS;
-- migrations `0001`–`0003`: APLICADAS E VERIFICADAS;
-- seed: SOMENTE FICTÍCIO E COM ESCOPO CORRETO;
-- smoke de sign-in/sign-out: PASS;
-- smoke de RLS/cross-team/identidade não autorizada: PASS;
-- `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`: PASS quando código/config versionada for alterado;
-- CI GitHub: PASS para qualquer mudança versionada;
-- diff/repo/logs públicos sem secret/dado real: PASS;
-- rollback/deprovisionamento: PROVADO ou estado residual explicitamente justificado como preview privado descartável;
-- exatamente uma nova `NEXT_ACTION` executável ao encerrar F15.
+- estado GitHub/contexto: VALID;
+- estado atual das integrações Vercel/Neon: REINSPECIONADO;
+- catálogo de integrações oficiais adicionais: REINSPECIONADO se ainda houver lacuna;
+- capacidade de configurar **e verificar** Deployment Protection: PROVADA;
+- capacidade de restringir env vars a Preview/branch: PROVADA;
+- capacidade de evitar/proteger production surface: PROVADA;
+- capacidade de configurar **e verificar** `disable_sign_up=true`: PROVADA;
+- capacidade de desabilitar e verificar métodos Auth adicionais: PROVADA;
+- caminho de rollback/deprovisionamento: PROVADO;
+- nenhum secret/dado real criado ou publicado durante o desbloqueio: PASS;
+- nenhuma alteração em projeto alheio: PASS;
+- CI GitHub: PASS se documentação/config versionada for alterada;
+- exatamente uma nova `NEXT_ACTION` ao encerrar F16.
 
 ## Condição de bloqueio
 
-Marcar F15 como **BLOCKED**, sem relaxar segurança, se qualquer uma destas condições ocorrer:
-
-- plano/capacidade Vercel não consegue impedir superfície pública relevante;
-- conector/provider não permite confirmar ou configurar `disable_sign_up`/métodos de Auth necessários;
-- não é possível separar de forma segura bootstrap/migration/runtime;
-- única credencial disponível ao runtime é owner/superuser/`BYPASSRLS`/`neon_superuser`;
-- secret só pode ser anexado a escopo Git excessivamente amplo;
-- não há forma confiável de executar ou desfazer o preview sem risco de dados reais;
-- qualquer requisito crítico depender de ação manual não observável que não possa ser verificada.
+Se nenhuma superfície de controle segura estiver disponível, manter o projeto bloqueado e registrar **uma única ação manual concreta** necessária para desbloqueio. Não retornar F15 a READY por expectativa.
 
 ## Fora do escopo
 
 Não:
 
-- usar dado real, interno ou pré-publicação;
-- criar usuário real;
-- tornar o preview produção;
-- liberar production domain público;
-- adicionar analytics/session replay externa;
-- implementar mutations/CRUD de contratação;
-- definir perfis funcionais da Q-009;
-- implementar auditoria de leitura da Q-010;
-- OAuth, magic link, OTP, reset, MFA;
-- migrar/copyar futura base produtiva para Preview.
+- provisionar o preview completo;
+- anexar secrets operacionais;
+- criar usuário hospedado;
+- executar migrations hospedadas;
+- criar seed;
+- fazer smoke funcional contra dados hospedados;
+- deploy com configuração privada;
+- usar dados reais;
+- mutation/CRUD;
+- Q-009/Q-010.
 
 ## Critério de encerramento
 
-A tarefa termina quando existe evidência verificável de um preview hospedado privado, fictício e descartável que preserva Deployment Protection + Auth privado + F08 + PostgreSQL/RLS, sem signup público e sem credencial runtime privilegiada, ou quando um blocker real é documentado sem enfraquecer a fronteira. Em ambos os casos deve restar exatamente uma próxima work unit canônica coerente com o estado real.
+F16 termina quando a sessão dispõe de um control-plane verificável que consegue cumprir as pré-condições de segurança de F15 sem revelar secrets. Somente então uma nova work unit poderá retomar o provisionamento do preview privado fictício.

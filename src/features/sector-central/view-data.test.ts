@@ -2,9 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const readMocks = vi.hoisted(() => ({
   readPersistentSectorCentralRecords: vi.fn(),
+  readPrivateAuthSessionState: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
+vi.mock("../../server/auth/runtime", () => ({
+  readPrivateAuthSessionState: readMocks.readPrivateAuthSessionState,
+}));
 vi.mock("./persistent-read", () => ({
   readPersistentSectorCentralRecords: readMocks.readPersistentSectorCentralRecords,
 }));
@@ -16,13 +20,20 @@ describe("loadSectorCentralViewData", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.COMPRAS_PERSISTENT_READ_ENABLED;
+    readMocks.readPrivateAuthSessionState.mockResolvedValue({
+      kind: "authenticated",
+      identity: {
+        issuer: "https://auth.demo.invalid/neondb/auth",
+        subject: "DEMO-SUBJECT",
+      },
+    });
   });
 
   afterEach(() => {
     delete process.env.COMPRAS_PERSISTENT_READ_ENABLED;
   });
 
-  it("uses the explicit demo source when the persistent flag is absent or false", async () => {
+  it("uses the explicit demo source when the persistent flag is absent or false without requiring auth", async () => {
     await expect(loadSectorCentralViewData()).resolves.toEqual({
       kind: "demo",
       records: demoSectorRecords,
@@ -34,10 +45,33 @@ describe("loadSectorCentralViewData", () => {
       records: demoSectorRecords,
     });
 
+    expect(readMocks.readPrivateAuthSessionState).not.toHaveBeenCalled();
     expect(readMocks.readPersistentSectorCentralRecords).not.toHaveBeenCalled();
   });
 
-  it("uses the protected persistent reader only for the exact true value", async () => {
+  it("requests sign-in before protected database access when persistent mode has no session", async () => {
+    process.env.COMPRAS_PERSISTENT_READ_ENABLED = "true";
+    readMocks.readPrivateAuthSessionState.mockResolvedValue({ kind: "unauthenticated" });
+
+    await expect(loadSectorCentralViewData()).resolves.toEqual({
+      kind: "sign-in-required",
+      records: [],
+    });
+    expect(readMocks.readPersistentSectorCentralRecords).not.toHaveBeenCalled();
+  });
+
+  it("keeps auth/provider failure distinct from no session and does not attempt database access", async () => {
+    process.env.COMPRAS_PERSISTENT_READ_ENABLED = "true";
+    readMocks.readPrivateAuthSessionState.mockResolvedValue({ kind: "unavailable" });
+
+    await expect(loadSectorCentralViewData()).resolves.toEqual({
+      kind: "unavailable",
+      records: [],
+    });
+    expect(readMocks.readPersistentSectorCentralRecords).not.toHaveBeenCalled();
+  });
+
+  it("uses the protected persistent reader only for exact true mode plus an authenticated session", async () => {
     const records = [
       {
         id: "00000000-0000-4000-8000-000000000911",
@@ -58,6 +92,18 @@ describe("loadSectorCentralViewData", () => {
       kind: "persistent",
       records,
     });
+    expect(readMocks.readPrivateAuthSessionState).toHaveBeenCalledTimes(1);
+    expect(readMocks.readPersistentSectorCentralRecords).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows authenticated but internally unauthorized identities to remain empty without auto-provisioning", async () => {
+    process.env.COMPRAS_PERSISTENT_READ_ENABLED = "true";
+    readMocks.readPersistentSectorCentralRecords.mockResolvedValue([]);
+
+    await expect(loadSectorCentralViewData()).resolves.toEqual({
+      kind: "persistent",
+      records: [],
+    });
     expect(readMocks.readPersistentSectorCentralRecords).toHaveBeenCalledTimes(1);
   });
 
@@ -68,6 +114,7 @@ describe("loadSectorCentralViewData", () => {
       kind: "unavailable",
       records: [],
     });
+    expect(readMocks.readPrivateAuthSessionState).not.toHaveBeenCalled();
     expect(readMocks.readPersistentSectorCentralRecords).not.toHaveBeenCalled();
   });
 

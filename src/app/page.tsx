@@ -1,3 +1,6 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+
 import { SectorCentral } from "@/features/sector-central/components/sector-central";
 import { loadSectorCentralViewData } from "@/features/sector-central/view-data";
 
@@ -5,6 +8,11 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const viewData = await loadSectorCentralViewData();
+
+  if (viewData.kind === "sign-in-required") {
+    redirect("/auth/sign-in");
+  }
+
   const isDemo = viewData.kind === "demo";
   const isPersistent = viewData.kind === "persistent";
 
@@ -24,7 +32,7 @@ export default async function Home() {
         ) : (
           <>
             <strong>Dados protegidos indisponíveis.</strong>
-            <span>A Central não substitui falha de sessão ou configuração por dados demonstrativos.</span>
+            <span>A Central não substitui falha de Auth, sessão, banco ou configuração por dados demonstrativos.</span>
           </>
         )}
       </section>
@@ -43,6 +51,11 @@ export default async function Home() {
           <span>Ambiente</span>
           <strong>{isDemo ? "Somente demonstração" : isPersistent ? "Leitura persistente" : "Indisponível"}</strong>
           <p>Nenhuma ação nesta tela grava ou altera registros.</p>
+          {isPersistent ? (
+            <p>
+              <Link href="/auth/sign-out">Encerrar sessão</Link>
+            </p>
+          ) : null}
         </div>
       </header>
 
@@ -50,7 +63,7 @@ export default async function Home() {
         <section className="records-section" aria-labelledby="unavailable-title">
           <div className="empty-state" role="status">
             <strong id="unavailable-title">Não foi possível carregar a Central protegida.</strong>
-            <p>Revise sessão e configuração server-side. Nenhum detalhe técnico ou dado substituto é exposto aqui.</p>
+            <p>Revise autenticação e configuração server-side. Nenhum detalhe técnico ou dado substituto é exposto aqui.</p>
           </div>
         </section>
       ) : (

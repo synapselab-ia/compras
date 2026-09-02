@@ -82,3 +82,4 @@ jobs:
           PGDATABASE=compras_read_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0002_trusted_identity_read_policies.sql
           PGDATABASE=compras_read_ci psql -v ON_ERROR_STOP=1 -f database/tests/trusted_identity_read_policies.sql
           PGDATABASE=compras_read_ci psql -v ON_ERROR_STOP=1 -f database/tests/trusted_identity_read_red_team.sql
+          PGDATABASE=compras_read_ci psql -v ON_ERROR_STOP=1 -f database/tests/trusted_server_context_transport.sql

@@ -1,13 +1,4 @@
-export type SectorCentralRecord = {
-  id: string;
-  object: string;
-  responsible: string;
-  stage: string;
-  status: string;
-  waitingOn: string;
-  nextAction: string;
-  lastMovement: string;
-};
+import type { SectorCentralRecord } from "./types";
 
 export const demoSectorRecords: SectorCentralRecord[] = [
   {

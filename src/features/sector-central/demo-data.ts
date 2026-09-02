@@ -1,5 +1,7 @@
 import type { SectorCentralRecord } from "./types";
 
+export type { SectorCentralRecord } from "./types";
+
 export const demoSectorRecords: SectorCentralRecord[] = [
   {
     id: "DEMO-001",

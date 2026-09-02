@@ -1,5 +1,6 @@
 import "server-only";
 
+import { readPersistentReadMode } from "../../server/persistent-read-mode";
 import { demoSectorRecords } from "./demo-data";
 import { readPersistentSectorCentralRecords } from "./persistent-read";
 import type { SectorCentralRecord } from "./types";
@@ -18,26 +19,12 @@ export type SectorCentralViewData =
       records: [];
     }>;
 
-function readPersistentMode(): "demo" | "persistent" | "invalid" {
-  const value = process.env.COMPRAS_PERSISTENT_READ_ENABLED;
-
-  if (value === undefined || value === "false") {
-    return "demo";
-  }
-
-  if (value === "true") {
-    return "persistent";
-  }
-
-  return "invalid";
-}
-
 /**
  * Selects the server-side source. Persistent failures never fall back to demo,
  * avoiding a misleading success state when protected data is unavailable.
  */
 export async function loadSectorCentralViewData(): Promise<SectorCentralViewData> {
-  const mode = readPersistentMode();
+  const mode = readPersistentReadMode();
 
   if (mode === "demo") {
     return { kind: "demo", records: demoSectorRecords };

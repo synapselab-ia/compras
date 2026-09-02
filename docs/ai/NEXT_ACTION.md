@@ -1,93 +1,125 @@
 # Next Action — Compras
 
-## F13-HOSTED-PREVIEW-BOUNDARY-DESIGN-01 — Desenhar a fronteira do primeiro preview hospedado privado
+## F14-PRIVATE-AUTH-ADMISSION-01 — Implementar autenticação privada sem signup público
 
-**Classe:** `T5 — arquitetura` com impacto de `T2 — segurança` e `T3 — integração externa`  
+**Classe:** `T1 — feature` com impacto de `T2 — segurança` e `T3 — integração externa`  
 **Estado:** READY  
-**Objetivo:** revalidar nas fontes oficiais atuais as capacidades e limites dos provedores de referência e definir, sem ainda provisionar recursos, o desenho mínimo seguro para um primeiro preview hospedado privado da jornada persistente de leitura, usando exclusivamente dados fictícios/sanitizados.
+**Objetivo:** implementar no repositório a jornada mínima de autenticação necessária ao futuro preview privado, permitindo apenas sign-in de identidades previamente admitidas, sem signup público, sem provisionar Vercel/Neon e sem alterar as regras de autorização/RLS já validadas.
 
 ## Fonte da tarefa
 
-Executar conforme `tasks/F13-HOSTED-PREVIEW-BOUNDARY-DESIGN-01/SPEC.md`, `docs/architecture/ARCHITECTURE.md`, `docs/architecture/SECURITY.md`, `docs/architecture/DATABASE.md`, ADR-003, ADR-004 e ADR-005.
+Executar conforme `tasks/F14-PRIVATE-AUTH-ADMISSION-01/SPEC.md`, ADR-003, ADR-006, `docs/architecture/SECURITY.md` e a fronteira F08 existente.
 
 ## Resultado esperado
 
-Ao final, o repositório deve possuir uma decisão arquitetural verificável que estabeleça, no mínimo:
+Ao final, o repositório deve possuir:
 
-- se Neon continua adequado como referência para PostgreSQL/identidade necessários ao preview e quais capacidades atuais serão realmente usadas;
-- se Vercel continua adequado como alvo do preview e qual mecanismo atual impede acesso público não autenticado à aplicação;
-- separação explícita entre ambiente local/CI, preview hospedado e eventual produção futura;
-- estratégia de admissão privada sem signup público;
-- papéis de banco separados para migration/administração e runtime, preservando F08/RLS e impedindo owner/superuser/`BYPASSRLS` no aplicativo;
-- categorias de secrets e onde cada uma pode existir, sem registrar valores reais no GitHub;
-- caminho de aplicação das migrations `0001`–`0003` em banco hospedado sem depender de painel como fonte canônica;
-- estratégia de seed/smoke test exclusivamente fictícia para provar `Central → detalhe → Central` persistente;
-- política mínima de logs, analytics e URLs para evitar exposição de metadados internos;
-- plano de rollback/deprovisionamento do preview;
-- critérios objetivos para uma futura work unit de provisionamento, ou blocker explícito caso algum provedor/plano não satisfaça a fronteira.
+- uma jornada explícita de sign-in para Managed Better Auth compatível com o SDK atual;
+- nenhuma UI de signup;
+- uma fronteira server-side que não exponha livremente operações de signup apenas porque o SDK/provider as oferece;
+- proteção das rotas operacionais contra uso anônimo no modo persistente, com estado de sessão claro e fail-closed;
+- sign-out funcional;
+- identidade do usuário derivada exclusivamente da sessão validada, mantendo `issuer + subject` como única identidade externa aceita por F08;
+- nenhuma criação automática de `app_users` ou memberships a partir de login;
+- configuração inválida/falha do Auth resultando em indisponibilidade genérica, sem fallback demo em modo persistente;
+- contrato documentado para o futuro provisionamento exigir `disable_sign_up=true` no Managed Better Auth antes de anexar secrets/URL hospedada;
+- testes adversariais cobrindo tentativa direta de signup, sessão ausente/inválida, identidade desconhecida e retorno seguro para sign-in.
 
 ## Regras obrigatórias
 
-- revalidar documentação oficial atual dos provedores antes de fechar qualquer decisão; não confiar apenas na arquitetura de referência histórica;
-- preferir documentação oficial e registrar links/versões/datas suficientes para auditoria da decisão;
-- não provisionar projeto, banco, Auth, domínio ou deploy nesta work unit;
-- não criar usuário operacional real nem publicar identificadores de conta/projeto;
-- não criar ou versionar secret, token, connection string, cookie, issuer/subject real ou credencial de provider;
-- não habilitar signup público;
-- não aceitar proteção apenas na UI como controle de acesso ao preview;
-- preservar o contrato F08: sessão validada no servidor, contexto LOCAL e runtime não privilegiado sujeito a RLS;
-- preservar migrations como fonte canônica do schema;
-- dados usados em exemplos, testes e documentação devem ser artificiais;
+- revalidar a documentação oficial atual do SDK/Managed Better Auth necessária à implementação antes de alterar integração externa;
+- reutilizar `@neondatabase/auth` e o adaptador de identidade atual; não introduzir segundo provedor de Auth sem decisão arquitetural;
+- não aceitar issuer, subject, `app_user_id`, membership ou `team_id` do browser;
+- não transformar email em identidade/autorização interna;
+- não auto-provisionar domínio Compras no primeiro login;
+- não habilitar signup público, OAuth, magic link ou outro método que possa criar usuário implicitamente;
+- se o handler genérico do SDK expuser endpoints além do necessário, restringir a superfície da aplicação de forma testável em vez de confiar que a UI não os chama;
+- o provider hospedado futuro continua obrigado a usar `disable_sign_up=true`; bloqueio na aplicação é defesa adicional, não substituição do controle provider-side;
+- `NEON_AUTH_COOKIE_SECRET`, `DATABASE_URL` e qualquer credencial permanecem server-only;
+- `NEON_AUTH_BASE_URL` não é derivada da request;
+- manter `COMPRAS_PERSISTENT_READ_ENABLED` com a semântica atual;
+- nenhuma policy/migration de escrita e nenhuma infraestrutura hospedada nesta work unit;
+- somente fixtures fictícias/sanitizadas;
 - manter `REAL_DATA_ALLOWED = NO`;
-- não resolver Q-009, Q-010 ou taxonomias abertas por inferência;
-- se a capacidade necessária depender de plano, setting ou limitação não confirmada, registrar a incerteza em vez de assumir.
+- não resolver Q-009/Q-010 ou taxonomias abertas.
+
+## Comportamento mínimo
+
+### Sem sessão
+
+Em caminho operacional persistente, o usuário deve ser direcionado para a experiência de sign-in ou receber estado autenticável equivalente, sem executar leitura protegida como se fosse uma falha de banco.
+
+### Sign-in válido
+
+Uma identidade previamente existente no provider pode estabelecer sessão. A sessão validada produz somente `issuer + subject`; autorização continua dependendo de `app_users` ativo + membership ativa no PostgreSQL.
+
+### Identidade autenticada sem autorização interna
+
+Não recebe dados de contratação. Não é criada membership automaticamente e não ganha erro que revele escopo de outra equipe.
+
+### Signup
+
+Tentativa pela UI não existe. Tentativa direta contra a superfície HTTP da aplicação deve ser rejeitada. A futura configuração hospedada deve bloquear também signup diretamente no endpoint gerenciado do provider.
+
+### Sign-out
+
+Invalida/encerra a sessão pelo mecanismo oficial do SDK e retorna ao estado não autenticado sem preservar acesso persistente.
+
+### Auth indisponível/configuração inválida
+
+Falha fechada. Não serializar provider error, cookie, endpoint interno ou secret. Em modo persistente, não cair para demo.
 
 ## Red-team mínimo
 
-O desenho deve ser atacado contra, no mínimo:
+Atacar deliberadamente:
 
-- preview acessível anonimamente por URL descoberta;
-- signup/admissão aberta por configuração padrão;
-- runtime usando owner, superuser, `BYPASSRLS`, `neondb_owner` ou capability role;
-- migrations executadas com credencial runtime ou credencial administrativa usada pela aplicação;
-- secrets chegando ao browser, GitHub público, Actions log, artifact ou URL;
-- branch/preview de PR recebendo secrets ou dados além do necessário;
-- seed fictício sendo confundido com dado real ou sendo aplicado em ambiente errado;
-- fallback demo mascarando falha de leitura persistente hospedada;
-- logs/analytics capturando IDs, claims ou conteúdo operacional desnecessário;
-- provider lock-in desnecessário contrariando a portabilidade definida na arquitetura;
-- ausência de rollback/deprovisionamento.
+- chamada direta a endpoint `sign-up` sem passar pela UI;
+- rota operacional acessada sem sessão;
+- sessão inválida/expirada;
+- issuer/subject forjados em query/body/header;
+- email conhecido tentando substituir subject;
+- usuário autenticado no provider mas desconhecido em `app_users`;
+- usuário desabilitado/membership revogada;
+- configuração `NEON_AUTH_BASE_URL` ou cookie secret ausente/inválida;
+- redirect aberto por `callbackURL`/parâmetro fornecido pelo cliente;
+- erro do provider vazando detalhes;
+- fallback demo mascarando Auth indisponível;
+- endpoint adicional do handler permitindo OAuth/signup implícito;
+- client bundle recebendo cookie secret ou `DATABASE_URL`.
 
 ## Verificação obrigatória
 
-- documentação oficial atual dos provedores relevantes: REVALIDADA;
-- matriz de capacidades/limitações e riscos: DOCUMENTADA;
-- ADR da fronteira do preview: COMPLETA;
-- compatibilidade com SECURITY/DATABASE/ADR-003/004/005: PASS;
-- nenhuma mudança de runtime, migration ou infraestrutura: CONFIRMADA;
-- diff integral sem secret, dado real, account/project ID ou URL privada: PASS;
-- lint/test/build aplicáveis à documentação: PASS/NOT APPLICABLE conforme CI;
+- documentação oficial atual de Managed Better Auth/Next.js SDK: REVALIDADA;
+- lint: PASS;
+- typecheck: PASS;
+- testes existentes: PASS;
+- novos testes de Auth/admissão: PASS;
+- build: PASS;
+- regressões F08/F09/F12: PASS;
+- nenhum endpoint de signup utilizável pela aplicação: PROVADO;
+- ausência de auto-provisionamento de `app_users`/membership: PROVADA;
+- diff integral sem secret/dado real/infra: PASS;
 - CI: PASS;
-- exatamente uma nova `NEXT_ACTION` executável ao encerrar F13.
+- exatamente uma nova `NEXT_ACTION` executável ao encerrar F14.
 
 ## Fora do escopo
 
 Não:
 
-- criar projeto Vercel/Neon ou qualquer outro recurso externo;
-- adicionar secrets a Vercel, GitHub ou provider;
-- aplicar migrations em banco hospedado;
-- criar identidade operacional real;
-- convidar usuário;
-- deploy ou domínio;
-- habilitar `COMPRAS_PERSISTENT_READ_ENABLED` em ambiente hospedado;
-- mutations, CRUD ou policy de escrita;
-- decidir perfis funcionais da Q-009;
-- decidir auditoria de leitura da Q-010;
-- usar dados reais;
-- tornar o repositório privado como efeito colateral;
-- pesquisa de preços.
+- criar projeto Neon/Vercel;
+- adicionar secrets reais;
+- habilitar Managed Better Auth hospedado;
+- criar usuário real ou fictício hospedado;
+- configurar `disable_sign_up` em recurso real;
+- aplicar migrations hospedadas;
+- deploy;
+- dados reais;
+- mutation/CRUD de contratação;
+- perfis funcionais Q-009;
+- auditoria de leitura Q-010;
+- recuperação de senha, OAuth ou MFA nesta primeira jornada;
+- tornar o preview produção.
 
 ## Critério de encerramento
 
-A tarefa termina quando existe uma decisão arquitetural atualizada, baseada em fontes oficiais, que permita provisionar um preview privado fictício sem adivinhações de segurança/provedor, com riscos e rollback explícitos, e quando o checkpoint deixa exatamente uma próxima work unit pequena e executável.
+A tarefa termina quando a aplicação possui uma fronteira de autenticação privada testada, capaz de consumir somente identidades previamente admitidas e de rejeitar signup na sua própria superfície, preservando F08/RLS, e deixa exatamente uma próxima work unit para provisionar e provar o preview hospedado fictício conforme ADR-006.

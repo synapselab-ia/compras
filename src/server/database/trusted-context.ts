@@ -96,11 +96,12 @@ export async function withTrustedDatabaseContext<T>(
     throw new TrustedDatabaseContextError();
   }
 
-  const pool = new Pool({ connectionString });
+  let pool: Pool | null = null;
   let client: PoolClient | null = null;
   let transactionOpen = false;
 
   try {
+    pool = new Pool({ connectionString });
     client = await pool.connect();
     await client.query("BEGIN READ ONLY");
     transactionOpen = true;
@@ -128,18 +129,26 @@ export async function withTrustedDatabaseContext<T>(
       try {
         await client.query("ROLLBACK");
       } catch {
-        // The connection is closed immediately below; never reuse uncertain state.
+        // The connection is destroyed below; never reuse uncertain state.
       }
     }
 
     throw new TrustedDatabaseContextError();
   } finally {
-    client?.release(true);
+    if (client) {
+      try {
+        client.release(true);
+      } catch {
+        // Pool shutdown below remains the final isolation boundary.
+      }
+    }
 
-    try {
-      await pool.end();
-    } catch {
-      // No connection is reused by this adapter after a protected operation.
+    if (pool) {
+      try {
+        await pool.end();
+      } catch {
+        // The adapter never reuses this pool after a protected operation.
+      }
     }
   }
 }

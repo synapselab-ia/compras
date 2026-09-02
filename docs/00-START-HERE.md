@@ -10,7 +10,9 @@ O sistema não substitui os sistemas oficiais de processo administrativo, requis
 
 A `Foundation-00` e as work units F01 a F14 foram concluídas/revisadas e integradas pelo fluxo canônico.
 
-A F15 (`Hosted Preview Provisioning`) foi executada até o preflight obrigatório e **parou com blocker seguro antes de qualquer provisionamento**. Nenhum projeto/deployment/banco/Auth/secret de Compras foi criado.
+A F15 (`Hosted Preview Provisioning`) parou no preflight obrigatório antes de qualquer provisionamento. A F16 (`Hosted Preview Control Plane Unblock`) reinspecionou providers, ferramentas, documentação oficial, runtime e catálogo de integrações e reduziu o blocker: **Vercel e Neon possuem as APIs/CLI necessárias, mas a sessão atual não possui uma superfície autenticada capaz de executar e verificar essas operações sem transferir credenciais.**
+
+Nenhum projeto/deployment/banco/Auth/secret de Compras foi criado em F15/F16. `REAL_DATA_ALLOWED` permanece `NO`.
 
 Existe uma aplicação executável com jornada `Central → detalhe → Central` em dois modos separados:
 
@@ -27,7 +29,7 @@ O núcleo relacional possui as migrations imutáveis:
 
 A F11 implementou `public.team_member_directory`, que expõe somente `team_id`, `membership_id` e `display_name` por uma capability técnica `NOLOGIN`/`NOBYPASSRLS`. A Central e o detalhe persistentes usam somente essa projeção para resolver responsáveis colegas.
 
-A F12 conectou `/contratacoes/[id]` à leitura persistente protegida. O ID da rota é validado e usado apenas como seletor UUID parametrizado; RLS continua sendo a fronteira autoritativa. Identificadores relacionados, itens e eventos são lidos somente das tabelas protegidas existentes. UUID de outra equipe permanece indistinguível de inexistente e falha de banco/sessão/configuração resulta em indisponibilidade genérica.
+A F12 conectou `/contratacoes/[id]` à leitura persistente protegida. O ID da rota é validado e usado apenas como seletor UUID parametrizado; RLS continua sendo a fronteira autoritativa. UUID de outra equipe permanece indistinguível de inexistente e falha de banco/sessão/configuração resulta em indisponibilidade genérica.
 
 A F13 definiu na ADR-006 a fronteira do primeiro preview hospedado privado: Deployment Protection obrigatório, secrets branch-specific, nenhuma production surface pública sem proteção compatível, papéis PostgreSQL separados para bootstrap/migration/runtime, Managed Better Auth com signup desabilitado e dados exclusivamente fictícios.
 
@@ -37,16 +39,23 @@ A ADR-007 mantém como requisito independente para o preview real que o Managed 
 
 ## Blocker atual do preview hospedado
 
-O preflight F15 revalidou estado real dos providers e encontrou duas lacunas de control-plane:
+F16 confirmou nas fontes oficiais atuais que:
 
-- **Vercel:** a conta acessível está em Hobby e não existe projeto `compras`; a integração atual permite inspeção/deploy genérico, mas não permite criar/importar projeto com alvo controlado, configurar/verificar `ssoProtection`, gravar env vars Preview/branch-specific nem deprovisionar de forma verificável. Não é seguro fazer o primeiro deploy e tentar proteger depois.
-- **Neon:** a organização acessível está em Free e não existe projeto `compras`; a integração atual consegue provisionar Auth e ler configuração, porém não expõe escrita dos campos necessários para definir e provar provider-side `disable_sign_up=true` e métodos adicionais desabilitados.
+- **Vercel** dispõe de REST API/CLI para criar projeto, configurar Vercel Authentication/`ssoProtection`, criar env vars `preview` com `gitBranch` e gerenciar recursos;
+- **Neon** dispõe de endpoints branch-scoped para `/auth/email_and_password`, `/auth/plugins`, domains/OAuth e demais controles; `neon api` pode chamar rotas autenticadas da API oficial.
 
-Por isso F15 não avançou para projeto, banco, Auth, migrations, seed, secrets ou deploy. O blocker está registrado em `docs/ai/CURRENT_STATE.md`.
+A sessão atual, entretanto, continua sem essas escritas:
 
-A CI da `main` após F14, run `33670574481`, permanece o last-good funcional. `REAL_DATA_ALLOWED` continua `NO`.
+- o conector Vercel é essencialmente read/inspect + deploy genérico e não escreve/read-back protection/env/deprovisionamento;
+- o conector Neon não expõe os PATCH de `email_and_password`/plugins;
+- o shell não possui `vercel`, `neon` ou `neonctl` autenticados;
+- não foi encontrada integração/plugin adicional compatível.
 
-A próxima ação canônica é `F16-HOSTED-PREVIEW-CONTROL-PLANE-UNBLOCK-01 — Desbloquear o control-plane seguro do preview hospedado`. Ela deve obter e provar as capacidades faltantes sem colar tokens/secrets em GitHub ou chat e sem relaxar ADR-006/ADR-007.
+A ausência de um executor autenticado é blocker. Não se deve pedir token no chat nem fazer deploy/Auth primeiro para proteger depois.
+
+A próxima ação canônica é `F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01 — Estabelecer sessão autenticada de control-plane para Vercel e Neon`. Há exatamente uma ação manual pendente: disponibilizar ao assistente uma sessão oficial autenticada e observável nos dois consoles sem revelar credenciais. Quando disponível, ChatGPT Work/Cloud Browser é o caminho preferencial; a prova deve continuar fail-closed.
+
+A CI pós-checkpoint F15 `33678376270` está em PASS. O last-good funcional continua F14/`33670574481`.
 
 O repositório está público. Aplicam-se integralmente as restrições de publicação de `AGENTS.md` e `docs/architecture/SECURITY.md`; nenhum dado real ou pré-publicação pode ser usado.
 
@@ -120,6 +129,8 @@ A hierarquia detalhada está em `docs/ai/SOURCE_OF_TRUTH.md`.
 - roles privilegiadas do provider nunca são credencial runtime;
 - infraestrutura externa deve ser revalidada antes de provisionamento;
 - ausência de ferramenta de controle é blocker, não autorização para ordem insegura;
+- documentação de capacidade do provider não substitui readback do estado real;
+- credencial não deve ser transferida para chat para desbloquear automação;
 - evitar complexidade prematura;
 - construir por slices pequenas, utilizáveis e verificáveis;
 - qualquer incerteza importante aumenta a investigação, nunca autoriza adivinhação.

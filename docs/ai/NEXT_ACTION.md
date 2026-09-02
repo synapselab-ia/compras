@@ -1,128 +1,124 @@
 # Next Action — Compras
 
-## F16-HOSTED-PREVIEW-CONTROL-PLANE-UNBLOCK-01 — Desbloquear o control-plane seguro do preview hospedado
+## F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01 — Estabelecer sessão autenticada de control-plane para Vercel e Neon
 
 **Classe:** `T3 — integração externa` com impacto de `T2 — segurança`  
-**Estado:** READY / BLOCKER-RESOLUTION  
-**Objetivo:** obter e provar, sem provisionar dados reais nem enfraquecer ADR-006/ADR-007, uma superfície de controle auditável que permita à próxima work unit criar o preview privado com Deployment Protection configurável, secrets com escopo restrito e Managed Better Auth com `disable_sign_up=true` e métodos adicionais desabilitados.
+**Estado:** MANUAL_ACTION_REQUIRED / BLOCKER-RESOLUTION  
+**Objetivo:** tornar disponível ao assistente uma sessão oficial, autenticada e observável de controle dos providers Vercel e Neon, sem copiar tokens/secrets para chat ou Git, e então provar por write + readback as capacidades que F16 confirmou existirem nos providers mas não estão expostas pelos conectores atuais.
+
+## Ação manual única necessária
+
+**Estabelecer uma sessão de controle autenticada nos consoles oficiais Vercel e Neon que seja acessível ao assistente sem revelar credenciais e então reexecutar esta work unit.**
+
+O caminho operacional preferido, quando disponível na conta, é abrir esta mesma frente em **ChatGPT Work/Cloud Browser** e autenticar o navegador nos consoles oficiais Vercel e Neon. Não enviar API key, bearer token, password, cookie, connection string ou secret pelo chat.
+
+Se esse modo não estiver disponível, F17 continua bloqueada até existir uma superfície oficial equivalente já autenticada e observável pela sessão. Não substituir isso por instruções manuais opacas que o assistente não consiga verificar.
 
 ## Fonte da tarefa
 
-Executar conforme `tasks/F16-HOSTED-PREVIEW-CONTROL-PLANE-UNBLOCK-01/SPEC.md`, ADR-006, ADR-007 e o blocker registrado em `docs/ai/CURRENT_STATE.md`.
+Executar conforme `tasks/F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01/SPEC.md`, ADR-006, ADR-007, `docs/architecture/SECURITY.md` e o checkpoint F16 em `docs/ai/CURRENT_STATE.md`.
 
-## Contexto
+## Contexto confirmado por F16
 
-F15 parou corretamente antes de qualquer provisionamento porque as integrações atualmente disponíveis não permitem provar todos os controles críticos antes da exposição:
+F16 eliminou uma ambiguidade importante:
 
-- Vercel: o conector atual não cria/importa projeto com alvo controlado, não altera `ssoProtection`, não cria env vars branch-specific e não oferece deprovisionamento verificável;
-- Neon: o conector atual não oferece escrita dos campos necessários para provar provider-side `disable_sign_up=true` e métodos adicionais desabilitados;
-- nenhum projeto/deployment/banco/Auth de Compras foi criado e nenhum secret foi anexado.
+- o Vercel possui APIs/CLI oficiais para criação de projeto, `ssoProtection`, env vars Preview + `gitBranch` e gerenciamento/rollback;
+- o Neon possui API oficial para `/auth/email_and_password`, `/auth/plugins`, métodos específicos, domains e demais configurações; a CLI `neon api` pode chamar qualquer rota autenticada;
+- o problema atual é que os conectores disponíveis nesta sessão não expõem essas operações de escrita/readback e o shell não possui as CLIs autenticadas;
+- nenhuma integração/plugin adicional compatível foi encontrada;
+- nenhum recurso de Compras foi provisionado.
 
 ## Resultado esperado
 
-Ao final, deve existir **capacidade de controle verificável**, e não necessariamente o preview em si.
-
-A F16 fecha quando for possível demonstrar, por ferramenta/connector/CLI/API autorizada e observável, todos os itens abaixo:
+F17 termina somente quando o assistente consegue, pela sessão autenticada e sem secrets em texto público, executar e verificar as seguintes provas **sem ainda montar o preview completo**.
 
 ### Vercel
 
-- criar/importar explicitamente um projeto ligado a `synapselab-ia/compras` sem depender de deploy genérico não controlado;
-- ler e alterar Deployment Protection/Vercel Authentication;
-- provar Vercel Authentication antes de secrets;
-- garantir uma destas fronteiras:
-  - `All Deployments`/proteção equivalente sobre toda production surface que possa servir a aplicação; **ou**
-  - topologia verificável em que nenhuma production surface recebe a aplicação/configuração privada e somente Preview protegido é usado;
-- criar environment variables server-only limitadas a Preview e, quando suportado, à branch hospedada dedicada;
-- listar deployment alvo e sua classificação real (`preview`/`production`);
-- possuir caminho verificável para rollback/deprovisionamento do recurso criado.
+1. confirmar a conta/equipe alvo e que nenhum projeto `compras` preexistente será sobrescrito;
+2. criar, se necessário para a prova, um recurso mínimo descartável e sem secrets de aplicação, somente depois de confirmar caminho de rollback;
+3. escrever Vercel Authentication/Deployment Protection em modo compatível com a ADR-006;
+4. ler de volta o estado efetivo de proteção;
+5. provar que env vars podem ser restritas a `preview` + branch dedicada, sem inserir valor operacional real nesta work unit;
+6. identificar deployment target e aliases/domains relevantes;
+7. provar um caminho verificável de remoção/deprovisionamento.
 
 ### Neon
 
-- criar projeto/branch dedicado somente quando a etapa Vercel acima estiver comprovada;
-- provisionar Managed Better Auth;
-- **definir e ler de volta** `disable_sign_up=true` para email/senha;
-- **definir e ler de volta** que OAuth, magic link, OTP, reset e demais métodos não permitidos estão desabilitados;
-- configurar/inspecionar trusted domains necessários sem wildcard desnecessário;
-- manter suporte às operações já disponíveis de SQL, roles, migrations e usuários fictícios;
-- não expor connection strings, passwords ou tokens em GitHub/chat/log/artifact.
-
-## Caminhos aceitáveis de desbloqueio
-
-F16 pode ser concluída por qualquer um destes caminhos, desde que o resultado seja verificável:
-
-1. os conectores oficiais instalados ganham as ações faltantes;
-2. é disponibilizada uma integração oficial adicional capaz de executar as ações faltantes;
-3. uma CLI/API oficial já autenticada e segura fica acessível à sessão sem copiar token/secret para GitHub ou chat;
-4. o plano/configuração do provider é ajustado, quando necessário, para tornar a proteção exigida disponível e verificável.
-
-Não assumir que upgrade de plano é obrigatório se uma topologia Preview-only realmente puder ser provada. Também não assumir que Hobby/Free são suficientes sem prova dos controles exigidos.
+1. somente depois da prova Vercel, criar recurso mínimo descartável se necessário;
+2. provisionar Managed Better Auth apenas se for possível aplicar imediatamente os controles exigidos;
+3. escrever e ler de volta `disable_sign_up=true` em `/auth/email_and_password`;
+4. escrever e ler de volta plugins/métodos laterais desabilitados conforme a ADR-006/ADR-007;
+5. confirmar OAuth providers ausentes/desabilitados e trusted domains estritos;
+6. provar caminho de disable/delete/rollback antes de qualquer usuário ou dado de produto.
 
 ## Regras obrigatórias
 
-- revalidar ferramentas disponíveis antes de concluir que o blocker persiste;
-- pesquisar integrações/plugins oficiais adicionais antes de propor workaround manual;
-- não solicitar nem registrar API token, password, connection string ou cookie secret em mensagem/repositório;
-- não usar browser client-side como fonte de segredo;
-- não criar projeto/deployment apenas para “ver o que acontece” se a proteção não puder ser configurada antes da exposição relevante;
-- não provisionar Managed Better Auth se `disable_sign_up` não puder ser definido e verificado;
-- não alterar projetos Vercel/Neon alheios a Compras;
-- não reutilizar os projetos já existentes da conta;
-- não converter Standard Protection em sinônimo de production-domain protection;
-- não usar Shareable Links, protection exceptions ou query-string bypass como solução;
+- usar somente consoles, CLI ou API oficiais autenticados;
+- não solicitar ao usuário que cole credenciais no chat;
+- não persistir token, password, cookie, connection string ou secret em Git, PR, Issue, log ou artifact;
+- não usar projetos Vercel/Neon alheios como laboratório;
+- não criar deploy com secret antes de protection comprovada;
+- não provisionar Neon Auth se `disable_sign_up` não puder ser escrito e lido de volta na mesma sessão controlada;
+- não confundir ausência de botão de signup com enforcement provider-side;
+- não usar Shareable Links, protection exceptions ou query-string bypass;
+- não habilitar `COMPRAS_PERSISTENT_READ_ENABLED`;
+- não criar usuário hospedado, seed, migrations hospedadas ou dado de contratação;
 - manter `REAL_DATA_ALLOWED = NO`;
-- não resolver Q-009/Q-010 nem iniciar mutations.
+- não resolver Q-009/Q-010.
 
 ## Red-team mínimo
 
 Atacar deliberadamente:
 
-- nova ferramenta que só lê proteção, mas não consegue configurá-la;
-- ferramenta que configura proteção mas não permite verificar estado final;
-- deploy que aparece como production apesar de solicitado como preview;
-- production alias criado automaticamente e deixado público;
-- env var configurada para todos os previews/PRs do repo público em vez da branch dedicada;
-- secret exibido na resposta do conector/log;
-- Neon Auth provisionado com signup default e tentativa de corrigir depois;
-- configuração que desliga signup somente na UI e não no provider;
-- OAuth/OTP/reset permanecendo ativos por default;
-- reutilização de projeto alheio para evitar o blocker;
-- proposta de colar token/API key no chat para liberar automação.
+- browser autenticado que consegue clicar mas não permite verificar estado final;
+- sessão que expira no meio da mudança e deixa recurso parcialmente configurado;
+- criação de projeto Vercel que gera production deployment/alias inesperado;
+- protection aplicada somente a Preview enquanto production surface recebe app;
+- env var sem branch scope apesar de aparentar Preview-only;
+- secret visível em resposta/UI/log e risco de persistência acidental;
+- Neon Auth criado com signup default antes do PATCH de bloqueio;
+- `disable_sign_up` aplicado a email/senha mas plugin lateral continua permitindo criação de conta;
+- método OAuth/provider habilitado por default;
+- rollback disponível apenas por instrução manual não observável;
+- tentativa de reutilizar projeto já existente;
+- tentativa de colar token no chat para acelerar a execução.
 
 ## Verificação obrigatória
 
-- estado GitHub/contexto: VALID;
-- estado atual das integrações Vercel/Neon: REINSPECIONADO;
-- catálogo de integrações oficiais adicionais: REINSPECIONADO se ainda houver lacuna;
-- capacidade de configurar **e verificar** Deployment Protection: PROVADA;
-- capacidade de restringir env vars a Preview/branch: PROVADA;
-- capacidade de evitar/proteger production surface: PROVADA;
-- capacidade de configurar **e verificar** `disable_sign_up=true`: PROVADA;
-- capacidade de desabilitar e verificar métodos Auth adicionais: PROVADA;
-- caminho de rollback/deprovisionamento: PROVADO;
-- nenhum secret/dado real criado ou publicado durante o desbloqueio: PASS;
-- nenhuma alteração em projeto alheio: PASS;
-- CI GitHub: PASS se documentação/config versionada for alterada;
-- exatamente uma nova `NEXT_ACTION` ao encerrar F16.
+- GitHub/contexto revalidado antes da prova;
+- sessão autenticada oficial: DISPONÍVEL E OBSERVÁVEL;
+- Vercel protection write + readback: PASS;
+- Vercel env scope write + readback: PASS;
+- classificação de deployment/aliases: INSPECIONADA;
+- Vercel rollback/deprovisionamento: PROVADO;
+- Neon `disable_sign_up=true` write + readback: PASS;
+- métodos/plugins adicionais: DESABILITADOS E LIDOS DE VOLTA;
+- trusted domains/OAuth state: INSPECIONADOS;
+- rollback Neon: PROVADO;
+- nenhum secret operacional publicado: PASS;
+- nenhum projeto alheio alterado: PASS;
+- nenhum dado real: PASS;
+- qualquer recurso de prova residual deve estar vazio de dados e explicitamente justificado ou removido;
+- CI GitHub: PASS se houver alteração versionada;
+- exatamente uma nova `NEXT_ACTION` ao encerrar F17.
 
 ## Condição de bloqueio
 
-Se nenhuma superfície de controle segura estiver disponível, manter o projeto bloqueado e registrar **uma única ação manual concreta** necessária para desbloqueio. Não retornar F15 a READY por expectativa.
+Se a sessão autenticada ainda não estiver acessível ao assistente, não executar writes de provider. Manter o blocker e repetir **somente a ação manual única** descrita no topo; não voltar a F15 nem criar um novo workaround.
 
 ## Fora do escopo
 
 Não:
 
 - provisionar o preview completo;
-- anexar secrets operacionais;
-- criar usuário hospedado;
-- executar migrations hospedadas;
-- criar seed;
-- fazer smoke funcional contra dados hospedados;
-- deploy com configuração privada;
-- usar dados reais;
+- anexar `DATABASE_URL`, cookie secret ou credencial runtime à Vercel;
+- migrations/seed hospedados;
+- usuário Auth de teste;
+- smoke funcional Central/detalhe;
+- dados reais;
 - mutation/CRUD;
 - Q-009/Q-010.
 
 ## Critério de encerramento
 
-F16 termina quando a sessão dispõe de um control-plane verificável que consegue cumprir as pré-condições de segurança de F15 sem revelar secrets. Somente então uma nova work unit poderá retomar o provisionamento do preview privado fictício.
+F17 fecha quando o control-plane autenticado estiver efetivamente acessível e as capacidades críticas forem provadas por write + readback + rollback sem revelar secrets. A próxima work unit poderá então retomar, em slice independente, o provisionamento do preview hospedado privado fictício.

@@ -17,7 +17,7 @@
 
 ## Estado real
 
-A work unit `F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01` foi reexecutada novamente em 2026-09-03 pelo protocolo canônico, partindo da `main` em `6506bf19f49cd275c2260201572d6c5a46df7912`, até sua condição explícita de bloqueio.
+A work unit `F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01` foi reexecutada novamente em 2026-09-03 pelo protocolo canônico, partindo da `main` em `eaa7f9df8f669b49b5266faa1b170e1f5e53bbb3`, até sua condição explícita de bloqueio.
 
 A pré-condição necessária continua ausente: esta sessão não oferece uma superfície oficial autenticada e observável capaz de escrever e ler de volta os controles críticos de Vercel e Neon sem transferir credenciais para o chat, GitHub público ou outro artefato persistente.
 
@@ -27,12 +27,12 @@ A aplicação permanece no last-good funcional F14: sign-in email/senha e sign-o
 
 ## Recuperação e contexto desta tentativa F17
 
-- `main` recuperada em `6506bf19f49cd275c2260201572d6c5a46df7912`;
+- `main` recuperada em `eaa7f9df8f669b49b5266faa1b170e1f5e53bbb3`;
 - nenhuma PR aberta foi encontrada;
 - nenhuma branch concorrente mais nova da F17 foi encontrada; somente branches/checkpoints históricos já integrados;
 - os 10 inputs estáveis do `CONTEXT_MANIFEST` continuam exatamente iguais aos hashes esperados;
 - `CONTEXT_STATUS = VALID`;
-- CI de entrada `33765781900`: PASS (`verify` e `database`);
+- CI de entrada `33767973259`: PASS (`verify` e `database`);
 - `REAL_DATA_ALLOWED = NO` permaneceu ativo durante toda a tentativa.
 
 ## Reinspeção Vercel
@@ -96,7 +96,7 @@ Resultado: a condição de bloqueio da própria F17 foi atingida novamente. Nenh
 
 - recuperação de `main`, PRs e branches: PASS;
 - `CONTEXT_MANIFEST`: PASS / VALID;
-- CI de entrada `33765781900`: PASS;
+- CI de entrada `33767973259`: PASS;
 - conta Vercel e lista de projetos: REINSPECIONADAS;
 - projeto Vercel `compras`: AUSENTE;
 - ferramentas Vercel: REINSPECIONADAS, lacuna persiste;
@@ -126,7 +126,7 @@ Q-001, Q-002, Q-003, Q-004, Q-005, Q-006, Q-009 e Q-010 permanecem abertas.
 
 ## Last good
 
-`6c3891d0e4839daa067741bbcf5eafdea542a329` continua sendo o `LAST_GOOD_COMMIT` funcional, validado pela CI da `main` run `33670574481`. O checkpoint F17 de entrada em `6506bf19f49cd275c2260201572d6c5a46df7912` possui CI pós-merge `33765781900` em PASS.
+`6c3891d0e4839daa067741bbcf5eafdea542a329` continua sendo o `LAST_GOOD_COMMIT` funcional, validado pela CI da `main` run `33670574481`. O checkpoint F17 de entrada em `eaa7f9df8f669b49b5266faa1b170e1f5e53bbb3` possui CI pós-merge `33767973259` em PASS.
 
 ## Próxima ação
 

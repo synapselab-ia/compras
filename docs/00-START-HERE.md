@@ -10,9 +10,9 @@ O sistema não substitui os sistemas oficiais de processo administrativo, requis
 
 A `Foundation-00` e as work units F01 a F14 foram concluídas/revisadas e integradas pelo fluxo canônico.
 
-A F15 (`Hosted Preview Provisioning`) parou no preflight obrigatório antes de qualquer provisionamento. A F16 (`Hosted Preview Control Plane Unblock`) reinspecionou providers, ferramentas, documentação oficial, runtime e catálogo de integrações e reduziu o blocker: **Vercel e Neon possuem as APIs/CLI necessárias, mas a sessão atual não possui uma superfície autenticada capaz de executar e verificar essas operações sem transferir credenciais.**
+A F15 (`Hosted Preview Provisioning`) parou no preflight obrigatório antes de qualquer provisionamento. A F16 (`Hosted Preview Control Plane Unblock`) confirmou que Vercel e Neon possuem as APIs/CLI necessárias, mas a sessão disponível não expõe todas as escritas/readbacks críticas. A F17 (`Authenticated Provider Control Session`) foi reexecutada em 2026-09-03 e atingiu novamente sua condição explícita de bloqueio: **ainda não existe uma sessão oficial autenticada e observável, acessível ao assistente, que permita executar os controles faltantes sem transferir credenciais para o chat**.
 
-Nenhum projeto/deployment/banco/Auth/secret de Compras foi criado em F15/F16. `REAL_DATA_ALLOWED` permanece `NO`.
+Nenhum projeto/deployment/banco/Auth/secret de Compras foi criado em F15/F16/F17. `REAL_DATA_ALLOWED` permanece `NO`.
 
 Existe uma aplicação executável com jornada `Central → detalhe → Central` em dois modos separados:
 
@@ -39,23 +39,23 @@ A ADR-007 mantém como requisito independente para o preview real que o Managed 
 
 ## Blocker atual do preview hospedado
 
-F16 confirmou nas fontes oficiais atuais que:
+As fontes oficiais atuais continuam confirmando que:
 
-- **Vercel** dispõe de REST API/CLI para criar projeto, configurar Vercel Authentication/`ssoProtection`, criar env vars `preview` com `gitBranch` e gerenciar recursos;
-- **Neon** dispõe de endpoints branch-scoped para `/auth/email_and_password`, `/auth/plugins`, domains/OAuth e demais controles; `neon api` pode chamar rotas autenticadas da API oficial.
+- **Vercel** dispõe de REST API/SDK para criar projeto, configurar Vercel Authentication/`ssoProtection`, criar env vars `preview` com `gitBranch`, ler/gerenciar env vars e remover deployments/projetos;
+- **Neon** dispõe de endpoints branch-scoped para `/auth/email_and_password`, `/auth/plugins`, domains/OAuth e demais controles de Managed Better Auth.
 
-A sessão atual, entretanto, continua sem essas escritas:
+A sessão atual, entretanto, continua sem as escritas necessárias:
 
-- o conector Vercel é essencialmente read/inspect + deploy genérico e não escreve/read-back protection/env/deprovisionamento;
-- o conector Neon não expõe os PATCH de `email_and_password`/plugins;
-- o shell não possui `vercel`, `neon` ou `neonctl` autenticados;
+- o conector Vercel permanece read/inspect + deploy genérico e não escreve/read-back protection/env/deprovisionamento;
+- o conector Neon continua sem os PATCH de `email_and_password`/plugins;
+- o shell não possui `vercel`, `neon` ou `neonctl` autenticados nem credenciais dos providers exportadas;
 - não foi encontrada integração/plugin adicional compatível.
 
 A ausência de um executor autenticado é blocker. Não se deve pedir token no chat nem fazer deploy/Auth primeiro para proteger depois.
 
-A próxima ação canônica é `F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01 — Estabelecer sessão autenticada de control-plane para Vercel e Neon`. Há exatamente uma ação manual pendente: disponibilizar ao assistente uma sessão oficial autenticada e observável nos dois consoles sem revelar credenciais. Quando disponível, ChatGPT Work/Cloud Browser é o caminho preferencial; a prova deve continuar fail-closed.
+A única ação canônica permanece `F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01 — Estabelecer sessão autenticada de control-plane para Vercel e Neon`. Há exatamente uma ação manual pendente: disponibilizar ao assistente uma sessão oficial autenticada e observável nos dois consoles sem revelar credenciais. Quando disponível, ChatGPT Work/Cloud Browser é o caminho preferencial; a prova deve continuar fail-closed.
 
-A CI pós-checkpoint F15 `33678376270` está em PASS. O last-good funcional continua F14/`33670574481`.
+A CI pós-checkpoint F16 `33680084691` está em PASS. O last-good funcional continua F14/`33670574481`.
 
 O repositório está público. Aplicam-se integralmente as restrições de publicação de `AGENTS.md` e `docs/architecture/SECURITY.md`; nenhum dado real ou pré-publicação pode ser usado.
 

@@ -4,11 +4,11 @@
 
 **Classe:** `T3 — integração externa` com impacto de `T2 — segurança`  
 **Estado:** MANUAL_ACTION_REQUIRED / BLOCKER-RESOLUTION  
-**Objetivo:** tornar disponível ao assistente uma sessão oficial, autenticada e observável de controle dos providers Vercel e Neon, sem copiar tokens/secrets para chat ou Git, e então provar por write + readback as capacidades que F16 confirmou existirem nos providers mas não estão expostas pelos conectores atuais.
+**Objetivo:** tornar disponível ao assistente uma sessão oficial, autenticada e observável de controle dos providers Vercel e Neon, sem copiar tokens/secrets para chat ou Git, e então provar por write + readback as capacidades críticas já confirmadas documentalmente.
 
 ## Reinspeção mais recente
 
-Em 2026-09-03, partindo da `main` em `a6595d6761a8f8f2d3a1a0572a76f47223c00768`, esta work unit foi reexecutada novamente até sua condição explícita de bloqueio.
+Em 2026-09-03, partindo da `main` em `c682c9a89d1b05d1b583117f0493a9b70fbcead9` com CI `33761007044` em PASS, esta work unit foi reexecutada novamente até sua condição explícita de bloqueio.
 
 O estado permanece:
 
@@ -37,11 +37,11 @@ Executar conforme `tasks/F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01/SPEC.md`,
 
 ## Contexto confirmado
 
-F16 e as reinspeções F17 eliminaram a ambiguidade de capacidade dos providers:
+As reinspeções F16/F17 eliminaram a ambiguidade de capacidade dos providers:
 
 - o Vercel possui APIs/SDK/CLI oficiais para criação de projeto, `ssoProtection`, env vars Preview + `gitBranch`, leitura/remoção de envs e gerenciamento/rollback;
 - o Neon possui API oficial branch-scoped para `/auth/email_and_password`, `/auth/plugins`, métodos específicos, domains, OAuth e teardown de Managed Better Auth;
-- o problema atual é exclusivamente a indisponibilidade, nesta sessão, de um executor oficial autenticado que exponha essas operações com write + readback;
+- o problema atual é a indisponibilidade, nesta sessão, de um executor oficial autenticado que exponha essas operações com write + readback;
 - nenhum recurso de Compras foi provisionado.
 
 ## Resultado esperado

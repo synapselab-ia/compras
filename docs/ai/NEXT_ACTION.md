@@ -6,6 +6,19 @@
 **Estado:** MANUAL_ACTION_REQUIRED / BLOCKER-RESOLUTION  
 **Objetivo:** tornar disponível ao assistente uma sessão oficial, autenticada e observável de controle dos providers Vercel e Neon, sem copiar tokens/secrets para chat ou Git, e então provar por write + readback as capacidades que F16 confirmou existirem nos providers mas não estão expostas pelos conectores atuais.
 
+## Reinspeção mais recente
+
+Em 2026-09-03 esta work unit foi reexecutada até sua condição explícita de bloqueio. O estado permanece:
+
+- Vercel e Neon continuam autenticados apenas pelas superfícies de conector já conhecidas;
+- o conector Vercel continua sem write/readback de Deployment Protection, env vars Preview + branch e deprovisionamento;
+- o conector Neon continua sem PATCH de `/auth/email_and_password` e `/auth/plugins`;
+- não existe CLI `vercel`, `neon` ou `neonctl` autenticada no runtime;
+- nenhuma integração adicional compatível foi encontrada;
+- nenhum recurso de Compras foi provisionado.
+
+Por regra do próprio F17, não criar uma nova work unit de workaround enquanto a ação manual abaixo não estiver satisfeita.
+
 ## Ação manual única necessária
 
 **Estabelecer uma sessão de controle autenticada nos consoles oficiais Vercel e Neon que seja acessível ao assistente sem revelar credenciais e então reexecutar esta work unit.**
@@ -16,16 +29,15 @@ Se esse modo não estiver disponível, F17 continua bloqueada até existir uma s
 
 ## Fonte da tarefa
 
-Executar conforme `tasks/F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01/SPEC.md`, ADR-006, ADR-007, `docs/architecture/SECURITY.md` e o checkpoint F16 em `docs/ai/CURRENT_STATE.md`.
+Executar conforme `tasks/F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01/SPEC.md`, ADR-006, ADR-007, `docs/architecture/SECURITY.md` e o checkpoint F17 em `docs/ai/CURRENT_STATE.md`.
 
-## Contexto confirmado por F16
+## Contexto confirmado
 
-F16 eliminou uma ambiguidade importante:
+F16 e a reinspeção F17 eliminaram a ambiguidade de capacidade do provider:
 
 - o Vercel possui APIs/CLI oficiais para criação de projeto, `ssoProtection`, env vars Preview + `gitBranch` e gerenciamento/rollback;
-- o Neon possui API oficial para `/auth/email_and_password`, `/auth/plugins`, métodos específicos, domains e demais configurações; a CLI `neon api` pode chamar qualquer rota autenticada;
-- o problema atual é que os conectores disponíveis nesta sessão não expõem essas operações de escrita/readback e o shell não possui as CLIs autenticadas;
-- nenhuma integração/plugin adicional compatível foi encontrada;
+- o Neon possui API oficial para `/auth/email_and_password`, `/auth/plugins`, métodos específicos, domains e demais configurações;
+- o problema atual é exclusivamente a indisponibilidade, nesta sessão, de um executor oficial autenticado que exponha essas operações com write + readback;
 - nenhum recurso de Compras foi provisionado.
 
 ## Resultado esperado
@@ -100,7 +112,7 @@ Atacar deliberadamente:
 - nenhum dado real: PASS;
 - qualquer recurso de prova residual deve estar vazio de dados e explicitamente justificado ou removido;
 - CI GitHub: PASS se houver alteração versionada;
-- exatamente uma nova `NEXT_ACTION` ao encerrar F17.
+- exatamente uma `NEXT_ACTION` ao encerrar F17.
 
 ## Condição de bloqueio
 
@@ -121,4 +133,4 @@ Não:
 
 ## Critério de encerramento
 
-F17 fecha quando o control-plane autenticado estiver efetivamente acessível e as capacidades críticas forem provadas por write + readback + rollback sem revelar secrets. A próxima work unit poderá então retomar, em slice independente, o provisionamento do preview hospedado privado fictício.
+F17 fecha quando o control-plane autenticado estiver efetivamente acessível e as capacidades críticas forem provadas por write + readback + rollback sem revelar secrets. Até lá, **F17 permanece a única `NEXT_ACTION` canônica**.

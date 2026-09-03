@@ -14,8 +14,8 @@
 **LAST_GOOD_CI_RUN:** `33670574481`  
 **F19_INPUT_COMMIT:** `50fd91ced1f5b88761b241c3e9626a7defbb44a5`  
 **F19_INPUT_CI_RUN:** `33800687046`  
-**F19_PROOF_COMMIT:** `deee704c9dd94a430e051065e035d53599afec5f`  
-**F19_PROOF_CI_RUN:** `33803957845`  
+**F19_PROOF_COMMIT:** `22281e8587ad4f84eae69add3d1e46c64701b70a`  
+**F19_PROOF_CI_RUN:** `33804487955`  
 **F19_DECISION:** `ADOPT` — ADR-009  
 **ON_HOLD:** `F17-B2` — Managed Better Auth observado não permite WRITE + READBACK de `disable_sign_up=true`
 
@@ -70,7 +70,7 @@ Os pontos materiais confirmados foram:
 
 `src/server/auth/self-hosted-proof.test.ts` executou Better Auth real em SQLite em memória com somente valores fictícios.
 
-O commit de prova reforçada `deee704c9dd94a430e051065e035d53599afec5f` passou a CI `33803957845`:
+O commit final da prova `22281e8587ad4f84eae69add3d1e46c64701b70a` passou a CI `33804487955`:
 
 - `verify`: PASS — lint, typecheck, testes e Next.js build;
 - `database`: PASS — toda a suíte PostgreSQL/RLS existente.
@@ -84,7 +84,7 @@ A prova demonstrou:
 5. novo signup continuou negado ao retornar para a configuração guardada;
 6. usuário fictício existente autenticou por server API;
 7. cookie emitido resolveu sessão server-side e `subject`;
-8. sign-out emitiu invalidação de cookie.
+8. sign-out emitiu cookie de expiração e a sessão antiga deixou de resolver.
 
 Nenhum usuário real, secret operacional, banco hospedado, recurso Neon ou dado de contratação foi usado.
 
@@ -138,8 +138,8 @@ O proof usou o `better-auth@1.6.23` transitivo já fixado no lockfile. Isso não
 - documentação oficial Better Auth: REVALIDADA;
 - runtime F14 atual: INSPECIONADO;
 - catch-all deny-all: INSPECIONADO;
-- proof F19 reforçado: PASS;
-- CI proof `33803957845`: PASS em verify + database;
+- proof F19 final: PASS;
+- CI proof `33804487955`: PASS em verify + database;
 - provider writes durante F19: NENHUM;
 - secret operacional: NENHUM;
 - usuário/dado real: NENHUM.

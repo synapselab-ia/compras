@@ -59,7 +59,7 @@ A organização e o conector Neon foram reinspecionados:
 - a superfície autenticada disponível agora expõe mais operações de inspeção/gestão de Auth, incluindo `get_neon_auth_config`, OAuth, trusted domains e enable/disable de Auth;
 - `update_auth_config` continua aceitando apenas `name` e a superfície atual ainda não expõe os PATCH/GET exigidos para `/auth/email_and_password`, `/auth/plugins` e controles equivalentes de admissão.
 
-A documentação oficial atual de Managed Better Auth foi revalidada pelo próprio catálogo/documentação Neon. Ela confirma que `/auth/email_and_password` e `/auth/plugins` possuem GET + PATCH branch-scoped e que o endpoint geral `/auth/config` altera apenas o nome da aplicação. A checklist atual também informa que localhost é permitido por padrão para desenvolvimento e deve ser desabilitado em ambiente de produção.
+A documentação oficial atual de Managed Better Auth foi revalidada pelo próprio catálogo/documentação Neon. Ela confirma que `/auth/email_and_password` e `/auth/plugins` possuem GET + PATCH branch-scoped e que o endpoint geral `/auth/config` altera apenas o nome da aplicação.
 
 A melhora parcial do conector Neon não fecha F17: sem conseguir escrever e ler de volta `disable_sign_up=true` e bloquear métodos laterais na mesma sessão controlada, provisionar Auth criaria exatamente a race proibida pelo SPEC.
 

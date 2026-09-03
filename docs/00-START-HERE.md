@@ -10,7 +10,7 @@ O sistema não substitui os sistemas oficiais de processo administrativo, requis
 
 A `Foundation-00` e as work units F01 a F14 foram concluídas/revisadas e integradas pelo fluxo canônico.
 
-A F15 (`Hosted Preview Provisioning`) parou no preflight obrigatório antes de qualquer provisionamento. A F16 (`Hosted Preview Control Plane Unblock`) confirmou que Vercel e Neon possuem as APIs/CLI necessárias, mas a sessão disponível não expõe todas as escritas/readbacks críticas. A F17 (`Authenticated Provider Control Session`) foi reexecutada novamente em 2026-09-03 e atingiu sua condição explícita de bloqueio: **ainda não existe uma sessão oficial autenticada e observável, acessível ao assistente, que permita executar os controles faltantes sem transferir credenciais para o chat**.
+A F15 (`Hosted Preview Provisioning`) parou no preflight obrigatório antes de qualquer provisionamento. A F16 (`Hosted Preview Control Plane Unblock`) confirmou que Vercel e Neon possuem as APIs/CLI necessárias, mas a sessão disponível não expõe todas as escritas/readbacks críticas. A F17 (`Authenticated Provider Control Session`) foi reexecutada novamente em 2026-09-03 a partir da `main` em `c682c9a89d1b05d1b583117f0493a9b70fbcead9` e atingiu outra vez sua condição explícita de bloqueio: **ainda não existe uma sessão oficial autenticada e observável, acessível ao assistente, que permita executar os controles faltantes sem transferir credenciais para o chat**.
 
 Nenhum projeto/deployment/banco/Auth/secret de Compras foi criado em F15/F16/F17. `REAL_DATA_ALLOWED` permanece `NO`.
 
@@ -55,7 +55,7 @@ A ausência de um executor autenticado é blocker. Não se deve pedir token no c
 
 A única ação canônica permanece `F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01 — Estabelecer sessão autenticada de control-plane para Vercel e Neon`. Há exatamente uma ação manual pendente: disponibilizar ao assistente uma sessão oficial autenticada e observável nos dois consoles sem revelar credenciais. Quando disponível, ChatGPT Work/Cloud Browser é o caminho preferencial; a prova deve continuar fail-closed.
 
-A `main` canônica de entrada desta tentativa foi `a6595d6761a8f8f2d3a1a0572a76f47223c00768`, com CI `33752929644` em PASS. O last-good funcional continua F14/`33670574481`.
+A `main` canônica de entrada desta tentativa foi `c682c9a89d1b05d1b583117f0493a9b70fbcead9`, com CI `33761007044` em PASS. O last-good funcional continua F14/`33670574481`.
 
 O repositório está público. Aplicam-se integralmente as restrições de publicação de `AGENTS.md` e `docs/architecture/SECURITY.md`; nenhum dado real ou pré-publicação pode ser usado.
 

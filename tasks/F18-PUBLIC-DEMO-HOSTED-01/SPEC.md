@@ -1,7 +1,7 @@
 # F18-PUBLIC-DEMO-HOSTED-01 — Publicar demonstração hospedada sem Auth, banco ou secrets
 
 **Classe:** T3 — integração externa, com impacto de T2 — segurança  
-**Estado:** ACTIVE  
+**Estado:** COMPLETE / VERIFIED  
 **Dependências:** F14, F17 em ON HOLD, ADR-006, ADR-007, ADR-008  
 **Classificação permitida:** PUBLIC / FICTITIOUS ONLY
 
@@ -66,12 +66,25 @@ Rejeitar como PASS se:
 - Vercel Authentication for removida para facilitar acesso;
 - auto-deploy permanecer aberto depois da prova.
 
+## Resultado executado em 2026-09-03
+
+- uma tentativa preliminar revelou target Production + preset `Other`; ela falhou `STATIC_BUILD_NO_OUT_DIR`, sem secrets/dados, e o auto-deploy foi fechado imediatamente;
+- ADR-008 formalizou a faixa demo independente;
+- `framework: "nextjs"` foi versionado;
+- o deployment deliberado `dpl_BqWDpoiotNstrTDhtU3mJ4k9pCZa`, commit `cb874445f97f851871090cb51f6ef3364520da37`, foi criado como Preview (`target=null`) e chegou a `READY`;
+- o build detectou Next.js 16.3.3, compilou, passou TypeScript e gerou as rotas esperadas;
+- acesso sem sessão continuou interceptado pela Vercel Authentication com redirect SSO;
+- nenhum env/secret operacional ou recurso Neon foi criado;
+- `git.deploymentEnabled` voltou a `false` e o commit de fechamento não gerou novo deployment;
+- um link temporário de smoke chegou a ser gerado, mas não foi persistido e o canal permaneceu no handshake SSO; ele não é mecanismo de acesso do produto e expira automaticamente;
+- a verificação funcional local/CI já prova que ausência de `COMPRAS_PERSISTENT_READ_ENABLED=true` seleciona o modo demo e que as fixtures usadas são fictícias.
+
 ## Rollback
 
-Se o build falhar ou surgir comportamento não previsto:
+Se a faixa demo deixar de ser necessária ou apresentar comportamento inesperado:
 
-1. restaurar imediatamente `git.deploymentEnabled=false`;
-2. não adicionar secrets para contornar o erro;
-3. registrar o deployment falho e o motivo;
+1. manter `git.deploymentEnabled=false`;
+2. não anexar secrets;
+3. retirar o deployment da circulação quando o control plane permitir de forma observável;
 4. manter `REAL_DATA_ALLOWED=NO`;
-5. deixar uma única NEXT_ACTION executável ou blocker objetivo.
+5. não promover a demo para persistente sem uma work unit própria e todos os gates de Auth/banco.

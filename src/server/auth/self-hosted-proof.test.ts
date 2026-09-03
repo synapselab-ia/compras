@@ -136,7 +136,15 @@ describe("F19 self-hosted Better Auth admission proof", () => {
         returnHeaders: true,
       });
 
-      expect(cookieHeaderFromSetCookie(signedOut.headers)).toContain("session_token");
+      const signOutSetCookie = signedOut.headers.getSetCookie().join("\n").toLowerCase();
+      expect(signOutSetCookie).toContain("session_token=");
+      expect(signOutSetCookie).toMatch(/max-age=0|expires=/);
+
+      const revokedSession = await guardedAuth.api.getSession({
+        headers: new Headers({ cookie }),
+      });
+
+      expect(revokedSession).toBeNull();
     } finally {
       database.close();
     }

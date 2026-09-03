@@ -1,148 +1,132 @@
 # Current State — Compras
 
-**PROJECT_STATUS:** BLOCKED_NEON_RESTRICTED_SIGNUP_CONTROL_UNAVAILABLE
-**CURRENT_PHASE:** F17 — Authenticated Provider Control Session (BLOCKED fail-closed no Neon)
-**REPO_VISIBILITY:** PUBLIC
-**APPLICATION_STATUS:** PRIVATE_AUTH_ADMISSION_AND_PERSISTENT_READ_IMPLEMENTED_NOT_HOSTED
-**DATABASE_STATUS:** PROTECTED_READ_MODEL_AND_TEAM_DIRECTORY_VALIDATED_IN_EPHEMERAL_CI
-**AUTH_STATUS:** PRIVATE_SIGNIN_SIGNOUT_AND_DENY_ALL_ADMISSION_IMPLEMENTED_NOT_PROVISIONED
-**DEPLOYMENT_STATUS:** VERCEL_CONTROL_PROJECT_EMPTY_PROTECTED_NO_DEPLOYMENTS
-**REAL_DATA_ALLOWED:** NO
-**CONTEXT_STATUS:** VALID
-**FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`
-**LAST_GOOD_COMMIT:** `6c3891d0e4839daa067741bbcf5eafdea542a329`
-**LAST_GOOD_CI_RUN:** `33670574481`
-**F17_INPUT_COMMIT:** `20916b6bf2a606b59bf49f94b5a61dea8f6d82ef`
-**F17_INPUT_CI_RUN:** `33790024970`
-**BLOCKERS:** `F17-B2` o Neon Auth disponível nesta conta não permite aplicar e ler de volta `disable_sign_up=true`; o console informa que signup restrito ainda não é suportado e apresenta o controle de signup desabilitado
-**RESUME_WHEN:** o Neon expuser, no mesmo canal oficial autenticado, WRITE + READBACK observável de `/auth/email_and_password` com `disable_sign_up=true`, `/auth/plugins` e métodos laterais/OAuth desabilitados antes de qualquer uso
+**PROJECT_STATUS:** F18_HOSTED_DEMO_READY_PRIVATE_PREVIEW_ON_HOLD  
+**CURRENT_PHASE:** F18 concluída; F17 ON HOLD por capacidade externa do Neon; F19 pronta  
+**REPO_VISIBILITY:** PUBLIC  
+**APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_PRIVATE_PERSISTENT_PATH_IMPLEMENTED_NOT_HOSTED  
+**DATABASE_STATUS:** PROTECTED_READ_MODEL_AND_TEAM_DIRECTORY_VALIDATED_IN_EPHEMERAL_CI  
+**AUTH_STATUS:** PRIVATE_SIGNIN_SIGNOUT_AND_DENY_ALL_ADMISSION_IMPLEMENTED_NOT_PROVISIONED  
+**DEPLOYMENT_STATUS:** VERCEL_PREVIEW_READY_DEMO_ONLY_PROTECTED_NO_SECRETS_GIT_AUTODEPLOY_DISABLED  
+**REAL_DATA_ALLOWED:** NO  
+**CONTEXT_STATUS:** VALID  
+**FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`  
+**LAST_GOOD_COMMIT:** `6c3891d0e4839daa067741bbcf5eafdea542a329`  
+**LAST_GOOD_CI_RUN:** `33670574481`  
+**F18_INPUT_COMMIT:** `848b9fcf31760e86fb0f7a164025fb28eed97c73`  
+**F18_INPUT_CI_RUN:** `33798974291`  
+**F18_DEPLOYED_COMMIT:** `cb874445f97f851871090cb51f6ef3364520da37`  
+**F18_DEPLOYMENT_ID:** `dpl_BqWDpoiotNstrTDhtU3mJ4k9pCZa`  
+**F18_DEPLOYMENT_STATE:** READY / Preview (`target = null`)  
+**ON_HOLD:** `F17-B2` — Managed Better Auth observado não permite WRITE + READBACK de `disable_sign_up=true`  
 
 ## Estado real
 
-A work unit `F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01` foi executada em 2026-09-03 pelo protocolo canônico, partindo da `main` em `20916b6bf2a606b59bf49f94b5a61dea8f6d82ef`.
+A F17 deixou de ser a frente ativa e passou a `ON HOLD` conforme a regra canônica para dependência externa objetiva. A prova real já demonstrou:
 
-A sessão oficial autenticada e observável foi estabelecida nos consoles Vercel e Neon sem transferir credenciais, tokens, cookies, connection strings ou secrets para chat ou Git. A prova Vercel passou. A prova Neon encontrou uma indisponibilidade real do controle crítico de signup restrito e encerrou fail-closed, com rollback completo do recurso Neon descartável.
+- Vercel control plane: PASS;
+- Neon Managed Better Auth: BLOCKED / fail-closed por indisponibilidade do controle obrigatório de signup;
+- Auth e projeto Neon descartáveis: removidos;
+- nenhum dado real, usuário, migration hospedada ou secret foi criado.
 
-F17 permanece aberta e é a única `NEXT_ACTION`. F18 não existe e não deve ser criada enquanto `F17-B2` persistir.
+Como `ON HOLD` não deve paralisar work units independentes, e por override explícito do usuário para continuar avançando, a F18 criou uma faixa de demonstração hospedada conforme ADR-008. Essa faixa não substitui o futuro preview privado/persistente.
 
-## Recuperação e contexto
+## F18 — Hosted demo
 
-- `main` recuperada em `20916b6bf2a606b59bf49f94b5a61dea8f6d82ef`;
-- nenhuma PR aberta no início da execução;
-- a frente ativa confirmada foi `F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01`;
-- os 10 inputs estáveis do `CONTEXT_MANIFEST` coincidiram com os blobs esperados;
-- `CONTEXT_STATUS = VALID`;
-- CI de entrada `33790024970`: PASS;
-- `REAL_DATA_ALLOWED = NO` permaneceu ativo.
+### Classificação
 
-## Prova Vercel — PASS
+- conteúdo permitido: PUBLIC / FICTITIOUS ONLY;
+- `REAL_DATA_ALLOWED = NO`;
+- sem PostgreSQL hospedado;
+- sem Neon Auth;
+- sem `DATABASE_URL`;
+- sem `NEON_AUTH_BASE_URL`/`NEON_AUTH_COOKIE_SECRET`;
+- sem `COMPRAS_PERSISTENT_READ_ENABLED=true`;
+- sem token/secret operacional.
 
-A conta/equipe correta foi identificada e os projetos preexistentes foram apenas inspecionados. Nenhum projeto alheio foi alterado.
+O código continua definindo modo `demo` quando `COMPRAS_PERSISTENT_READ_ENABLED` está ausente ou `false`. A página raiz identifica esse estado como `Protótipo com dados fictícios` e `Persistência operacional desabilitada neste ambiente`. As fixtures versionadas usam somente objetos/pessoas/setores explicitamente demonstrativos.
 
-Foi criado o projeto mínimo `compras-f17-control-proof`, sem secret de aplicação e sem deployment, domínio ou alias. O projeto foi conectado a `synapselab-ia/compras` somente para validar o escopo de branch da variável fictícia.
+### Preflight adversarial que encontrou problema real
+
+Antes da F18 formal, uma tentativa controlada na branch `f18-demo-hosted-preview` habilitou Git deployment para observar o comportamento real do projeto Vercel preservado.
+
+A Vercel classificou aquela primeira tentativa como `production`. O agente falhou fechado imediatamente e restaurou `git.deploymentEnabled=false` sem anexar qualquer env/secret/dado.
+
+Esse deployment terminou `ERROR` com `STATIC_BUILD_NO_OUT_DIR`: o projeto havia sido criado com preset `Other`/`framework=null` e procurou um diretório `public`. Ele nunca ficou `READY`/live e não continha configuração sensível.
+
+Esse achado foi incorporado à ADR-008 e à SPEC F18 em vez de ser contornado com secrets ou configuração manual opaca.
+
+### Correção F18
+
+Na branch dedicada `f18-public-demo-hosted-01`:
+
+1. ADR-008 definiu a faixa demo independente e seus invariantes;
+2. `vercel.json` passou a declarar explicitamente `framework: "nextjs"`;
+3. Git deployment foi habilitado somente no commit deliberado `cb874445f97f851871090cb51f6ef3364520da37`;
+4. a Vercel criou o deployment `dpl_BqWDpoiotNstrTDhtU3mJ4k9pCZa` com `target = null`, ou seja, não Production;
+5. o build detectou Next.js 16.3.3, compilou, executou TypeScript, gerou as rotas e concluiu `READY`;
+6. `git.deploymentEnabled` foi restaurado para `false` depois da publicação deliberada;
+7. após essa restauração, nenhum novo deployment foi criado.
+
+O projeto Vercel continua com nome provisório `compras-f17-control-proof`; ele foi reutilizado para evitar recriação/retrabalho. Renomear não faz parte da F18.
 
 ### Deployment Protection
 
-- Vercel Authentication foi configurada antes de qualquer variável;
-- o plano Hobby expôs `Standard Protection`;
-- foi executado WRITE + reload/readback do controle;
-- estado final observado: `Require Log In` habilitado e formulário salvo;
-- nenhum Shareable Link, Protection Bypass, exception ou URL obscura foi usado;
-- nenhum deployment Production ou Preview foi criado.
+A URL do deployment Preview continua interceptada pela Vercel Authentication: uma requisição sem sessão recebeu `302` para o fluxo SSO da Vercel e `x-robots-tag: noindex`. A proteção não foi removida para facilitar a demo.
 
-### Variável fictícia Preview + branch
+Uma URL temporária de compartilhamento foi gerada somente durante tentativa de smoke automatizado, sem ser persistida no GitHub/checkpoint e sem conter acesso a dados sensíveis; o canal ainda retornou para o fluxo SSO. Ela não é mecanismo de acesso do produto e expira automaticamente.
 
-- branch dedicada: `f17-provider-control-proof`;
-- variável inerte: `F17_INERT_PROOF`;
-- tipo: Config;
-- target observado: Preview;
-- filtro observado: branch `f17-provider-control-proof`;
-- WRITE + READBACK: PASS;
-- remoção da variável + reload/readback de ausência: PASS;
-- nenhum `DATABASE_URL`, cookie secret ou secret operacional foi usado.
+O conteúdo pós-proteção não foi declarado como visualmente smoke-tested nesta sessão, pois o canal disponível não concluiu o handshake SSO. Isso não autoriza remover a proteção. O build hospedado, a lógica demo versionada, a CI e a barreira externa foram verificados separadamente.
 
-### Estado residual Vercel
+## Red-team F18
 
-Por instrução explícita do usuário, o projeto Vercel **não foi excluído**. Ele permanece vazio, sem deployments e sem env vars, protegido por Vercel Authentication, para possível reaproveitamento futuro como projeto real do Compras. O nome é provisório.
-
-`vercel.json` mantém auto-deploy por Git desabilitado enquanto F17 estiver bloqueada, evitando que commits exclusivamente documentais criem uma superfície Production no projeto preservado. Remover esse bloqueio pertence a uma futura work unit de provisionamento deliberado, depois que F17 fechar.
-
-## Prova Neon — BLOCKED / FAIL-CLOSED
-
-A organização correta foi identificada. Os três projetos preexistentes foram inspecionados read-only e permaneceram inalterados.
-
-Foi criado o projeto descartável `compras-f17-control-proof` em região AWS suportada, inicialmente sem Neon Auth. Nenhuma tabela de negócio, migration, seed, usuário, `app_user`, membership ou dado de contratação foi criado.
-
-Ao habilitar Managed Better Auth para a prova controlada, o próprio console exibiu imediatamente o alerta:
-
-> Anyone on the web can sign up for your app. Support for restricted signups is coming soon.
-
-Na aba Configuration:
-
-- `Sign-up with Email` apareceu ativo por padrão;
-- o controle correspondente estava desabilitado para interação, impedindo o WRITE exigido;
-- portanto `disable_sign_up=true` não pôde ser aplicado nem lido de volta;
-- `Allow Localhost` apareceu habilitado por padrão;
-- um provider Google com `Shared keys` apareceu na seção OAuth;
-- ausência/desativação de OAuth, magic link, phone e plugins laterais não pôde ser provada;
-- nenhum domínio público foi adicionado e nenhum usuário foi criado.
-
-O alerta e o controle desabilitado são evidência observável de que esta superfície Neon atual não satisfaz ADR-006, ADR-007 e a SPEC F17. Documentação ou GET genérico não substituem o WRITE + READBACK ausente.
-
-## Rollback Neon — PASS
-
-Após confirmação destrutiva explícita do usuário:
-
-1. Neon Auth foi removido com `Clear all data associated with this integration` marcado;
-2. a página voltou a oferecer `Enable Neon Auth`, confirmando o teardown da integração;
-3. o projeto descartável `compras-f17-control-proof` foi excluído;
-4. após reload, a lista da organização voltou a conter somente os três projetos preexistentes;
-5. nenhum projeto Neon residual da F17 permaneceu.
-
-## Red-team F17
-
-- sessão parcialmente observável: rejeitada; Vercel teve readback real e Neon foi bloqueado onde o readback crítico faltou;
-- sessão expirada entre WRITE e READBACK: não ocorreu; reloads autenticados confirmaram os estados usados como evidência;
-- superfície Vercel Production pública: nenhuma foi criada;
-- variável Preview sem branch: rejeitada; branch específica foi observada antes da remoção;
-- URL obscura, Shareable Link ou bypass: não usados;
-- signup race Neon: detectada pelo alerta/provider default e encerrada por teardown imediato;
-- métodos laterais/OAuth: não considerados seguros sem readback; a presença de Google/Shared keys reforçou o bloqueio;
-- deny-all da aplicação como substituto de provider: rejeitado;
-- configuração Neon genérica como falsa prova: rejeitada;
-- secret em Git/chat/log/screenshot público: nenhum;
-- projeto alheio alterado: nenhum;
-- dado real, interno ou pré-publicação: nenhum.
+- Production acidental: detectada na tentativa preliminar e tratada fail-closed; a publicação F18 efetiva foi Preview (`target=null`);
+- framework errado: detectado pelo erro `STATIC_BUILD_NO_OUT_DIR`; corrigido por `framework: "nextjs"` versionado;
+- secret/env para “fazer funcionar”: rejeitado; nenhum foi criado;
+- persistência acidental: não habilitada; modo demo permanece default explícito;
+- dado real/interno/pré-publicação: nenhum;
+- Neon project/Auth: nenhum criado em F18;
+- remoção da Vercel Authentication: rejeitada; proteção permaneceu ativa;
+- Shareable Link como mecanismo permanente: rejeitado;
+- Git auto-deploy residual: removido; estado final `deploymentEnabled=false`;
+- projeto Vercel alheio: nenhum alterado.
 
 ## Verificação
 
-- GitHub `main`, PRs e branches de entrada: INSPECIONADOS;
-- `CONTEXT_MANIFEST`: PASS / VALID;
-- sessão Vercel autenticada: PASS;
-- Vercel protection WRITE + READBACK: PASS;
-- Vercel env Preview + branch WRITE + READBACK: PASS;
-- Vercel env rollback: PASS;
-- deployments/domains/aliases Vercel: INSPECIONADOS / AUSENTES;
-- projeto Vercel residual: VAZIO, PROTEGIDO E JUSTIFICADO;
-- sessão Neon autenticada: PASS;
-- Neon `disable_sign_up=true` WRITE + READBACK: BLOCKED;
-- Neon plugins/métodos laterais/OAuth: NÃO PROVADOS, tratados como inseguros;
-- Neon Auth teardown: PASS;
-- projeto Neon descartável removido + readback: PASS;
-- secrets operacionais publicados: NÃO;
-- dados reais utilizados: NÃO;
-- projeto alheio alterado: NÃO.
+### GitHub
 
-## Limite atual
+- `main` de entrada F18: `848b9fcf31760e86fb0f7a164025fb28eed97c73`;
+- CI de entrada `33798974291`: PASS (`verify` e `database`, incluindo lint/typecheck/test/build e testes PostgreSQL/RLS);
+- nenhuma PR concorrente aberta no início da F18;
+- contexto estável permaneceu válido.
 
-F17 não pode ser concluída porque o provider Neon observado não expõe o enforcement obrigatório de signup restrito. Não tentar novo projeto Neon, não montar o preview, não anexar secrets e não criar F18.
+### Vercel
 
-Q-001, Q-002, Q-003, Q-004, Q-005, Q-006, Q-009 e Q-010 permanecem abertas.
+- projeto reutilizado: identificado e ligado a `synapselab-ia/compras`;
+- deployment F18: `READY`;
+- target F18: Preview (`null`), não Production;
+- build Next.js: PASS;
+- Vercel Authentication: observada por redirect SSO;
+- env/secret operacional criado por F18: NÃO;
+- Git auto-deploy final: desabilitado no repositório.
+
+### Neon
+
+Nenhuma escrita ou recurso Neon foi criado em F18. O blocker F17 permanece evidência histórica válida e não foi reexecutado por inércia.
+
+## Decisão de arquitetura para continuar avançando
+
+Esperar indefinidamente pelo controle Managed Better Auth não é mais a única rota de progresso.
+
+A documentação oficial atual do Better Auth confirma PostgreSQL direto, configuração `emailAndPassword.disableSignUp`, `trustedOrigins` e schema/migrations controláveis pela aplicação. Por isso a próxima work unit é F19, que deve decidir se o Auth deve ser self-hosted em PostgreSQL e assim remover a dependência do controle indisponível do Managed Neon Auth, preservando F14/F08/RLS.
+
+Isso é uma hipótese arquitetural a provar, não uma autorização para hospedar dados reais.
 
 ## Last good
 
-`6c3891d0e4839daa067741bbcf5eafdea542a329` continua sendo o `LAST_GOOD_COMMIT` funcional, validado pela CI `33670574481`. O checkpoint de entrada F17 em `20916b6bf2a606b59bf49f94b5a61dea8f6d82ef` possui CI `33790024970` em PASS.
+O last-good funcional privado continua F14/`6c3891d0e4839daa067741bbcf5eafdea542a329` com CI `33670574481` até que uma work unit hospedada persistente passe todos os gates.
+
+A F18 adiciona um last-good **de demonstração hospedada** separado: deployment Vercel `dpl_BqWDpoiotNstrTDhtU3mJ4k9pCZa`, commit `cb874445f97f851871090cb51f6ef3364520da37`, estado `READY`, sem secrets, Auth interno, banco ou dados reais.
 
 ## Próxima ação
 
-Executar somente a ação descrita em `docs/ai/NEXT_ACTION.md`: manter F17 bloqueada até o Neon oferecer os controles provider-side exigidos e, então, retomar a prova Neon sem recriar ou excluir o projeto Vercel preservado.
+Executar somente `F19-AUTH-PORTABILITY-DESIGN-01` conforme `docs/ai/NEXT_ACTION.md` e sua SPEC. F17 permanece ON HOLD e só volta a ser frente ativa se a rota Managed Neon Auth voltar a ser escolhida e sua condição `RESUME_WHEN` estiver satisfeita.

@@ -8,22 +8,26 @@
 
 ## Reinspeção mais recente
 
-Em 2026-09-03 esta work unit foi reexecutada até sua condição explícita de bloqueio. O estado permanece:
+Em 2026-09-03, partindo da `main` em `a6595d6761a8f8f2d3a1a0572a76f47223c00768`, esta work unit foi reexecutada novamente até sua condição explícita de bloqueio.
 
-- Vercel e Neon continuam autenticados apenas pelas superfícies de conector já conhecidas;
+O estado permanece:
+
+- Vercel e Neon estão acessíveis somente pelas superfícies de conector já conhecidas;
 - o conector Vercel continua sem write/readback de Deployment Protection, env vars Preview + branch e deprovisionamento;
 - o conector Neon continua sem PATCH de `/auth/email_and_password` e `/auth/plugins`;
 - não existe CLI `vercel`, `neon` ou `neonctl` autenticada no runtime;
+- não existem variáveis de autenticação Vercel/Neon exportadas ao shell;
 - nenhuma integração adicional compatível foi encontrada;
+- não existe projeto `compras` nos providers;
 - nenhum recurso de Compras foi provisionado.
 
-Por regra do próprio F17, não criar uma nova work unit de workaround enquanto a ação manual abaixo não estiver satisfeita.
+Por regra do próprio F17, **não criar F18 nem nova work unit de workaround enquanto a ação manual abaixo não estiver satisfeita**.
 
 ## Ação manual única necessária
 
 **Estabelecer uma sessão de controle autenticada nos consoles oficiais Vercel e Neon que seja acessível ao assistente sem revelar credenciais e então reexecutar esta work unit.**
 
-O caminho operacional preferido, quando disponível na conta, é abrir esta mesma frente em **ChatGPT Work/Cloud Browser** e autenticar o navegador nos consoles oficiais Vercel e Neon. Não enviar API key, bearer token, password, cookie, connection string ou secret pelo chat.
+O caminho operacional preferido, quando disponível na conta, é executar esta frente em **ChatGPT Work/Cloud Browser** e autenticar o navegador nos consoles oficiais Vercel e Neon. Não enviar API key, bearer token, password, cookie, connection string ou secret pelo chat.
 
 Se esse modo não estiver disponível, F17 continua bloqueada até existir uma superfície oficial equivalente já autenticada e observável pela sessão. Não substituir isso por instruções manuais opacas que o assistente não consiga verificar.
 
@@ -33,10 +37,10 @@ Executar conforme `tasks/F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01/SPEC.md`,
 
 ## Contexto confirmado
 
-F16 e a reinspeção F17 eliminaram a ambiguidade de capacidade do provider:
+F16 e as reinspeções F17 eliminaram a ambiguidade de capacidade dos providers:
 
-- o Vercel possui APIs/CLI oficiais para criação de projeto, `ssoProtection`, env vars Preview + `gitBranch` e gerenciamento/rollback;
-- o Neon possui API oficial para `/auth/email_and_password`, `/auth/plugins`, métodos específicos, domains e demais configurações;
+- o Vercel possui APIs/SDK/CLI oficiais para criação de projeto, `ssoProtection`, env vars Preview + `gitBranch`, leitura/remoção de envs e gerenciamento/rollback;
+- o Neon possui API oficial branch-scoped para `/auth/email_and_password`, `/auth/plugins`, métodos específicos, domains, OAuth e teardown de Managed Better Auth;
 - o problema atual é exclusivamente a indisponibilidade, nesta sessão, de um executor oficial autenticado que exponha essas operações com write + readback;
 - nenhum recurso de Compras foi provisionado.
 
@@ -49,17 +53,17 @@ F17 termina somente quando o assistente consegue, pela sessão autenticada e sem
 1. confirmar a conta/equipe alvo e que nenhum projeto `compras` preexistente será sobrescrito;
 2. criar, se necessário para a prova, um recurso mínimo descartável e sem secrets de aplicação, somente depois de confirmar caminho de rollback;
 3. escrever Vercel Authentication/Deployment Protection em modo compatível com a ADR-006;
-4. ler de volta o estado efetivo de proteção;
+4. ler de volta o estado efetivo de protection;
 5. provar que env vars podem ser restritas a `preview` + branch dedicada, sem inserir valor operacional real nesta work unit;
 6. identificar deployment target e aliases/domains relevantes;
-7. provar um caminho verificável de remoção/deprovisionamento.
+7. provar caminho verificável de remoção/deprovisionamento.
 
 ### Neon
 
 1. somente depois da prova Vercel, criar recurso mínimo descartável se necessário;
 2. provisionar Managed Better Auth apenas se for possível aplicar imediatamente os controles exigidos;
 3. escrever e ler de volta `disable_sign_up=true` em `/auth/email_and_password`;
-4. escrever e ler de volta plugins/métodos laterais desabilitados conforme a ADR-006/ADR-007;
+4. escrever e ler de volta plugins/métodos laterais desabilitados conforme ADR-006/ADR-007;
 5. confirmar OAuth providers ausentes/desabilitados e trusted domains estritos;
 6. provar caminho de disable/delete/rollback antes de qualquer usuário ou dado de produto.
 
@@ -116,7 +120,7 @@ Atacar deliberadamente:
 
 ## Condição de bloqueio
 
-Se a sessão autenticada ainda não estiver acessível ao assistente, não executar writes de provider. Manter o blocker e repetir **somente a ação manual única** descrita no topo; não voltar a F15 nem criar um novo workaround.
+Se a sessão autenticada ainda não estiver acessível ao assistente, não executar writes de provider. Manter o blocker e repetir **somente a ação manual única** descrita no topo; não voltar a F15 e não criar uma nova work unit de workaround.
 
 ## Fora do escopo
 

@@ -10,9 +10,9 @@ O sistema não substitui os sistemas oficiais de processo administrativo, requis
 
 A `Foundation-00` e as work units F01 a F14 foram concluídas/revisadas e integradas pelo fluxo canônico.
 
-A F15 (`Hosted Preview Provisioning`) parou no preflight obrigatório antes de qualquer provisionamento. A F16 (`Hosted Preview Control Plane Unblock`) confirmou que Vercel e Neon possuem as APIs/CLI necessárias, mas a sessão disponível não expõe todas as escritas/readbacks críticas. A F17 (`Authenticated Provider Control Session`) foi reexecutada novamente em 2026-09-03 a partir da `main` em `6506bf19f49cd275c2260201572d6c5a46df7912` e atingiu outra vez sua condição explícita de bloqueio: **ainda não existe uma sessão oficial autenticada e observável, acessível ao assistente, que permita executar os controles faltantes sem transferir credenciais para o chat**.
+A F15 (`Hosted Preview Provisioning`) parou no preflight obrigatório antes de qualquer provisionamento. A F16 (`Hosted Preview Control Plane Unblock`) confirmou documentalmente os controles necessários. Em 2026-09-03, a F17 (`Authenticated Provider Control Session`) estabeleceu sessões oficiais autenticadas e observáveis nos consoles Vercel e Neon e executou a prova real.
 
-Nenhum projeto/deployment/banco/Auth/secret de Compras foi criado em F15/F16/F17. `REAL_DATA_ALLOWED` permanece `NO`.
+A etapa Vercel passou: o projeto vazio `compras-f17-control-proof` ficou protegido, sem deployments ou env vars, depois de provar e remover uma variável fictícia limitada a Preview + branch. A etapa Neon bloqueou fail-closed: o console informou que signup restrito ainda não era suportado e não permitiu aplicar/read-back `disable_sign_up=true`. O Auth e o projeto Neon descartável foram removidos. Nenhum secret, usuário, migration, seed ou dado de produto foi criado. `REAL_DATA_ALLOWED` permanece `NO`.
 
 Existe uma aplicação executável com jornada `Central → detalhe → Central` em dois modos separados:
 
@@ -39,23 +39,21 @@ A ADR-007 mantém como requisito independente para o preview real que o Managed 
 
 ## Blocker atual do preview hospedado
 
-As fontes oficiais atuais continuam confirmando que:
+O blocker não é mais autenticação do executor. A sessão oficial funcionou e permitiu concluir a prova Vercel.
 
-- **Vercel** dispõe de REST API/SDK/CLI para criar projeto, configurar Vercel Authentication/`ssoProtection`, criar env vars `preview` com `gitBranch`, ler/gerenciar env vars e remover deployments/projetos;
-- **Neon** dispõe de endpoints branch-scoped para `/auth/email_and_password`, `/auth/plugins`, domains/OAuth e demais controles de Managed Better Auth.
+O blocker real é a capacidade Neon observada nesta conta/região:
 
-A sessão atual, entretanto, continua sem as escritas necessárias:
+- o Managed Better Auth abriu signup de email por padrão;
+- o console exibiu que signup restrito ainda não era suportado;
+- o controle `Sign-up with Email` estava desabilitado para escrita;
+- não houve WRITE + READBACK possível de `disable_sign_up=true`;
+- OAuth e métodos laterais também não puderam ser comprovados em estado seguro.
 
-- o conector Vercel permanece read/inspect + deploy genérico e não escreve/read-back protection/env/deprovisionamento;
-- o conector Neon continua sem os PATCH de `email_and_password`/plugins;
-- o shell não possui `vercel`, `neon` ou `neonctl` autenticados nem variáveis de autenticação dos providers exportadas;
-- não foi encontrada integração/plugin adicional compatível.
+A documentação de API não substitui esse readback real. A F17 permanece bloqueada até o Neon oferecer os controles específicos em uma única sessão autenticada. Não criar outro projeto Neon para contornar, não provisionar preview e não criar F18.
 
-A ausência de um executor autenticado é blocker. Não se deve pedir token no chat nem fazer deploy/Auth primeiro para proteger depois.
+A única ação canônica permanece `F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01`, agora com `RESUME_WHEN` objetivo em `docs/ai/NEXT_ACTION.md`. Não há ação manual de credencial pendente.
 
-A única ação canônica permanece `F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01 — Estabelecer sessão autenticada de control-plane para Vercel e Neon`. Há exatamente uma ação manual pendente: disponibilizar ao assistente uma sessão oficial autenticada e observável nos dois consoles sem revelar credenciais. Quando disponível, ChatGPT Work/Cloud Browser é o caminho preferencial; a prova deve continuar fail-closed.
-
-A `main` canônica de entrada desta tentativa foi `6506bf19f49cd275c2260201572d6c5a46df7912`, com CI `33765781900` em PASS. O last-good funcional continua F14/`33670574481`.
+A `main` canônica de entrada desta execução foi `20916b6bf2a606b59bf49f94b5a61dea8f6d82ef`, com CI `33790024970` em PASS. O last-good funcional continua F14/`33670574481`.
 
 O repositório está público. Aplicam-se integralmente as restrições de publicação de `AGENTS.md` e `docs/architecture/SECURITY.md`; nenhum dado real ou pré-publicação pode ser usado.
 

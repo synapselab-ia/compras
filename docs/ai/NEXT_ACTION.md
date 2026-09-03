@@ -1,143 +1,79 @@
 # Next Action — Compras
 
-## F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01 — Estabelecer sessão autenticada de control-plane para Vercel e Neon
+## F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01 — Retomar a prova Neon quando signup restrito estiver disponível
 
-**Classe:** `T3 — integração externa` com impacto de `T2 — segurança`  
-**Estado:** MANUAL_ACTION_REQUIRED / BLOCKER-RESOLUTION  
-**Objetivo:** tornar disponível ao assistente uma sessão oficial, autenticada e observável de controle dos providers Vercel e Neon, sem copiar tokens/secrets para chat ou Git, e então provar por write + readback as capacidades críticas já confirmadas documentalmente.
+**Classe:** `T3 — integração externa` com impacto de `T2 — segurança`
+**Estado:** BLOCKED_EXTERNAL_PROVIDER_CAPABILITY / RESUME_WHEN
+**Objetivo:** concluir a etapa Neon da F17 somente quando o mesmo canal oficial autenticado permitir WRITE + READBACK de `disable_sign_up=true` e dos controles de plugins/métodos laterais antes de qualquer uso do Auth.
 
-## Reinspeção mais recente
+Esta é a única `NEXT_ACTION` canônica. Não criar F18 enquanto a condição abaixo não estiver satisfeita.
 
-Em 2026-09-03, partindo da `main` em `1fd6dc66382da316928d3a6e0e62021c964f1d8e` com CI `33788045163` em PASS, esta work unit foi reexecutada novamente até sua condição explícita de bloqueio.
+## Bloqueio observado
 
-O estado permanece:
+Em 2026-09-03, a sessão oficial autenticada do Neon foi operada diretamente no console da organização correta. Em um projeto vazio e descartável criado exclusivamente para F17, o console mostrou:
 
-- Vercel e Neon estão acessíveis por superfícies oficiais autenticadas de inspeção, mas não pelo conjunto completo de controles exigidos pela F17;
-- o conector Vercel continua com 24 ferramentas e sem write/readback de Deployment Protection, env vars Preview + branch e deprovisionamento controlado;
-- a superfície Neon Auth continua expondo inspeção/gestão parcial (`get_neon_auth_config`, OAuth, trusted domains e enable/disable), mas `update_auth_config` segue restrito ao nome da aplicação e não há write + readback de `/auth/email_and_password` e `/auth/plugins`;
-- não existe CLI `vercel`, `neon` ou `neonctl` autenticada no runtime;
-- não existem variáveis de autenticação Vercel/Neon exportadas ao shell;
-- nenhuma integração adicional compatível foi encontrada;
-- não existe projeto `compras` nos providers;
-- nenhum recurso de Compras foi provisionado.
+- alerta de que qualquer pessoa na web poderia criar conta e que signup restrito ainda estava por vir;
+- `Sign-up with Email` ativo por padrão;
+- controle de signup desabilitado para interação, impedindo o WRITE;
+- `Allow Localhost` ativo por padrão;
+- provider Google/`Shared keys` presente na seção OAuth.
 
-Por regra do próprio F17, **não criar F18 nem nova work unit de workaround enquanto a ação manual abaixo não estiver satisfeita**.
+Assim, não foi possível aplicar nem ler de volta `disable_sign_up=true`; também não foi possível provar plugins/métodos laterais e OAuth em estado seguro. O Auth foi removido com seus dados vazios e o projeto Neon descartável foi excluído. A lista final voltou aos três projetos preexistentes.
 
-## Ação manual única necessária
+## Condição objetiva de retomada
 
-**Estabelecer uma sessão de controle autenticada nos consoles oficiais Vercel e Neon que seja acessível ao assistente sem revelar credenciais e então reexecutar esta work unit.**
+Retomar F17 somente quando a conta/região Neon oferecer, em uma única sessão oficial autenticada e observável:
 
-O caminho operacional preferido, quando disponível na conta, é executar esta frente em **ChatGPT Work/Cloud Browser** e autenticar o navegador nos consoles oficiais Vercel e Neon. Não enviar API key, bearer token, password, cookie, connection string ou secret pelo chat.
+1. WRITE + READBACK específico de `/auth/email_and_password` com `disable_sign_up=true`;
+2. WRITE + READBACK de `/auth/plugins` e dos endpoints específicos necessários para manter magic link, phone/OTP, organizações/admin ou outros métodos laterais desabilitados;
+3. OAuth providers comprovadamente ausentes ou desabilitados;
+4. trusted domains estritos, sem wildcard e sem localhost desnecessário;
+5. caminho observável de teardown antes de criar usuário ou dado.
 
-Se esse modo não estiver disponível, F17 continua bloqueada até existir uma superfície oficial equivalente já autenticada e observável pela sessão. Não substituir isso por instruções manuais opacas que o assistente não consiga verificar.
+Documentação, endpoint Auth genérico, configuração apenas de nome da aplicação, deny-all da aplicação ou aparência da UI não satisfazem essa condição.
 
-## Fonte da tarefa
+## Estado preservado da prova Vercel
 
-Executar conforme `tasks/F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01/SPEC.md`, ADR-006, ADR-007, `docs/architecture/SECURITY.md` e o checkpoint F17 em `docs/ai/CURRENT_STATE.md`.
+A etapa Vercel da F17 já passou e não deve ser refeita por rotina:
 
-## Contexto confirmado
+- projeto `compras-f17-control-proof` preservado por instrução do usuário;
+- Vercel Authentication ativa com readback;
+- nenhum deployment, domínio ou alias;
+- variável fictícia `F17_INERT_PROOF` provada como Preview + branch `f17-provider-control-proof` e removida com readback;
+- nenhuma env var ou secret operacional residual;
+- auto-deploy por Git desabilitado em `vercel.json` enquanto F17 estiver bloqueada.
 
-As reinspeções F16/F17 eliminaram a ambiguidade de capacidade dos providers:
+Não excluir, recriar ou renomear o projeto Vercel nesta ação. Revalidar seu estado apenas por leitura se houver evidência concreta de mudança.
 
-- o Vercel possui APIs/SDK/CLI oficiais para criação de projeto, `ssoProtection`, env vars Preview + `gitBranch`, leitura/remoção de envs e gerenciamento/rollback;
-- o Neon possui API oficial branch-scoped para `/auth/email_and_password`, `/auth/plugins`, métodos específicos, domains, OAuth e teardown de Managed Better Auth;
-- a documentação Neon atual confirma que `/auth/config` altera apenas o nome da aplicação, enquanto `email_and_password` e `plugins` exigem endpoints próprios;
-- o problema atual é a indisponibilidade, nesta sessão, de um executor oficial autenticado que exponha **todos** esses controles com write + readback;
-- nenhum recurso de Compras foi provisionado.
+## Execução permitida ao retomar
 
-## Resultado esperado
-
-F17 termina somente quando o assistente consegue, pela sessão autenticada e sem secrets em texto público, executar e verificar as seguintes provas **sem ainda montar o preview completo**.
-
-### Vercel
-
-1. confirmar a conta/equipe alvo e que nenhum projeto `compras` preexistente será sobrescrito;
-2. criar, se necessário para a prova, um recurso mínimo descartável e sem secrets de aplicação, somente depois de confirmar caminho de rollback;
-3. escrever Vercel Authentication/Deployment Protection em modo compatível com a ADR-006;
-4. ler de volta o estado efetivo de protection;
-5. provar que env vars podem ser restritas a `preview` + branch dedicada, sem inserir valor operacional real nesta work unit;
-6. identificar deployment target e aliases/domains relevantes;
-7. provar caminho verificável de remoção/deprovisionamento.
-
-### Neon
-
-1. somente depois da prova Vercel, criar recurso mínimo descartável se necessário;
-2. provisionar Managed Better Auth apenas se for possível aplicar imediatamente os controles exigidos;
-3. escrever e ler de volta `disable_sign_up=true` em `/auth/email_and_password`;
-4. escrever e ler de volta plugins/métodos laterais desabilitados conforme ADR-006/ADR-007;
-5. confirmar OAuth providers ausentes/desabilitados e trusted domains estritos;
-6. provar caminho de disable/delete/rollback antes de qualquer usuário ou dado de produto.
+1. recuperar GitHub/contexto e validar o manifest;
+2. confirmar por leitura que o estado Vercel preservado não mudou;
+3. confirmar a disponibilidade dos controles Neon antes de provisionar Auth;
+4. criar no máximo um projeto Neon vazio e descartável, sem tocar projetos existentes;
+5. aplicar imediatamente todos os controles críticos;
+6. fazer READBACK específico de cada controle;
+7. executar o red-team da SPEC;
+8. remover Auth/projeto descartável mediante confirmação destrutiva quando exigida;
+9. somente se tudo passar, fechar F17 e criar uma nova work unit que retome F15.
 
 ## Regras obrigatórias
 
-- usar somente consoles, CLI ou API oficiais autenticados;
-- não solicitar ao usuário que cole credenciais no chat;
-- não persistir token, password, cookie, connection string ou secret em Git, PR, Issue, log ou artifact;
-- não usar projetos Vercel/Neon alheios como laboratório;
-- não criar deploy com secret antes de protection comprovada;
-- não provisionar Neon Auth se `disable_sign_up` não puder ser escrito e lido de volta na mesma sessão controlada;
-- não confundir ausência de botão de signup com enforcement provider-side;
-- não usar Shareable Links, protection exceptions ou query-string bypass;
-- não habilitar `COMPRAS_PERSISTENT_READ_ENABLED`;
-- não criar usuário hospedado, seed, migrations hospedadas ou dado de contratação;
-- manter `REAL_DATA_ALLOWED = NO`;
-- não resolver Q-009/Q-010.
+- `REAL_DATA_ALLOWED = NO`;
+- não criar usuário, `app_user`, membership, migration hospedada, seed ou dado de contratação;
+- não usar `DATABASE_URL`, cookie secret ou outro secret operacional;
+- não copiar credencial para chat, Git, PR, log, screenshot pública ou artifact;
+- não reutilizar projeto Neon alheio;
+- não criar novo projeto Neon apenas para tentar contornar o mesmo bloqueio observado;
+- não deixar Auth com signup default exposto enquanto procura controles;
+- não habilitar método lateral sem prova equivalente;
+- não usar deny-all da aplicação como substituto de `disable_sign_up` do provider;
+- não criar F18 antes do PASS integral da F17.
 
-## Red-team mínimo
+## Fonte da tarefa
 
-Atacar deliberadamente:
-
-- browser autenticado que consegue clicar mas não permite verificar estado final;
-- sessão que expira no meio da mudança e deixa recurso parcialmente configurado;
-- criação de projeto Vercel que gera production deployment/alias inesperado;
-- protection aplicada somente a Preview enquanto production surface recebe app;
-- env var sem branch scope apesar de aparentar Preview-only;
-- Shareable Link/protection bypass usado como falso substituto de Deployment Protection;
-- secret visível em resposta/UI/log e risco de persistência acidental;
-- Neon Auth criado com signup default antes do PATCH de bloqueio;
-- `get_neon_auth_config` ou enable/disable de Auth usados como falso substituto para o PATCH inexistente de `email_and_password`/plugins;
-- `disable_sign_up` aplicado a email/senha mas plugin lateral continua permitindo criação de conta;
-- método OAuth/provider habilitado por default;
-- rollback disponível apenas por instrução manual não observável;
-- tentativa de reutilizar projeto já existente;
-- tentativa de colar token no chat para acelerar a execução.
-
-## Verificação obrigatória
-
-- GitHub/contexto revalidado antes da prova;
-- sessão autenticada oficial: DISPONÍVEL E OBSERVÁVEL;
-- Vercel protection write + readback: PASS;
-- Vercel env scope write + readback: PASS;
-- classificação de deployment/aliases: INSPECIONADA;
-- Vercel rollback/deprovisionamento: PROVADO;
-- Neon `disable_sign_up=true` write + readback: PASS;
-- métodos/plugins adicionais: DESABILITADOS E LIDOS DE VOLTA;
-- trusted domains/OAuth state: INSPECIONADOS;
-- rollback Neon: PROVADO;
-- nenhum secret operacional publicado: PASS;
-- nenhum projeto alheio alterado: PASS;
-- nenhum dado real: PASS;
-- qualquer recurso de prova residual deve estar vazio de dados e explicitamente justificado ou removido;
-- CI GitHub: PASS se houver alteração versionada;
-- exatamente uma `NEXT_ACTION` ao encerrar F17.
-
-## Condição de bloqueio
-
-Se a sessão autenticada ainda não estiver acessível ao assistente com **todos** os controles exigidos, não executar writes de provider. Manter o blocker e repetir **somente a ação manual única** descrita no topo; não voltar a F15 e não criar uma nova work unit de workaround.
-
-## Fora do escopo
-
-Não:
-
-- provisionar o preview completo;
-- anexar `DATABASE_URL`, cookie secret ou credencial runtime à Vercel;
-- migrations/seed hospedados;
-- usuário Auth de teste;
-- smoke funcional Central/detalhe;
-- dados reais;
-- mutation/CRUD;
-- Q-009/Q-010.
+Executar conforme `tasks/F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01/SPEC.md`, ADR-006, ADR-007, `docs/architecture/SECURITY.md` e `docs/ai/CURRENT_STATE.md`.
 
 ## Critério de encerramento
 
-F17 fecha quando o control-plane autenticado estiver efetivamente acessível e as capacidades críticas forem provadas por write + readback + rollback sem revelar secrets. Até lá, **F17 permanece a única `NEXT_ACTION` canônica**.
+F17 fecha somente com Vercel e Neon em PASS por WRITE + READBACK + rollback observável, sem secrets ou dados reais. Enquanto o controle Neon de signup restrito permanecer indisponível, esta mesma F17 continua bloqueada e é a única `NEXT_ACTION`.

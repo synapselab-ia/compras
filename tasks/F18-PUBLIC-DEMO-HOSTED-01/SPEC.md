@@ -11,7 +11,7 @@ A frente privada/persistente está bloqueada por capacidade externa do Neon, mas
 
 ## Resultado esperado
 
-Disponibilizar uma URL Vercel funcional que execute deliberadamente o modo demo público da aplicação, sem qualquer env var operacional, secret, Neon Auth, PostgreSQL ou dado real.
+Disponibilizar um deployment Vercel funcional em modo demo, sem qualquer env var operacional, secret, Neon Auth, PostgreSQL ou dado real, preservando a Vercel Authentication já configurada quando ela se aplicar à URL.
 
 ## Implementação
 
@@ -19,25 +19,29 @@ Disponibilizar uma URL Vercel funcional que execute deliberadamente o modo demo 
 2. usar uma branch dedicada desta work unit;
 3. definir `framework: "nextjs"` em `vercel.json` para corrigir o preset `Other` observado no projeto;
 4. habilitar temporariamente `git.deploymentEnabled=true` para o deployment deliberado;
-5. aceitar target Vercel `production` exclusivamente porque ADR-008 classifica esta superfície como PUBLIC DEMO sem secrets/dados internos;
+5. exigir deployment Preview (`target` ausente/null); se surgir Production, falhar fechado antes de qualquer secret/dado;
 6. aguardar build e verificar o deployment;
-7. acessar a URL sem bypass e confirmar a identificação explícita de protótipo/dados fictícios;
-8. confirmar ausência de configuração persistente/operacional;
-9. restaurar `git.deploymentEnabled=false` na branch/repositório após a prova.
+7. confirmar que a URL continua atrás da Vercel Authentication já provada;
+8. confirmar pela lógica versionada e pelo build que, sem `COMPRAS_PERSISTENT_READ_ENABLED=true`, a aplicação usa apenas o modo demo e as fixtures fictícias;
+9. quando o canal autenticado permitir, fazer smoke da página sem transformar bypass em requisito do produto;
+10. restaurar `git.deploymentEnabled=false` na branch/repositório após a prova.
 
 ## Critérios de aceite
 
-- build Vercel `READY`;
-- aplicação acessível como demonstração pública;
-- banner contém `Protótipo com dados fictícios`;
+- deployment Vercel Preview `READY`;
+- Vercel Authentication continua interceptando acesso sem sessão;
+- build inclui a aplicação Next.js e conclui sem env/secret operacional;
+- lógica versionada mantém o banner `Protótipo com dados fictícios` no modo demo;
 - `COMPRAS_PERSISTENT_READ_ENABLED` não é habilitado;
 - nenhum `DATABASE_URL`, `NEON_AUTH_*`, token ou secret é criado/usado;
 - nenhum recurso Neon é criado;
-- nenhum dado real/interno/pré-publicação é exibido;
-- nenhum Shareable Link ou Protection Bypass é usado;
+- nenhum dado real/interno/pré-publicação é incluído;
+- nenhum Shareable Link persistente é criado como mecanismo de acesso do produto;
 - Git auto-deploy volta a `false` após a publicação deliberada;
 - GitHub CI da work unit passa;
 - CURRENT_STATE/NEXT_ACTION são atualizados com exatamente uma próxima ação.
+
+O smoke visual pós-proteção é evidência adicional desejável, mas sua ausência por limitação do canal autenticado não transforma o build em preview privado/persistente nem autoriza relaxar Deployment Protection.
 
 ## Fora do escopo
 
@@ -57,8 +61,9 @@ Rejeitar como PASS se:
 - qualquer secret/env operacional for necessário;
 - a aplicação entrar em modo persistente;
 - um dado não fictício aparecer;
-- a superfície for descrita como privada/operacional;
+- a superfície for descrita como produção operacional;
 - o build exigir relaxar controles de segurança;
+- Vercel Authentication for removida para facilitar acesso;
 - auto-deploy permanecer aberto depois da prova.
 
 ## Rollback

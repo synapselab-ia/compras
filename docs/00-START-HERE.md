@@ -22,36 +22,70 @@ A F15/F16 prepararam a fronteira do primeiro preview privado. A F17 executou pro
 - **Vercel:** PASS para Deployment Protection e variável Preview + branch, com rollback;
 - **Neon Managed Better Auth:** BLOCKED porque a superfície observada permite signup por padrão e não permite aplicar/read-back `disable_sign_up=true`; o Auth/projeto descartáveis foram removidos.
 
-A F17 está `ON HOLD` por capacidade externa objetiva. Não há ação manual de login/credencial pendente.
+A F17 permanece `ON HOLD` como evidência do blocker externo, mas deixou de ser caminho crítico depois da F19.
 
 ## F18 — demonstração hospedada
 
-O protocolo canônico determina que uma frente `ON HOLD` não deve bloquear uma work unit independente. Por isso a ADR-008 criou uma faixa hospedada de **DEMO / PUBLIC DATA** que não usa Auth interno, banco ou secrets e não altera os requisitos do futuro preview privado.
+A ADR-008 criou uma faixa independente de **DEMO / PUBLIC DATA** sem Auth interno, banco ou secrets.
 
-A F18 publicou com sucesso um deployment Vercel Preview da aplicação Next.js usando apenas o modo demo já versionado:
+A F18 publicou com sucesso um deployment Vercel Preview da aplicação Next.js usando apenas o modo demo:
 
 - deployment `READY`;
 - target Preview (`null`), não Production;
-- Vercel Authentication permaneceu na frente da URL;
+- Vercel Authentication na frente da URL;
 - nenhum `DATABASE_URL`, `NEON_AUTH_*`, token ou secret;
 - nenhum recurso Neon;
 - `COMPRAS_PERSISTENT_READ_ENABLED` não habilitado;
-- somente fixtures explicitamente fictícias;
-- Git auto-deploy restaurado para `false` após a publicação deliberada.
+- somente fixtures fictícias;
+- Git auto-deploy restaurado para `false`.
 
-Uma tentativa preliminar havia revelado dois riscos reais e foi encerrada fail-closed: a Vercel classificou o primeiro push como Production e, com preset `Other`, o build falhou procurando diretório `public`. Nenhum secret/dado foi anexado. A F18 corrigiu o framework por configuração versionada `framework: "nextjs"` e a publicação efetiva ocorreu como Preview.
+Essa faixa não é ambiente operacional e não autoriza dados reais.
 
-Essa demo hospedada é apenas uma superfície de UI com dados fictícios. Ela **não** significa que Auth, PostgreSQL hospedado, RLS hospedado ou dados reais estejam liberados.
+## F19 — Better Auth self-hosted adotado
 
-`REAL_DATA_ALLOWED = NO` permanece absoluto.
+A F19 revalidou documentação oficial Better Auth v1.6 e executou prova local/efêmera real.
+
+A prova demonstrou:
+
+- `disableSignUp=true` rejeita signup;
+- social providers/plugins laterais podem permanecer ausentes;
+- migrations Auth podem ser controladas pela aplicação;
+- bootstrap one-shot não roteável consegue criar somente a identidade fictícia necessária ao laboratório;
+- ao voltar para configuração fechada, novo signup continua negado;
+- usuário existente autentica por server API;
+- cookie emitido resolve sessão server-side;
+- sign-out emite invalidação de cookie.
+
+A CI passou em lint, typecheck, testes, build e toda a suíte PostgreSQL/RLS existente.
+
+A ADR-009 registrou **ADOPT**: o primeiro preview privado deve substituir Managed Neon Auth por Better Auth self-hosted.
+
+Neon pode continuar como PostgreSQL hospedado; a política de Auth passa a ser controlada e versionada pela aplicação.
+
+Fronteira escolhida:
+
+- catch-all Auth continua deny-all;
+- sign-in/sign-out continuam Server Actions;
+- `disableSignUp=true` no motor;
+- nenhum social provider/plugin de método lateral;
+- trusted origins estritos;
+- sessão validada server-side;
+- issuer estável `urn:compras:better-auth:self-hosted:v1`;
+- `subject` vem de `Better Auth user.id` validado;
+- Auth user não cria `app_user`/membership automaticamente;
+- schema Auth dedicado `auth`;
+- role Auth runtime separada, sem superuser/BYPASSRLS/ownership e sem grants no domínio;
+- `AUTH_DATABASE_URL` separado de `DATABASE_URL`;
+- secrets exclusivamente server-side;
+- migrations Auth geradas da versão pinada e versionadas antes de hospedagem.
 
 ## Próxima frente
 
 A única `NEXT_ACTION` está em `docs/ai/NEXT_ACTION.md`:
 
-`F19-AUTH-PORTABILITY-DESIGN-01 — Desenhar Better Auth self-hosted para remover dependência do signup controlado pelo Neon`.
+`F20-SELF-HOSTED-AUTH-IMPLEMENT-01 — Implementar Better Auth self-hosted mantendo a fronteira F14/F08`.
 
-A hipótese deve ser provada, não presumida. A documentação oficial atual do Better Auth expõe PostgreSQL, `emailAndPassword.disableSignUp`, `trustedOrigins` e schema/migrations controláveis pela aplicação. A F19 deve decidir se isso permite preservar a fronteira F14/F08/RLS e eliminar o blocker estrutural do Managed Neon Auth.
+A F20 deve transformar a decisão F19 em código e migrations reproduzíveis, ainda somente em local/CI efêmero e sem provisionamento hosted persistente.
 
 ## Modos da aplicação
 
@@ -71,10 +105,10 @@ Só existe quando `COMPRAS_PERSISTENT_READ_ENABLED=true` e todos os preflight/ga
 Fluxo de confiança:
 
 ```text
-sessão validada no servidor
+sessão Better Auth validada no servidor
 -> issuer + subject
 -> contexto transacional LOCAL
--> PostgreSQL com role runtime não privilegiada
+-> PostgreSQL com role de domínio não privilegiada
 -> RLS
 -> somente registros autorizados
 ```
@@ -83,13 +117,13 @@ Falha de Auth/banco/configuração não pode cair silenciosamente para demo.
 
 ## Banco canônico
 
-Migrations imutáveis atuais:
+Migrations imutáveis do domínio:
 
 - `database/migrations/0001_core_foundation.sql` — schema + default-deny/`FORCE RLS`;
 - `database/migrations/0002_trusted_identity_read_policies.sql` — helpers de identidade e primeiras policies de leitura;
 - `database/migrations/0003_team_member_directory.sql` — capability view mínima do diretório da equipe.
 
-Mudança estrutural nova usa nova migration; migration aplicada não é reescrita.
+F20 adicionará uma trilha separada de migrations Auth; não reescreverá as migrations do domínio.
 
 ## Fonte de verdade
 
@@ -125,7 +159,8 @@ Ordem mínima para uma nova sessão:
 - `docs/decisions/ADR-005-directory-capability-role-lifecycle.md`;
 - `docs/decisions/ADR-006-hosted-preview-boundary.md`;
 - `docs/decisions/ADR-007-private-auth-admission.md`;
-- `docs/decisions/ADR-008-public-demo-hosted-lane.md`.
+- `docs/decisions/ADR-008-public-demo-hosted-lane.md`;
+- `docs/decisions/ADR-009-self-hosted-better-auth.md`.
 
 ### Operação por IA
 
@@ -147,10 +182,10 @@ Ordem mínima para uma nova sessão:
 - IDs do cliente nunca definem identidade/escopo;
 - signup público não é aceito por conveniência;
 - dado real/interno/pré-publicação não entra no repositório público nem na faixa demo;
-- provider role privilegiada nunca é runtime normal;
+- role privilegiada nunca é runtime normal;
 - secrets nunca vão para Git, chat, URL, log, summary ou artifact público;
-- documentação de provider não substitui readback real quando o controle é crítico;
-- blocker externo objetivo entra `ON HOLD`; não deve paralisar work independente;
+- documentação de provider não substitui prova/readback quando o controle é crítico;
+- blocker externo objetivo entra `ON HOLD`; não deve paralisar trabalho independente;
 - falha protegida não vira sucesso demonstrativo silenciosamente;
 - toda mudança arquitetural relevante recebe ADR;
 - construir por slices pequenas, verificáveis e reversíveis.

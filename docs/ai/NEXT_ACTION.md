@@ -1,62 +1,63 @@
 # Next Action — Compras
 
-## F19-AUTH-PORTABILITY-DESIGN-01 — Desenhar Better Auth self-hosted para remover dependência do signup controlado pelo Neon
+## F20-SELF-HOSTED-AUTH-IMPLEMENT-01 — Implementar Better Auth self-hosted mantendo a fronteira F14/F08
 
-**Classe:** `T5 — arquitetura` com impacto de `T2 — segurança` e `T3 — integração externa`  
+**Classe:** `T1 — feature` com impacto de `T2 — segurança` e `T3 — integração externa`  
 **Estado:** READY  
-**Objetivo:** decidir, com documentação oficial atual e prova local/efêmera, se o preview privado deve substituir o Managed Better Auth bloqueado por Better Auth self-hosted em PostgreSQL controlado, com signup fechado por configuração versionada.
+**Objetivo:** substituir o adaptador Managed Neon Auth no código por Better Auth self-hosted, com signup negado por configuração versionada, schema/roles/migrations reproduzíveis e a mesma fronteira server-side + RLS, sem provisionar ambiente hosted persistente.
 
 Esta é a única `NEXT_ACTION` canônica.
 
 ## Por que esta ação agora
 
-A F17 foi movida para `ON HOLD`: a sessão autenticada real provou que a superfície Managed Better Auth disponível nesta conta/região não permite WRITE + READBACK de `disable_sign_up=true`. Repetir a mesma tentativa não produz progresso.
+A F19 terminou em **ADOPT** e a ADR-009 registrou a decisão arquitetural:
 
-A F18 abriu uma faixa independente de demonstração hospedada e concluiu um deployment Preview Next.js `READY` com dados exclusivamente fictícios, sem Auth, banco ou secrets. O preview demo permanece atrás da Vercel Authentication e Git auto-deploy voltou a ficar desabilitado.
+- o Managed Neon Auth observado permanece incapaz de impor/read-back signup restrito e fica `ON HOLD` como rota;
+- Better Auth self-hosted provou localmente `disableSignUp=true` com signup rejeitado;
+- a prova também validou bootstrap one-shot não roteável, sign-in de usuário existente, sessão server-side e sign-out;
+- PostgreSQL, schema separado, role Auth runtime mínima e migrations controladas permitem preservar a fronteira F14/F08/RLS;
+- nenhum provider social/plugin lateral é necessário.
 
-O próximo problema útil é remover a dependência arquitetural da capacidade ausente do Managed Neon Auth sem enfraquecer a admissão privada.
-
-## Hipótese a testar
-
-A documentação oficial atual do Better Auth expõe diretamente:
-
-- PostgreSQL como backend;
-- `emailAndPassword.enabled=true`;
-- `emailAndPassword.disableSignUp=true`;
-- `trustedOrigins` explícitos;
-- social providers somente quando configurados;
-- plugins somente quando adicionados;
-- geração/migration do schema Auth.
-
-A F19 deve provar se isso permite manter ou melhorar a fronteira F14/F08: sign-in email/senha por Server Action, sign-out, sessão server-side, catch-all Auth deny-all, identidade derivada no servidor e autorização final por `app_users` + membership + RLS.
+A aplicação ainda usa `@neondatabase/auth`; portanto a decisão precisa virar implementação testada antes de qualquer novo provisionamento privado.
 
 ## Execução obrigatória
 
 1. recuperar estado/contexto e validar manifest;
-2. revalidar documentação oficial atual do Better Auth/Next.js/PostgreSQL;
-3. inspecionar `@neondatabase/auth` atual e a interface consumida por F14;
-4. desenhar schema/role/connection boundary para Auth separado do domínio Compras;
-5. definir signup fechado, trusted origins, ausência de OAuth/plugins e bootstrap administrativo do primeiro usuário fictício;
-6. executar prova local/efêmera suficiente para verificar que signup é negado por configuração real;
-7. red-team de endpoints laterais, privilégios de banco, sessão, migrations, secrets e compatibilidade com Vercel;
-8. registrar decisão em nova ADR: `ADOPT`, `REJECT` ou `BLOCKED` com evidência;
-9. atualizar checkpoint deixando exatamente uma nova NEXT_ACTION.
+2. revalidar documentação oficial Better Auth v1.6/versão escolhida e PostgreSQL/Next.js quando necessário;
+3. promover `better-auth` a dependência direta com versão exata e adicionar dependências PostgreSQL necessárias;
+4. implementar a instância Better Auth em módulo `server-only`;
+5. preservar a API estreita de `private-admission`/`readPrivateAuthSessionState` e remover dependência Managed Neon somente após equivalência;
+6. manter `/api/auth/[...path]` deny-all;
+7. configurar `emailAndPassword.enabled=true`, `disableSignUp=true`, `socialProviders={}`, trusted origins estritos e sem plugin de método lateral;
+8. implementar/testar cookies de Server Actions com `nextCookies()` oficial ou forwarding explícito;
+9. fixar issuer server-side `urn:compras:better-auth:self-hosted:v1`;
+10. separar `AUTH_DATABASE_URL` de `DATABASE_URL`;
+11. gerar/versionar schema Auth da versão pinada e criar boundary de schema/roles/grants em PostgreSQL efêmero;
+12. implementar/testar bootstrap one-shot somente fictício e não roteável;
+13. provar signup negado, sign-in, sessão, sign-out, ausência de auto-`app_user`/membership e isolamento Auth/domínio;
+14. executar red-team integral da SPEC;
+15. rodar lint, typecheck, testes, PostgreSQL/RLS e build;
+16. revisar diff e atualizar checkpoint deixando exatamente uma próxima ação.
 
 ## Invariantes
 
 - `REAL_DATA_ALLOWED = NO`;
-- nenhum secret em Git/chat/log/artifact público;
+- nenhum recurso Neon/Vercel persistente novo nesta work unit;
+- nenhum secret real em Git/chat/log/artifact;
 - nenhum usuário real;
-- nenhuma autorização derivada do browser;
-- autenticar não cria automaticamente `app_users` ou memberships;
-- não habilitar social provider/plugin por conveniência;
-- não usar role PostgreSQL privilegiada como runtime normal;
-- F17 permanece documentada como evidência do blocker do Managed Neon Auth, mas deixa de ser frente ativa enquanto estiver ON HOLD.
+- nenhuma rota pública de signup/OAuth/OTP/reset/admin;
+- autenticação não cria autorização;
+- role Auth runtime não é owner/superuser/BYPASSRLS e não lê domínio;
+- role do domínio não ganha acesso Auth por conveniência;
+- identidade só nasce de sessão server-side;
+- falha Auth não cai silenciosamente para demo no caminho persistente;
+- Vercel Authentication continua obrigatória para o preview hospedado existente;
+- F17 continua ON HOLD, não volta a ser frente ativa por rotina.
 
 ## Fonte da tarefa
 
-Executar `tasks/F19-AUTH-PORTABILITY-DESIGN-01/SPEC.md`, ADR-006, ADR-007, ADR-008, `docs/architecture/SECURITY.md` e `docs/architecture/DATABASE.md`.
+Executar `tasks/F20-SELF-HOSTED-AUTH-IMPLEMENT-01/SPEC.md`, ADR-009, ADR-007, ADR-006, `docs/architecture/SECURITY.md` e `docs/architecture/DATABASE.md`.
 
 ## Critério de encerramento
 
-A F19 termina somente com uma decisão arquitetural verificável e uma estratégia de enforcement que mantenha signup fechado por construção, preserve a identidade server-side/RLS e não dependa de capacidade indisponível do provider atual.
+F20 fecha somente quando Better Auth self-hosted estiver implementado no repositório e provado em CI/local efêmero como substituto seguro do adaptador Managed Neon, sem provisionamento hosted e sem dados reais. Ao final deve existir exatamente uma nova `NEXT_ACTION` executável para o preflight/provisionamento privado fictício.

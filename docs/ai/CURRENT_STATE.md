@@ -1,132 +1,155 @@
 # Current State — Compras
 
-**PROJECT_STATUS:** F18_HOSTED_DEMO_READY_PRIVATE_PREVIEW_ON_HOLD  
-**CURRENT_PHASE:** F18 concluída; F17 ON HOLD por capacidade externa do Neon; F19 pronta  
+**PROJECT_STATUS:** F19_AUTH_PORTABILITY_ADOPTED_F20_READY  
+**CURRENT_PHASE:** F19 concluída / ADOPT; F20 pronta; F17 ON HOLD  
 **REPO_VISIBILITY:** PUBLIC  
-**APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_PRIVATE_PERSISTENT_PATH_IMPLEMENTED_NOT_HOSTED  
-**DATABASE_STATUS:** PROTECTED_READ_MODEL_AND_TEAM_DIRECTORY_VALIDATED_IN_EPHEMERAL_CI  
-**AUTH_STATUS:** PRIVATE_SIGNIN_SIGNOUT_AND_DENY_ALL_ADMISSION_IMPLEMENTED_NOT_PROVISIONED  
+**APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_PRIVATE_AUTH_MIGRATION_DESIGNED_NOT_IMPLEMENTED  
+**DATABASE_STATUS:** PROTECTED_DOMAIN_READ_MODEL_VALIDATED_AUTH_SCHEMA_NOT_YET_IMPLEMENTED  
+**AUTH_STATUS:** SELF_HOSTED_BETTER_AUTH_ADOPTED_DESIGN_PROVEN_NOT_YET_RUNTIME  
 **DEPLOYMENT_STATUS:** VERCEL_PREVIEW_READY_DEMO_ONLY_PROTECTED_NO_SECRETS_GIT_AUTODEPLOY_DISABLED  
 **REAL_DATA_ALLOWED:** NO  
 **CONTEXT_STATUS:** VALID  
 **FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`  
 **LAST_GOOD_COMMIT:** `6c3891d0e4839daa067741bbcf5eafdea542a329`  
 **LAST_GOOD_CI_RUN:** `33670574481`  
-**F18_INPUT_COMMIT:** `848b9fcf31760e86fb0f7a164025fb28eed97c73`  
-**F18_INPUT_CI_RUN:** `33798974291`  
-**F18_DEPLOYED_COMMIT:** `cb874445f97f851871090cb51f6ef3364520da37`  
-**F18_DEPLOYMENT_ID:** `dpl_BqWDpoiotNstrTDhtU3mJ4k9pCZa`  
-**F18_DEPLOYMENT_STATE:** READY / Preview (`target = null`)  
-**ON_HOLD:** `F17-B2` — Managed Better Auth observado não permite WRITE + READBACK de `disable_sign_up=true`  
+**F19_INPUT_COMMIT:** `50fd91ced1f5b88761b241c3e9626a7defbb44a5`  
+**F19_INPUT_CI_RUN:** `33800687046`  
+**F19_PROOF_COMMIT:** `22281e8587ad4f84eae69add3d1e46c64701b70a`  
+**F19_PROOF_CI_RUN:** `33804487955`  
+**F19_DECISION:** `ADOPT` — ADR-009  
+**ON_HOLD:** `F17-B2` — Managed Better Auth observado não permite WRITE + READBACK de `disable_sign_up=true`
 
 ## Estado real
 
-A F17 deixou de ser a frente ativa e passou a `ON HOLD` conforme a regra canônica para dependência externa objetiva. A prova real já demonstrou:
+A F19 foi executada pelo protocolo canônico a partir da `main` `50fd91ced1f5b88761b241c3e9626a7defbb44a5`, cujo CI `33800687046` estava integralmente em PASS. O `CONTEXT_MANIFEST` permaneceu válido: os 10 inputs estáveis continuam com os blobs esperados.
+
+A frente ativa era a PR/branch F19. Não houve necessidade de reabrir F17 nem de escrever em Vercel/Neon.
+
+## F17 — ON HOLD
+
+A prova provider-side anterior continua válida:
 
 - Vercel control plane: PASS;
-- Neon Managed Better Auth: BLOCKED / fail-closed por indisponibilidade do controle obrigatório de signup;
-- Auth e projeto Neon descartáveis: removidos;
-- nenhum dado real, usuário, migration hospedada ou secret foi criado.
+- Managed Neon Auth: BLOCKED porque signup restrito não pôde ser aplicado/read-back;
+- Auth/projeto Neon descartáveis foram removidos;
+- nenhum dado real, usuário ou secret foi criado.
 
-Como `ON HOLD` não deve paralisar work units independentes, e por override explícito do usuário para continuar avançando, a F18 criou uma faixa de demonstração hospedada conforme ADR-008. Essa faixa não substitui o futuro preview privado/persistente.
+A F17 permanece `ON HOLD` como evidência histórica. Ela não é mais dependência do caminho crítico depois da decisão F19.
 
-## F18 — Hosted demo
+## F18 — Hosted demo preservada
 
-### Classificação
+A demonstração Vercel continua sendo somente UI/dados fictícios:
 
-- conteúdo permitido: PUBLIC / FICTITIOUS ONLY;
-- `REAL_DATA_ALLOWED = NO`;
-- sem PostgreSQL hospedado;
-- sem Neon Auth;
-- sem `DATABASE_URL`;
-- sem `NEON_AUTH_BASE_URL`/`NEON_AUTH_COOKIE_SECRET`;
-- sem `COMPRAS_PERSISTENT_READ_ENABLED=true`;
-- sem token/secret operacional.
+- deployment Preview `READY`;
+- Vercel Authentication na frente da URL;
+- nenhum banco/Auth interno/secret;
+- `COMPRAS_PERSISTENT_READ_ENABLED` não habilitado;
+- Git auto-deploy restaurado para `false`.
 
-O código continua definindo modo `demo` quando `COMPRAS_PERSISTENT_READ_ENABLED` está ausente ou `false`. A página raiz identifica esse estado como `Protótipo com dados fictícios` e `Persistência operacional desabilitada neste ambiente`. As fixtures versionadas usam somente objetos/pessoas/setores explicitamente demonstrativos.
+F19 não alterou recurso provider, deployment ou configuração hosted.
 
-### Preflight adversarial que encontrou problema real
+## F19 — Auth Portability Design
 
-Antes da F18 formal, uma tentativa controlada na branch `f18-demo-hosted-preview` habilitou Git deployment para observar o comportamento real do projeto Vercel preservado.
+### Documentação oficial revalidada
 
-A Vercel classificou aquela primeira tentativa como `production`. O agente falhou fechado imediatamente e restaurou `git.deploymentEnabled=false` sem anexar qualquer env/secret/dado.
+A documentação Better Auth v1.6 foi revalidada para PostgreSQL, database/migrations, options, server API, email/password, Next.js, session e rate limit.
 
-Esse deployment terminou `ERROR` com `STATIC_BUILD_NO_OUT_DIR`: o projeto havia sido criado com preset `Other`/`framework=null` e procurou um diretório `public`. Ele nunca ficou `READY`/live e não continha configuração sensível.
+Os pontos materiais confirmados foram:
 
-Esse achado foi incorporado à ADR-008 e à SPEC F18 em vez de ser contornado com secrets ou configuração manual opaca.
+- PostgreSQL direto e schema não-default via `search_path`;
+- migrations/schema controláveis pela aplicação;
+- `emailAndPassword.disableSignUp=true`;
+- `trustedOrigins` explícitos;
+- `auth.api.signInEmail`, `getSession` e `signOut` server-side;
+- cookies de Server Actions precisam de integração/forwarding correto;
+- social providers/plugins são opt-in;
+- cookie cache é opt-in;
+- `auth.api` server-side não herda o rate limit client-side.
 
-### Correção F18
+### Prova executável
 
-Na branch dedicada `f18-public-demo-hosted-01`:
+`src/server/auth/self-hosted-proof.test.ts` executou Better Auth real em SQLite em memória com somente valores fictícios.
 
-1. ADR-008 definiu a faixa demo independente e seus invariantes;
-2. `vercel.json` passou a declarar explicitamente `framework: "nextjs"`;
-3. Git deployment foi habilitado somente no commit deliberado `cb874445f97f851871090cb51f6ef3364520da37`;
-4. a Vercel criou o deployment `dpl_BqWDpoiotNstrTDhtU3mJ4k9pCZa` com `target = null`, ou seja, não Production;
-5. o build detectou Next.js 16.3.3, compilou, executou TypeScript, gerou as rotas e concluiu `READY`;
-6. `git.deploymentEnabled` foi restaurado para `false` depois da publicação deliberada;
-7. após essa restauração, nenhum novo deployment foi criado.
+O commit final da prova `22281e8587ad4f84eae69add3d1e46c64701b70a` passou a CI `33804487955`:
 
-O projeto Vercel continua com nome provisório `compras-f17-control-proof`; ele foi reutilizado para evitar recriação/retrabalho. Renomear não faz parte da F18.
+- `verify`: PASS — lint, typecheck, testes e Next.js build;
+- `database`: PASS — toda a suíte PostgreSQL/RLS existente.
 
-### Deployment Protection
+A prova demonstrou:
 
-A URL do deployment Preview continua interceptada pela Vercel Authentication: uma requisição sem sessão recebeu `302` para o fluxo SSO da Vercel e `x-robots-tag: noindex`. A proteção não foi removida para facilitar a demo.
+1. signup rejeitado com `disableSignUp=true` antes de qualquer tabela Auth existir;
+2. ausência de social providers/plugins laterais na instância de prova;
+3. migrations Better Auth programáticas em storage descartável;
+4. bootstrap one-shot não roteável em instância separada;
+5. novo signup continuou negado ao retornar para a configuração guardada;
+6. usuário fictício existente autenticou por server API;
+7. cookie emitido resolveu sessão server-side e `subject`;
+8. sign-out emitiu cookie de expiração e a sessão antiga deixou de resolver.
 
-Uma URL temporária de compartilhamento foi gerada somente durante tentativa de smoke automatizado, sem ser persistida no GitHub/checkpoint e sem conter acesso a dados sensíveis; o canal ainda retornou para o fluxo SSO. Ela não é mecanismo de acesso do produto e expira automaticamente.
+Nenhum usuário real, secret operacional, banco hospedado, recurso Neon ou dado de contratação foi usado.
 
-O conteúdo pós-proteção não foi declarado como visualmente smoke-tested nesta sessão, pois o canal disponível não concluiu o handshake SSO. Isso não autoriza remover a proteção. O build hospedado, a lógica demo versionada, a CI e a barreira externa foram verificados separadamente.
+## Decisão F19 — ADOPT
 
-## Red-team F18
+ADR-009 adota Better Auth self-hosted e remove Managed Neon Auth do caminho crítico.
 
-- Production acidental: detectada na tentativa preliminar e tratada fail-closed; a publicação F18 efetiva foi Preview (`target=null`);
-- framework errado: detectado pelo erro `STATIC_BUILD_NO_OUT_DIR`; corrigido por `framework: "nextjs"` versionado;
-- secret/env para “fazer funcionar”: rejeitado; nenhum foi criado;
-- persistência acidental: não habilitada; modo demo permanece default explícito;
-- dado real/interno/pré-publicação: nenhum;
-- Neon project/Auth: nenhum criado em F18;
-- remoção da Vercel Authentication: rejeitada; proteção permaneceu ativa;
-- Shareable Link como mecanismo permanente: rejeitado;
-- Git auto-deploy residual: removido; estado final `deploymentEnabled=false`;
-- projeto Vercel alheio: nenhum alterado.
+Neon pode continuar como PostgreSQL hospedado, porém a aplicação passa a controlar a política Auth versionada.
+
+Fronteira escolhida:
+
+- `/api/auth/[...path]` continua deny-all;
+- sign-in/sign-out continuam Server Actions estreitas;
+- sessão é validada server-side;
+- `issuer = urn:compras:better-auth:self-hosted:v1`;
+- `subject = Better Auth user.id` vindo de sessão validada;
+- `app_users`/membership continuam autorização separada e nunca nascem automaticamente de Auth;
+- schema Auth dedicado `auth`;
+- migrator/owner separado de runtime Auth;
+- runtime Auth sem superuser/BYPASSRLS/ownership e sem grants de domínio;
+- `AUTH_DATABASE_URL` separado de `DATABASE_URL`;
+- `BETTER_AUTH_SECRET` e `COMPRAS_AUTH_BASE_URL` server-only;
+- `disableSignUp=true`, `socialProviders={}`, trusted origins estritos;
+- nenhum plugin de método lateral;
+- integration plugin `nextCookies()` pode ser usado apenas para transporte de cookies se F20 o provar corretamente;
+- cookie cache não deve ser habilitado no primeiro preview.
+
+O proof usou o `better-auth@1.6.23` transitivo já fixado no lockfile. Isso não é aceito para runtime final: F20 deve transformar Better Auth em dependência direta com versão exata antes da implementação.
+
+## Red-team F19
+
+- signup por endpoint direto apesar de botão ausente: rejeitado por dupla barreira planejada, deny-all HTTP + `disableSignUp=true`;
+- OAuth/social/plugin lateral: não configurados;
+- wildcard/localhost hosted: proibidos;
+- Auth user ganhando autorização automaticamente: proibido;
+- role Auth privilegiada ou com acesso ao domínio: proibida;
+- reset/OTP/magic link/Admin API públicos: fora da superfície HTTP;
+- secret no browser: configuração deve permanecer `server-only`;
+- subject fornecido pelo cliente: rejeitado;
+- cookie de Server Action presumido: identificado como gate explícito F20;
+- migration via painel/manual/latest: rejeitada; versão pinada + SQL versionado;
+- dependência transitiva: identificada e promovida a gate da F20;
+- brute force: identificado que `auth.api` server-side não recebe rate limit client-side; Vercel Authentication continua obrigatória no primeiro preview e exposição mais ampla exigirá controle deliberado;
+- cookie cache/revogação atrasada: cookie cache não será habilitado no primeiro preview.
 
 ## Verificação
 
-### GitHub
-
-- `main` de entrada F18: `848b9fcf31760e86fb0f7a164025fb28eed97c73`;
-- CI de entrada `33798974291`: PASS (`verify` e `database`, incluindo lint/typecheck/test/build e testes PostgreSQL/RLS);
-- nenhuma PR concorrente aberta no início da F18;
-- contexto estável permaneceu válido.
-
-### Vercel
-
-- projeto reutilizado: identificado e ligado a `synapselab-ia/compras`;
-- deployment F18: `READY`;
-- target F18: Preview (`null`), não Production;
-- build Next.js: PASS;
-- Vercel Authentication: observada por redirect SSO;
-- env/secret operacional criado por F18: NÃO;
-- Git auto-deploy final: desabilitado no repositório.
-
-### Neon
-
-Nenhuma escrita ou recurso Neon foi criado em F18. O blocker F17 permanece evidência histórica válida e não foi reexecutado por inércia.
-
-## Decisão de arquitetura para continuar avançando
-
-Esperar indefinidamente pelo controle Managed Better Auth não é mais a única rota de progresso.
-
-A documentação oficial atual do Better Auth confirma PostgreSQL direto, configuração `emailAndPassword.disableSignUp`, `trustedOrigins` e schema/migrations controláveis pela aplicação. Por isso a próxima work unit é F19, que deve decidir se o Auth deve ser self-hosted em PostgreSQL e assim remover a dependência do controle indisponível do Managed Neon Auth, preservando F14/F08/RLS.
-
-Isso é uma hipótese arquitetural a provar, não uma autorização para hospedar dados reais.
+- `main` de entrada: `50fd91ced1f5b88761b241c3e9626a7defbb44a5`;
+- CI de entrada `33800687046`: PASS;
+- `CONTEXT_MANIFEST`: VALID;
+- documentação oficial Better Auth: REVALIDADA;
+- runtime F14 atual: INSPECIONADO;
+- catch-all deny-all: INSPECIONADO;
+- proof F19 final: PASS;
+- CI proof `33804487955`: PASS em verify + database;
+- provider writes durante F19: NENHUM;
+- secret operacional: NENHUM;
+- usuário/dado real: NENHUM.
 
 ## Last good
 
-O last-good funcional privado continua F14/`6c3891d0e4839daa067741bbcf5eafdea542a329` com CI `33670574481` até que uma work unit hospedada persistente passe todos os gates.
+O last-good funcional privado continua F14/`6c3891d0e4839daa067741bbcf5eafdea542a329` com CI `33670574481` até que o novo Auth self-hosted seja implementado e o preview persistente passe todos os gates.
 
-A F18 adiciona um last-good **de demonstração hospedada** separado: deployment Vercel `dpl_BqWDpoiotNstrTDhtU3mJ4k9pCZa`, commit `cb874445f97f851871090cb51f6ef3364520da37`, estado `READY`, sem secrets, Auth interno, banco ou dados reais.
+A F18 continua sendo o last-good de demonstração hospedada separado.
 
 ## Próxima ação
 
-Executar somente `F19-AUTH-PORTABILITY-DESIGN-01` conforme `docs/ai/NEXT_ACTION.md` e sua SPEC. F17 permanece ON HOLD e só volta a ser frente ativa se a rota Managed Neon Auth voltar a ser escolhida e sua condição `RESUME_WHEN` estiver satisfeita.
+Executar somente `F20-SELF-HOSTED-AUTH-IMPLEMENT-01` conforme `docs/ai/NEXT_ACTION.md`, `tasks/F20-SELF-HOSTED-AUTH-IMPLEMENT-01/SPEC.md` e ADR-009.

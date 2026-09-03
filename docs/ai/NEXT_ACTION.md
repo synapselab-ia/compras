@@ -8,13 +8,13 @@
 
 ## Reinspeção mais recente
 
-Em 2026-09-03, partindo da `main` em `645d53d0e73ffc2a6bd11a802a5e3bce1fe7d106` com CI `33770194375` em PASS, esta work unit foi reexecutada novamente até sua condição explícita de bloqueio.
+Em 2026-09-03, partindo da `main` em `9096e0ea83e0491bfe3d25cedade1fc422b4c53d` com CI `33771574243` em PASS, esta work unit foi reexecutada novamente até sua condição explícita de bloqueio.
 
 O estado permanece:
 
 - Vercel e Neon estão acessíveis por superfícies oficiais autenticadas de inspeção, mas não pelo conjunto completo de controles exigidos pela F17;
 - o conector Vercel continua com 24 ferramentas e sem write/readback de Deployment Protection, env vars Preview + branch e deprovisionamento controlado;
-- a superfície Neon Auth agora expõe mais inspeção/gestão (`get_neon_auth_config`, OAuth, trusted domains e enable/disable), mas `update_auth_config` continua restrito ao nome da aplicação e não há write + readback de `/auth/email_and_password` e `/auth/plugins`;
+- a superfície Neon Auth continua expondo inspeção/gestão parcial (`get_neon_auth_config`, OAuth, trusted domains e enable/disable), mas `update_auth_config` segue restrito ao nome da aplicação e não há write + readback de `/auth/email_and_password` e `/auth/plugins`;
 - não existe CLI `vercel`, `neon` ou `neonctl` autenticada no runtime;
 - não existem variáveis de autenticação Vercel/Neon exportadas ao shell;
 - nenhuma integração adicional compatível foi encontrada;
@@ -92,6 +92,7 @@ Atacar deliberadamente:
 - criação de projeto Vercel que gera production deployment/alias inesperado;
 - protection aplicada somente a Preview enquanto production surface recebe app;
 - env var sem branch scope apesar de aparentar Preview-only;
+- Shareable Link/protection bypass usado como falso substituto de Deployment Protection;
 - secret visível em resposta/UI/log e risco de persistência acidental;
 - Neon Auth criado com signup default antes do PATCH de bloqueio;
 - `get_neon_auth_config` ou enable/disable de Auth usados como falso substituto para o PATCH inexistente de `email_and_password`/plugins;

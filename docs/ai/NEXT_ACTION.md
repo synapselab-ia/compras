@@ -8,13 +8,13 @@
 
 ## Reinspeção mais recente
 
-Em 2026-09-03, partindo da `main` em `c682c9a89d1b05d1b583117f0493a9b70fbcead9` com CI `33761007044` em PASS, esta work unit foi reexecutada novamente até sua condição explícita de bloqueio.
+Em 2026-09-03, partindo da `main` em `6506bf19f49cd275c2260201572d6c5a46df7912` com CI `33765781900` em PASS, esta work unit foi reexecutada novamente até sua condição explícita de bloqueio.
 
 O estado permanece:
 
 - Vercel e Neon estão acessíveis somente pelas superfícies de conector já conhecidas;
-- o conector Vercel continua sem write/readback de Deployment Protection, env vars Preview + branch e deprovisionamento;
-- o conector Neon continua sem PATCH de `/auth/email_and_password` e `/auth/plugins`;
+- o conector Vercel continua com 24 ferramentas e sem write/readback de Deployment Protection, env vars Preview + branch e deprovisionamento;
+- o conector Neon Auth continua com 15 ferramentas e sem PATCH de `/auth/email_and_password` e `/auth/plugins`;
 - não existe CLI `vercel`, `neon` ou `neonctl` autenticada no runtime;
 - não existem variáveis de autenticação Vercel/Neon exportadas ao shell;
 - nenhuma integração adicional compatível foi encontrada;

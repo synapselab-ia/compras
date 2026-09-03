@@ -1,7 +1,7 @@
 # F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01 — Estabelecer sessão autenticada de control-plane para Vercel e Neon
 
 **Classe:** T3 — integração externa, com impacto de T2 — segurança  
-**Estado:** MANUAL_ACTION_REQUIRED após F16  
+**Estado:** BLOCKED_EXTERNAL_PROVIDER_CAPABILITY após prova autenticada de 2026-09-03
 **Dependências:** F13, F14, F15, F16, ADR-006, ADR-007  
 **Classificação dos dados permitidos:** PUBLIC / FICTITIOUS ONLY
 

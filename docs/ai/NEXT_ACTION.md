@@ -8,7 +8,7 @@
 
 ## Reinspeção mais recente
 
-Em 2026-09-03, partindo da `main` em `eaa7f9df8f669b49b5266faa1b170e1f5e53bbb3` com CI `33767973259` em PASS, esta work unit foi reexecutada novamente até sua condição explícita de bloqueio.
+Em 2026-09-03, partindo da `main` em `1b07ee26b2b47f7aa52b4e2e0b0d581974879442` com CI `33768977830` em PASS, esta work unit foi reexecutada novamente até sua condição explícita de bloqueio.
 
 O estado permanece:
 

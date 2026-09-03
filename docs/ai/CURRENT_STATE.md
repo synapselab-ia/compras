@@ -17,9 +17,9 @@
 
 ## Estado real
 
-A work unit `F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01` foi reexecutada novamente em 2026-09-03, desta vez partindo da `main` em `a6595d6761a8f8f2d3a1a0572a76f47223c00768`, até sua condição explícita de bloqueio.
+A work unit `F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01` foi reexecutada novamente em 2026-09-03 pelo protocolo canônico, partindo da `main` em `c682c9a89d1b05d1b583117f0493a9b70fbcead9`, até sua condição explícita de bloqueio.
 
-A pré-condição necessária ainda não existe nesta sessão: não há uma superfície oficial autenticada e observável que permita escrever e ler de volta os controles críticos de Vercel e Neon sem transferir credenciais para o chat ou para superfícies públicas do repositório.
+A pré-condição necessária continua ausente: esta sessão não oferece uma superfície oficial autenticada e observável capaz de escrever e ler de volta os controles críticos de Vercel e Neon sem transferir credenciais para o chat, GitHub público ou outro artefato persistente.
 
 Nenhum projeto, deployment, banco, branch Neon, Managed Better Auth, usuário, secret, migration hospedada ou seed de Compras foi criado nesta tentativa. Nenhum projeto existente e alheio foi alterado.
 
@@ -27,13 +27,12 @@ A aplicação permanece no last-good funcional F14: sign-in email/senha e sign-o
 
 ## Recuperação e contexto desta tentativa F17
 
-- `main` recuperada em `a6595d6761a8f8f2d3a1a0572a76f47223c00768`;
+- `main` recuperada em `c682c9a89d1b05d1b583117f0493a9b70fbcead9`;
 - nenhuma PR aberta foi encontrada;
 - nenhuma branch concorrente mais nova da F17 foi encontrada; apenas checkpoints históricos já integrados;
-- `CONTEXT_MANIFEST` foi revalidado contra os blobs atuais;
-- todos os 10 inputs estáveis continuam iguais aos hashes esperados;
+- os 10 inputs estáveis do `CONTEXT_MANIFEST` continuam exatamente iguais aos hashes esperados;
 - `CONTEXT_STATUS = VALID`;
-- CI de entrada `33752929644`: PASS (`verify` e `database`);
+- CI de entrada `33761007044`: PASS (`verify` e `database`);
 - `REAL_DATA_ALLOWED = NO` permaneceu ativo durante toda a tentativa.
 
 ## Reinspeção Vercel
@@ -46,18 +45,9 @@ A conta e o conector oficial disponível foram reinspecionados:
 - o conector continua com 24 ferramentas;
 - permanecem ausentes operações para criação/importação explícita do projeto `compras`, escrita + readback de `ssoProtection`/Vercel Authentication, criação/listagem de env vars Preview + branch e deprovisionamento controlado.
 
-A documentação oficial atual foi revalidada e confirma que o provider possui essas capacidades por REST API/SDK/CLI:
+A documentação oficial atual foi revalidada e confirma que o provider possui essas capacidades por REST API/SDK/CLI: criação de projeto, `ssoProtection`, env vars `target: ["preview"]` com `gitBranch`, leitura/remoção de env vars e remoção de deployments/projetos.
 
-- criação explícita de projeto;
-- atualização de Vercel Authentication por `ssoProtection`;
-- env vars com `target: ["preview"]` e `gitBranch`;
-- leitura/remoção de environment variables;
-- remoção de deployments e projetos;
-- CLI capaz de exibir/alterar project protection.
-
-Portanto a capacidade do provider continua documentada, mas a sessão atual continua incapaz de executar write + readback autenticados desses controles.
-
-`deploy_to_vercel` não foi chamado. Fazer deploy genérico antes de estabelecer protection observável continuaria invertendo a ordem fail-closed definida por ADR-006/F17.
+`deploy_to_vercel` não foi chamado. Fazer deploy genérico antes de estabelecer e provar protection continuaria invertendo a ordem fail-closed definida por ADR-006/F17.
 
 ## Reinspeção Neon
 
@@ -67,18 +57,11 @@ A organização e o conector Neon foram reinspecionados:
 - os projetos existentes continuam alheios;
 - não existe projeto Neon dedicado a Compras;
 - o conector continua permitindo projetos, branches, SQL, roles, Auth base, usuários, OAuth e trusted domains;
-- `update_auth_config` continua aceitando apenas `name` e não expõe os PATCH exigidos para email/senha e plugins.
+- `update_auth_config` continua aceitando apenas `name` e não expõe os PATCH exigidos para `/auth/email_and_password` e `/auth/plugins`.
 
-A documentação oficial atual de Managed Better Auth foi revalidada e continua confirmando endpoints branch-scoped para:
+A documentação oficial atual de Managed Better Auth foi revalidada e continua confirmando os endpoints branch-scoped de email/senha, plugins, OAuth, domains e teardown de Auth.
 
-- `/auth/email_and_password` — GET/PATCH;
-- `/auth/plugins` — GET/PATCH;
-- plugins específicos como magic link e phone number;
-- `/auth/oauth_providers`;
-- `/auth/domains`;
-- disable de Auth, inclusive com opção de remoção dos dados Auth.
-
-Assim como no Vercel, o provider possui a superfície necessária, mas ela continua fora das operações autenticadas disponíveis nesta sessão.
+Não foi criado projeto Neon nem provisionado Auth porque F17 exige que `disable_sign_up=true` e métodos laterais possam ser escritos e lidos de volta na mesma sessão controlada antes de qualquer exposição.
 
 ## Runtime e integrações adicionais
 
@@ -89,45 +72,39 @@ O runtime foi reinspecionado sem revelar valores de ambiente:
 - `neonctl`: AUSENTE;
 - variáveis de ambiente com nomes de autenticação Vercel/Neon exportadas ao shell: AUSENTES.
 
-O catálogo de plugins foi novamente pesquisado para:
-
-- gerenciamento Vercel de project/protection/env;
-- configuração Neon Auth `email_and_password`/plugins;
-- browser/web automation.
-
-Nenhuma integração instalável compatível foi encontrada.
+O catálogo de plugins foi novamente pesquisado para gerenciamento Vercel de project/protection/env, configuração Neon Auth `email_and_password`/plugins e browser/web automation. Nenhuma integração instalável compatível foi encontrada.
 
 ## Red-team desta tentativa F17
 
-A solução foi novamente atacada contra os falsos desbloqueios previstos no SPEC:
+Foram novamente rejeitados os falsos desbloqueios previstos no SPEC:
 
-- conector autenticado que apenas lê conta/projeto, sem escrita de protection/config crítica: INSUFICIENTE;
-- documentação pública usada como substituto de readback do estado real da conta: REJEITADO;
-- `deploy_to_vercel` usado antes de configurar/provar protection: REJEITADO;
-- inferir que Preview, URL obscura ou ausência de alias conhecido equivalem a protection: REJEITADO;
-- criar projeto Neon ou Managed Better Auth antes de possuir o PATCH de `disable_sign_up`: REJEITADO;
-- aceitar deny-all da aplicação como substituto do controle provider-side: REJEITADO;
-- considerar `update_auth_config(name)` equivalente à configuração de email/senha/plugins: REJEITADO;
-- instalar CLI sem sessão autenticada e chamar isso de control-plane: REJEITADO;
-- solicitar/copiar token Vercel, Neon API key, password, cookie ou connection string para chat/Git: REJEITADO;
-- reutilizar projeto existente como laboratório: NÃO EXECUTADO;
-- executar configuração manual que o assistente não possa observar/read-back: REJEITADO.
+- conector que apenas lê conta/projeto sem escrita da configuração crítica;
+- documentação pública como substituto de readback do estado real;
+- `deploy_to_vercel` antes de protection observável;
+- Preview/URL obscura como substituto de Deployment Protection;
+- criação de Neon project/Auth antes de possuir o PATCH de `disable_sign_up`;
+- deny-all da aplicação como substituto de enforcement provider-side;
+- `update_auth_config(name)` tratado como controle de email/senha/plugins;
+- instalação de CLI sem sessão autenticada;
+- copiar token Vercel, Neon API key, password, cookie ou connection string para chat/Git;
+- reutilizar projeto alheio como laboratório;
+- configuração manual que o assistente não consiga observar/read-back.
 
-Resultado: a condição de bloqueio da própria F17 foi atingida novamente. Nenhum controle de segurança foi enfraquecido para fabricar progresso.
+Resultado: a condição de bloqueio da própria F17 foi atingida novamente. Nenhum controle foi enfraquecido para fabricar progresso.
 
 ## Verificação desta tentativa F17
 
 - recuperação de `main`, PRs e branches: PASS;
 - `CONTEXT_MANIFEST`: PASS / VALID;
-- CI de entrada `33752929644`: PASS;
-- conta Vercel: REINSPECIONADA;
+- CI de entrada `33761007044`: PASS;
+- conta Vercel e lista de projetos: REINSPECIONADAS;
 - projeto Vercel `compras`: AUSENTE;
 - ferramentas Vercel: REINSPECIONADAS, lacuna persiste;
-- documentação oficial Vercel project/protection/env/rollback: REVALIDADA;
-- conta Neon: REINSPECIONADA;
+- documentação oficial Vercel: REVALIDADA;
+- conta Neon e lista de projetos: REINSPECIONADAS;
 - projeto Neon `compras`: AUSENTE;
 - ferramentas Neon Auth: REINSPECIONADAS, lacuna persiste;
-- documentação oficial Neon Auth API: REVALIDADA;
+- documentação oficial Neon Auth: REVALIDADA;
 - catálogo de plugins/integradores: REINSPECIONADO, sem alternativa compatível;
 - CLI autenticada Vercel/Neon no runtime: AUSENTE;
 - sessão oficial capaz de write + readback dos controles críticos: NÃO DISPONÍVEL;
@@ -149,7 +126,7 @@ Q-001, Q-002, Q-003, Q-004, Q-005, Q-006, Q-009 e Q-010 permanecem abertas.
 
 ## Last good
 
-`6c3891d0e4839daa067741bbcf5eafdea542a329` continua sendo o `LAST_GOOD_COMMIT` funcional, validado pela CI da `main` run `33670574481`. O checkpoint F17 anterior em `a6595d6761a8f8f2d3a1a0572a76f47223c00768` possui CI pós-merge `33752929644` em PASS.
+`6c3891d0e4839daa067741bbcf5eafdea542a329` continua sendo o `LAST_GOOD_COMMIT` funcional, validado pela CI da `main` run `33670574481`. O checkpoint F17 de entrada em `c682c9a89d1b05d1b583117f0493a9b70fbcead9` possui CI pós-merge `33761007044` em PASS.
 
 ## Próxima ação
 

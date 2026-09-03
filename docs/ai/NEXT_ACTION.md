@@ -1,79 +1,62 @@
 # Next Action — Compras
 
-## F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01 — Retomar a prova Neon quando signup restrito estiver disponível
+## F19-AUTH-PORTABILITY-DESIGN-01 — Desenhar Better Auth self-hosted para remover dependência do signup controlado pelo Neon
 
-**Classe:** `T3 — integração externa` com impacto de `T2 — segurança`
-**Estado:** BLOCKED_EXTERNAL_PROVIDER_CAPABILITY / RESUME_WHEN
-**Objetivo:** concluir a etapa Neon da F17 somente quando o mesmo canal oficial autenticado permitir WRITE + READBACK de `disable_sign_up=true` e dos controles de plugins/métodos laterais antes de qualquer uso do Auth.
+**Classe:** `T5 — arquitetura` com impacto de `T2 — segurança` e `T3 — integração externa`  
+**Estado:** READY  
+**Objetivo:** decidir, com documentação oficial atual e prova local/efêmera, se o preview privado deve substituir o Managed Better Auth bloqueado por Better Auth self-hosted em PostgreSQL controlado, com signup fechado por configuração versionada.
 
-Esta é a única `NEXT_ACTION` canônica. Não criar F18 enquanto a condição abaixo não estiver satisfeita.
+Esta é a única `NEXT_ACTION` canônica.
 
-## Bloqueio observado
+## Por que esta ação agora
 
-Em 2026-09-03, a sessão oficial autenticada do Neon foi operada diretamente no console da organização correta. Em um projeto vazio e descartável criado exclusivamente para F17, o console mostrou:
+A F17 foi movida para `ON HOLD`: a sessão autenticada real provou que a superfície Managed Better Auth disponível nesta conta/região não permite WRITE + READBACK de `disable_sign_up=true`. Repetir a mesma tentativa não produz progresso.
 
-- alerta de que qualquer pessoa na web poderia criar conta e que signup restrito ainda estava por vir;
-- `Sign-up with Email` ativo por padrão;
-- controle de signup desabilitado para interação, impedindo o WRITE;
-- `Allow Localhost` ativo por padrão;
-- provider Google/`Shared keys` presente na seção OAuth.
+A F18 abriu uma faixa independente de demonstração hospedada e concluiu um deployment Preview Next.js `READY` com dados exclusivamente fictícios, sem Auth, banco ou secrets. O preview demo permanece atrás da Vercel Authentication e Git auto-deploy voltou a ficar desabilitado.
 
-Assim, não foi possível aplicar nem ler de volta `disable_sign_up=true`; também não foi possível provar plugins/métodos laterais e OAuth em estado seguro. O Auth foi removido com seus dados vazios e o projeto Neon descartável foi excluído. A lista final voltou aos três projetos preexistentes.
+O próximo problema útil é remover a dependência arquitetural da capacidade ausente do Managed Neon Auth sem enfraquecer a admissão privada.
 
-## Condição objetiva de retomada
+## Hipótese a testar
 
-Retomar F17 somente quando a conta/região Neon oferecer, em uma única sessão oficial autenticada e observável:
+A documentação oficial atual do Better Auth expõe diretamente:
 
-1. WRITE + READBACK específico de `/auth/email_and_password` com `disable_sign_up=true`;
-2. WRITE + READBACK de `/auth/plugins` e dos endpoints específicos necessários para manter magic link, phone/OTP, organizações/admin ou outros métodos laterais desabilitados;
-3. OAuth providers comprovadamente ausentes ou desabilitados;
-4. trusted domains estritos, sem wildcard e sem localhost desnecessário;
-5. caminho observável de teardown antes de criar usuário ou dado.
+- PostgreSQL como backend;
+- `emailAndPassword.enabled=true`;
+- `emailAndPassword.disableSignUp=true`;
+- `trustedOrigins` explícitos;
+- social providers somente quando configurados;
+- plugins somente quando adicionados;
+- geração/migration do schema Auth.
 
-Documentação, endpoint Auth genérico, configuração apenas de nome da aplicação, deny-all da aplicação ou aparência da UI não satisfazem essa condição.
+A F19 deve provar se isso permite manter ou melhorar a fronteira F14/F08: sign-in email/senha por Server Action, sign-out, sessão server-side, catch-all Auth deny-all, identidade derivada no servidor e autorização final por `app_users` + membership + RLS.
 
-## Estado preservado da prova Vercel
+## Execução obrigatória
 
-A etapa Vercel da F17 já passou e não deve ser refeita por rotina:
+1. recuperar estado/contexto e validar manifest;
+2. revalidar documentação oficial atual do Better Auth/Next.js/PostgreSQL;
+3. inspecionar `@neondatabase/auth` atual e a interface consumida por F14;
+4. desenhar schema/role/connection boundary para Auth separado do domínio Compras;
+5. definir signup fechado, trusted origins, ausência de OAuth/plugins e bootstrap administrativo do primeiro usuário fictício;
+6. executar prova local/efêmera suficiente para verificar que signup é negado por configuração real;
+7. red-team de endpoints laterais, privilégios de banco, sessão, migrations, secrets e compatibilidade com Vercel;
+8. registrar decisão em nova ADR: `ADOPT`, `REJECT` ou `BLOCKED` com evidência;
+9. atualizar checkpoint deixando exatamente uma nova NEXT_ACTION.
 
-- projeto `compras-f17-control-proof` preservado por instrução do usuário;
-- Vercel Authentication ativa com readback;
-- nenhum deployment, domínio ou alias;
-- variável fictícia `F17_INERT_PROOF` provada como Preview + branch `f17-provider-control-proof` e removida com readback;
-- nenhuma env var ou secret operacional residual;
-- auto-deploy por Git desabilitado em `vercel.json` enquanto F17 estiver bloqueada.
-
-Não excluir, recriar ou renomear o projeto Vercel nesta ação. Revalidar seu estado apenas por leitura se houver evidência concreta de mudança.
-
-## Execução permitida ao retomar
-
-1. recuperar GitHub/contexto e validar o manifest;
-2. confirmar por leitura que o estado Vercel preservado não mudou;
-3. confirmar a disponibilidade dos controles Neon antes de provisionar Auth;
-4. criar no máximo um projeto Neon vazio e descartável, sem tocar projetos existentes;
-5. aplicar imediatamente todos os controles críticos;
-6. fazer READBACK específico de cada controle;
-7. executar o red-team da SPEC;
-8. remover Auth/projeto descartável mediante confirmação destrutiva quando exigida;
-9. somente se tudo passar, fechar F17 e criar uma nova work unit que retome F15.
-
-## Regras obrigatórias
+## Invariantes
 
 - `REAL_DATA_ALLOWED = NO`;
-- não criar usuário, `app_user`, membership, migration hospedada, seed ou dado de contratação;
-- não usar `DATABASE_URL`, cookie secret ou outro secret operacional;
-- não copiar credencial para chat, Git, PR, log, screenshot pública ou artifact;
-- não reutilizar projeto Neon alheio;
-- não criar novo projeto Neon apenas para tentar contornar o mesmo bloqueio observado;
-- não deixar Auth com signup default exposto enquanto procura controles;
-- não habilitar método lateral sem prova equivalente;
-- não usar deny-all da aplicação como substituto de `disable_sign_up` do provider;
-- não criar F18 antes do PASS integral da F17.
+- nenhum secret em Git/chat/log/artifact público;
+- nenhum usuário real;
+- nenhuma autorização derivada do browser;
+- autenticar não cria automaticamente `app_users` ou memberships;
+- não habilitar social provider/plugin por conveniência;
+- não usar role PostgreSQL privilegiada como runtime normal;
+- F17 permanece documentada como evidência do blocker do Managed Neon Auth, mas deixa de ser frente ativa enquanto estiver ON HOLD.
 
 ## Fonte da tarefa
 
-Executar conforme `tasks/F17-AUTHENTICATED-PROVIDER-CONTROL-SESSION-01/SPEC.md`, ADR-006, ADR-007, `docs/architecture/SECURITY.md` e `docs/ai/CURRENT_STATE.md`.
+Executar `tasks/F19-AUTH-PORTABILITY-DESIGN-01/SPEC.md`, ADR-006, ADR-007, ADR-008, `docs/architecture/SECURITY.md` e `docs/architecture/DATABASE.md`.
 
 ## Critério de encerramento
 
-F17 fecha somente com Vercel e Neon em PASS por WRITE + READBACK + rollback observável, sem secrets ou dados reais. Enquanto o controle Neon de signup restrito permanecer indisponível, esta mesma F17 continua bloqueada e é a única `NEXT_ACTION`.
+A F19 termina somente com uma decisão arquitetural verificável e uma estratégia de enforcement que mantenha signup fechado por construção, preserve a identidade server-side/RLS e não dependa de capacidade indisponível do provider atual.

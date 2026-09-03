@@ -8,13 +8,13 @@
 
 ## Reinspeção mais recente
 
-Em 2026-09-03, partindo da `main` em `1b07ee26b2b47f7aa52b4e2e0b0d581974879442` com CI `33768977830` em PASS, esta work unit foi reexecutada novamente até sua condição explícita de bloqueio.
+Em 2026-09-03, partindo da `main` em `645d53d0e73ffc2a6bd11a802a5e3bce1fe7d106` com CI `33770194375` em PASS, esta work unit foi reexecutada novamente até sua condição explícita de bloqueio.
 
 O estado permanece:
 
-- Vercel e Neon estão acessíveis somente pelas superfícies de conector já conhecidas;
-- o conector Vercel continua com 24 ferramentas e sem write/readback de Deployment Protection, env vars Preview + branch e deprovisionamento;
-- o conector Neon Auth continua com 15 ferramentas e sem PATCH de `/auth/email_and_password` e `/auth/plugins`;
+- Vercel e Neon estão acessíveis por superfícies oficiais autenticadas de inspeção, mas não pelo conjunto completo de controles exigidos pela F17;
+- o conector Vercel continua com 24 ferramentas e sem write/readback de Deployment Protection, env vars Preview + branch e deprovisionamento controlado;
+- a superfície Neon Auth agora expõe mais inspeção/gestão (`get_neon_auth_config`, OAuth, trusted domains e enable/disable), mas `update_auth_config` continua restrito ao nome da aplicação e não há write + readback de `/auth/email_and_password` e `/auth/plugins`;
 - não existe CLI `vercel`, `neon` ou `neonctl` autenticada no runtime;
 - não existem variáveis de autenticação Vercel/Neon exportadas ao shell;
 - nenhuma integração adicional compatível foi encontrada;
@@ -41,7 +41,8 @@ As reinspeções F16/F17 eliminaram a ambiguidade de capacidade dos providers:
 
 - o Vercel possui APIs/SDK/CLI oficiais para criação de projeto, `ssoProtection`, env vars Preview + `gitBranch`, leitura/remoção de envs e gerenciamento/rollback;
 - o Neon possui API oficial branch-scoped para `/auth/email_and_password`, `/auth/plugins`, métodos específicos, domains, OAuth e teardown de Managed Better Auth;
-- o problema atual é a indisponibilidade, nesta sessão, de um executor oficial autenticado que exponha essas operações com write + readback;
+- a documentação Neon atual confirma que `/auth/config` altera apenas o nome da aplicação, enquanto `email_and_password` e `plugins` exigem endpoints próprios;
+- o problema atual é a indisponibilidade, nesta sessão, de um executor oficial autenticado que exponha **todos** esses controles com write + readback;
 - nenhum recurso de Compras foi provisionado.
 
 ## Resultado esperado
@@ -93,6 +94,7 @@ Atacar deliberadamente:
 - env var sem branch scope apesar de aparentar Preview-only;
 - secret visível em resposta/UI/log e risco de persistência acidental;
 - Neon Auth criado com signup default antes do PATCH de bloqueio;
+- `get_neon_auth_config` ou enable/disable de Auth usados como falso substituto para o PATCH inexistente de `email_and_password`/plugins;
 - `disable_sign_up` aplicado a email/senha mas plugin lateral continua permitindo criação de conta;
 - método OAuth/provider habilitado por default;
 - rollback disponível apenas por instrução manual não observável;
@@ -120,7 +122,7 @@ Atacar deliberadamente:
 
 ## Condição de bloqueio
 
-Se a sessão autenticada ainda não estiver acessível ao assistente, não executar writes de provider. Manter o blocker e repetir **somente a ação manual única** descrita no topo; não voltar a F15 e não criar uma nova work unit de workaround.
+Se a sessão autenticada ainda não estiver acessível ao assistente com **todos** os controles exigidos, não executar writes de provider. Manter o blocker e repetir **somente a ação manual única** descrita no topo; não voltar a F15 e não criar uma nova work unit de workaround.
 
 ## Fora do escopo
 

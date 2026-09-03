@@ -66,8 +66,7 @@ F17 termina somente quando o assistente consegue, pela sessão autenticada e sem
 3. escrever e ler de volta `disable_sign_up=true` em `/auth/email_and_password`;
 4. escrever e ler de volta plugins/métodos laterais desabilitados conforme ADR-006/ADR-007;
 5. confirmar OAuth providers ausentes/desabilitados e trusted domains estritos;
-6. confirmar controles de origem/localhost compatíveis com a superfície de preview;
-7. provar caminho de disable/delete/rollback antes de qualquer usuário ou dado de produto.
+6. provar caminho de disable/delete/rollback antes de qualquer usuário ou dado de produto.
 
 ## Regras obrigatórias
 
@@ -98,7 +97,6 @@ Atacar deliberadamente:
 - `get_neon_auth_config` ou enable/disable de Auth usados como falso substituto para o PATCH inexistente de `email_and_password`/plugins;
 - `disable_sign_up` aplicado a email/senha mas plugin lateral continua permitindo criação de conta;
 - método OAuth/provider habilitado por default;
-- localhost/origem de desenvolvimento mantido habilitado sem necessidade;
 - rollback disponível apenas por instrução manual não observável;
 - tentativa de reutilizar projeto já existente;
 - tentativa de colar token no chat para acelerar a execução.
@@ -113,7 +111,7 @@ Atacar deliberadamente:
 - Vercel rollback/deprovisionamento: PROVADO;
 - Neon `disable_sign_up=true` write + readback: PASS;
 - métodos/plugins adicionais: DESABILITADOS E LIDOS DE VOLTA;
-- trusted domains/OAuth/origens relevantes: INSPECIONADOS;
+- trusted domains/OAuth state: INSPECIONADOS;
 - rollback Neon: PROVADO;
 - nenhum secret operacional publicado: PASS;
 - nenhum projeto alheio alterado: PASS;

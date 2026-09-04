@@ -1,7 +1,7 @@
 # F20-SELF-HOSTED-AUTH-IMPLEMENT-01 — Implementar Better Auth self-hosted mantendo a fronteira F14/F08
 
 **Classe:** T1 — feature, com impacto T2 — segurança e T3 — integração externa  
-**Estado:** PLANNED / NEXT  
+**Estado:** DONE / PASS — CI `33869932738`  
 **Dependências:** F14, F18, F19, ADR-006, ADR-007, ADR-008, ADR-009  
 **Classificação permitida:** PUBLIC / FICTITIOUS ONLY
 
@@ -153,3 +153,7 @@ Rejeitar PASS se qualquer um ocorrer:
 ## Critério de encerramento
 
 F20 fecha quando Better Auth self-hosted estiver implementado e provado local/CI como substituto funcional e de segurança do adaptador Managed Neon, com schema/roles/migrations reproduzíveis e sem provisionamento hosted. Deve deixar exatamente uma próxima work unit para o preflight/provisionamento privado com dados exclusivamente fictícios.
+
+## Resultado executado
+
+F20 foi concluída na PR `#36`. O commit funcional `49bd1f346373d2c97eb5f32b009b2b2ea6551408` passou integralmente a CI `33869932738`, incluindo `verify`, suíte PostgreSQL/RLS e `auth-database`. O checkpoint avançou para `F21-PRIVATE-PREVIEW-SELF-HOSTED-PROVISION-01` sem permitir dados reais ou provisionamento hosted durante F20.

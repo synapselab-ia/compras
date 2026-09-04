@@ -52,12 +52,6 @@ jobs:
       - name: Materialize exact dependency lock
         run: npm install --ignore-scripts --no-audit --no-fund
 
-      - name: Use PostgreSQL 17 client
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client-17
-          pg_dump --version
-
       - name: Generate Better Auth 1.6.23 PostgreSQL schema
         run: |
           psql -v ON_ERROR_STOP=1 -c 'CREATE SCHEMA auth;'
@@ -94,7 +88,11 @@ jobs:
 
           mkdir -p database/auth/migrations
           tmp_file="$(mktemp)"
-          /usr/lib/postgresql/17/bin/pg_dump --schema=auth --schema-only --no-owner --no-privileges --no-comments > "$tmp_file"
+          docker run --rm --network host \
+            -e PGPASSWORD=postgres \
+            postgres:17-alpine \
+            pg_dump --host=127.0.0.1 --port=5432 --username=postgres --dbname=compras_auth_schema \
+              --schema=auth --schema-only --no-owner --no-privileges --no-comments > "$tmp_file"
           {
             echo '-- Generated from better-auth@1.6.23 via getMigrations() against PostgreSQL 17.'
             echo '-- Do not edit after application; changes require a new Auth migration.'

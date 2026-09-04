@@ -1,7 +1,7 @@
 # Current State — Compras
 
 **PROJECT_STATUS:** F21_ON_HOLD_VERCEL_CONTROL_PLANE_F22_READY  
-**CURRENT_PHASE:** F20 integrada; F21 ON HOLD antes de secrets; F22 READY; F17 ON HOLD histórico  
+**CURRENT_PHASE:** F21 checkpoint integrado; F21 ON HOLD antes de secrets; F22 READY; F17 ON HOLD histórico  
 **REPO_VISIBILITY:** PUBLIC  
 **APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_IMPLEMENTED_PERSISTENT_PREVIEW_BLOCKED_PRE_SECRETS  
 **DATABASE_STATUS:** PROTECTED_DOMAIN_READ_MODEL_VALIDATED_AUTH_SCHEMA_VERSIONED_EPHEMERAL_PASS_NO_F21_HOSTED_DB  
@@ -12,22 +12,27 @@
 **FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`  
 **F20_MERGE_COMMIT:** `a5313463b3ccf7f7d3b229ca0ab8798f586cafcc`  
 **F20_PR:** `#36` — MERGED  
-**F20_MAIN_CI_RUN:** `33871786734` — PASS  
 **F20_FINAL_CHECKPOINT_COMMIT:** `a1037b38269c2e67e0ec249ed597eb5171eb31d2`  
 **F20_FINAL_CHECKPOINT_CI_RUN:** `33871918152` — PASS  
-**LAST_GOOD_COMMIT:** `a1037b38269c2e67e0ec249ed597eb5171eb31d2`  
-**LAST_GOOD_CI_RUN:** `33871918152`  
+**F21_CHECKPOINT_PR:** `#37` — MERGED  
+**F21_CHECKPOINT_MERGE_COMMIT:** `b38ad708a6f668b4886930a96eaff95a1251590a`  
+**F21_PR_CI_RUN:** `33873199115` — PASS  
+**F21_MAIN_CI_RUN:** `33873312591` — PASS  
+**LAST_GOOD_COMMIT:** `b38ad708a6f668b4886930a96eaff95a1251590a`  
+**LAST_GOOD_CI_RUN:** `33873312591`  
 **F21_STATE:** `ON HOLD / BLOCKED` — Vercel control-plane surface unavailable for required protection/env readback+CRUD  
 **F21_RESUME_WHEN:** sessão Vercel autenticada permitir readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch, sem exposição de valores  
 **ON_HOLD:** `F17-B2` histórico + `F21` conforme resume_when acima
 
 ## Estado real recuperado
 
-A `main` foi recuperada em `a1037b38269c2e67e0ec249ed597eb5171eb31d2`. A CI `33871918152` terminou integralmente em PASS.
+A F21 partiu da `main` `a1037b38269c2e67e0ec249ed597eb5171eb31d2`, cuja CI `33871918152` estava integralmente em PASS.
 
-Não existia branch F21 ativa. Foi criada `f21-private-preview-self-hosted-provision` a partir desse checkpoint somente para registrar o estado sanitizado da execução.
+Não existia branch F21 ativa. A frente foi criada em `f21-private-preview-self-hosted-provision`, executada e integrada em `main` pela PR `#37`.
 
-O `CONTEXT_MANIFEST` foi revalidado. Todos os 10 inputs estáveis continuam exatamente nos blobs esperados; portanto `CONTEXT_STATUS = VALID`.
+O merge/checkpoint F21 é `b38ad708a6f668b4886930a96eaff95a1251590a`. A CI da PR `33873199115` e a CI de `main` `33873312591` passaram integralmente em `verify`, `database` e `auth-database`.
+
+O `CONTEXT_MANIFEST` foi revalidado. Todos os 10 inputs estáveis continuaram exatamente nos blobs esperados; portanto `CONTEXT_STATUS = VALID`.
 
 A tarefa executada foi a única `NEXT_ACTION` então canônica: `F21-PRIVATE-PREVIEW-SELF-HOSTED-PROVISION-01`.
 
@@ -121,7 +126,9 @@ Resultado deliberado:
 - proteção externa removida para contornar blocker: NÃO;
 - dado/identidade real: NÃO.
 
-O red-team, portanto, rejeitou um falso PASS e preservou a fronteira aprovada.
+A revisão integral do diff público da PR `#37` também procurou connection strings, URLs hosted, IDs de control plane e secrets; nenhum desses valores foi persistido.
+
+O red-team rejeitou um falso PASS e preservou a fronteira aprovada.
 
 ## Rollback / residual F21
 
@@ -148,13 +155,28 @@ A implementação integrada continua válida:
 - Auth runtime e domínio runtime separados;
 - migrations Auth versionadas;
 - bootstrap one-shot restrito a `example.invalid`;
-- RLS e isolamento Auth/domínio já provados em CI.
+- RLS e isolamento Auth/domínio provados em CI.
+
+## Verificação F21
+
+- GitHub/main inicial: RECUPERADO;
+- `CONTEXT_MANIFEST`: VALID;
+- documentação oficial Vercel/Neon: REVALIDADA;
+- estado real Vercel/Neon: RECUPERADO antes de writes;
+- barreira Vercel do Preview existente: OBSERVADA;
+- novo deployment F21 automático: AUSENTE;
+- hosted secrets F21: NENHUM;
+- recurso PostgreSQL F21: NENHUM;
+- dados/identidades reais: NENHUM;
+- revisão do diff público: PASS;
+- CI PR `33873199115`: PASS;
+- CI `main` `33873312591`: PASS.
 
 ## Last good
 
-O last-good canônico permanece o checkpoint F20 em `main` `a1037b38269c2e67e0ec249ed597eb5171eb31d2`, validado pela CI `33871918152`.
+O last-good canônico passa a ser o checkpoint F21 integrado `b38ad708a6f668b4886930a96eaff95a1251590a`, validado pela CI de `main` `33873312591`.
 
-Não existe preview persistente operacional e `REAL_DATA_ALLOWED` continua `NO`.
+Esse checkpoint registra corretamente um blocker externo; ele não representa preview persistente operacional. `REAL_DATA_ALLOWED` continua `NO`.
 
 ## Próxima ação
 

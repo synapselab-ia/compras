@@ -23,11 +23,11 @@ A F18 mantém uma faixa independente de demonstração hospedada, protegida por 
 
 A F19 adotou Better Auth self-hosted pela ADR-009.
 
-A F20 transformou essa decisão em implementação, foi integrada em `main` e passou integralmente as suítes de CI.
+A F20 transformou essa decisão em implementação e a F22 acrescentou assets reproduzíveis de bootstrap/seed/smoke para o futuro preview persistente, todos ainda exclusivamente fictícios e provados em PostgreSQL descartável/CI.
 
 ## F20 — Better Auth self-hosted implementado
 
-O runtime privado agora usa Better Auth self-hosted com PostgreSQL:
+O runtime privado usa Better Auth self-hosted com PostgreSQL:
 
 - `better-auth@1.6.23` é dependência direta e pinada;
 - `@neondatabase/auth` saiu do runtime;
@@ -88,13 +88,52 @@ A execução parou fail-closed porque a superfície Vercel autenticada disponív
 
 Nenhum secret ou recurso hosted novo foi criado. F21 fica `ON HOLD` até essa capacidade de control plane estar disponível; a proteção não será reduzida para contornar o blocker.
 
+## F22 — seed e smoke reproduzíveis
+
+A F22 materializou o pacote operacional fictício que a F21 precisará quando puder ser retomada.
+
+O seed `server-only`:
+
+- exige modo exato `FICTITIOUS_EPHEMERAL`;
+- usa somente UUIDs determinísticos, nomes sintéticos e email `example.invalid`;
+- cria duas equipes e duas contratações artificiais;
+- recebe o `subject` do bootstrap Better Auth e verifica a identidade persistida antes de criar autorização;
+- cria `app_user` e membership em etapa administrativa separada do Auth;
+- não concede membership à equipe adversarial;
+- executa postflight e retorna apenas status sanitizado.
+
+O harness PostgreSQL descartável prova:
+
+- Auth sem `app_user`/membership → zero dados;
+- usuário autorizado → somente própria equipe;
+- UUID conhecido da outra equipe → invisível;
+- claims ausentes/malformados ou issuer/subject errados → fail-closed;
+- signup normal continua fechado;
+- sign-in, sessão e sign-out permanecem funcionais;
+- Auth runtime e domínio runtime continuam separados e não privilegiados;
+- Auth não lê domínio e domínio não lê Auth.
+
+A composição do preflight aplica as migrations na ordem:
+
+```text
+domínio 0001
+-> domínio 0002
+-> Auth 0001
+-> Auth 0002
+-> domínio 0003
+```
+
+Essa ordem preserva a ownership dedicada da view `team_member_directory`. Nenhuma migration canônica foi reescrita. Depois da view ser criada, um postflight exige que a role Auth continue sem `SELECT` sobre ela.
+
+O workflow F22 usa apenas PostgreSQL 17 descartável. Credenciais operacionais são geradas no job e mascaradas; nenhum recurso Vercel/Neon hosted é criado.
+
 ## Próxima frente
 
 A única `NEXT_ACTION` está em `docs/ai/NEXT_ACTION.md`:
 
-`F22-PRIVATE-PREVIEW-SEED-SMOKE-ASSETS-01 — Versionar assets reproduzíveis de seed e smoke do preview privado`.
+`F23-PRIVATE-SIGNIN-ABUSE-CONTROL-DESIGN-01 — Fechar desenho de controle de abuso do sign-in privado`.
 
-A F22 deve transformar os requisitos já definidos de bootstrap/seed/cross-team/fail-closed em assets totalmente fictícios e reproduzíveis em PostgreSQL efêmero/CI, sem qualquer write hosted, enquanto F21 aguarda o `resume_when` externo.
+A F23 deve fechar, sem provisionamento hosted, a arquitetura de rate limiting/controle de abuso distribuído do Server Action de sign-in: confiança dos sinais de origem, política de chaveamento, concorrência, indisponibilidade, privacidade, observabilidade e testes adversariais. F21 continua `ON HOLD` até seu `resume_when` externo.
 
 ## Modos da aplicação
 
@@ -133,6 +172,8 @@ Migrations imutáveis do domínio:
 - `database/migrations/0003_team_member_directory.sql` — capability view mínima do diretório da equipe.
 
 Migrations Auth ficam separadas em `database/auth/migrations/` e não reescrevem a trilha do domínio.
+
+Assets F22 de preflight ficam em `src/server/preflight/` e não são migrations de produção.
 
 ## Fonte de verdade
 

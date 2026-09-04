@@ -1,10 +1,15 @@
 import "server-only";
 
+import { betterAuth } from "better-auth";
+import { headers } from "next/headers";
+import { Pool } from "pg";
+
 import {
-  createNeonAuth,
-  NEON_AUTH_NETWORK_ERROR_CODES,
-  type NeonAuthServerApiError,
-} from "@neondatabase/auth/next/server";
+  AUTH_SCHEMA_POOL_OPTIONS,
+  SELF_HOSTED_AUTH_ISSUER,
+  readSelfHostedAuthConfiguration,
+  type SelfHostedAuthConfiguration,
+} from "./configuration";
 
 export type ExternalIdentity = Readonly<{
   issuer: string;
@@ -16,106 +21,158 @@ export type PrivateAuthSessionState =
   | Readonly<{ kind: "unauthenticated" }>
   | Readonly<{ kind: "unavailable" }>;
 
-export type ConfiguredPrivateAuth = Readonly<{
-  issuer: string;
-  auth: ReturnType<typeof createNeonAuth>;
-}>;
-
-type AuthConfiguration = Readonly<{
-  baseUrl: string;
-  cookieSecret: string;
-}>;
-
-function readExactEnvironmentValue(name: string): string | null {
-  const value = process.env[name];
-
-  if (!value || value !== value.trim()) {
-    return null;
-  }
-
-  return value;
+function createPrivateBetterAuth(
+  configuration: SelfHostedAuthConfiguration,
+  pool: Pool,
+) {
+  return betterAuth({
+    database: pool,
+    baseURL: configuration.baseUrl,
+    secret: configuration.secret,
+    trustedOrigins: [configuration.baseUrl],
+    emailAndPassword: {
+      enabled: true,
+      disableSignUp: true,
+    },
+    socialProviders: {},
+    plugins: [],
+  });
 }
 
-function readAuthConfiguration(): AuthConfiguration | null {
-  const baseUrl = readExactEnvironmentValue("NEON_AUTH_BASE_URL");
-  const cookieSecret = readExactEnvironmentValue("NEON_AUTH_COOKIE_SECRET");
+type BetterAuthInstance = ReturnType<typeof createPrivateBetterAuth>;
 
-  if (!baseUrl || !cookieSecret || cookieSecret.length < 32) {
+export type ConfiguredPrivateAuth = Readonly<{
+  issuer: string;
+  auth: BetterAuthInstance;
+}>;
+
+type RuntimeCache = {
+  configuration: SelfHostedAuthConfiguration;
+  configured: ConfiguredPrivateAuth;
+  pool: Pool;
+};
+
+let runtimeCache: RuntimeCache | null = null;
+
+function sameConfiguration(
+  left: SelfHostedAuthConfiguration,
+  right: SelfHostedAuthConfiguration,
+): boolean {
+  return (
+    left.authDatabaseUrl === right.authDatabaseUrl &&
+    left.baseUrl === right.baseUrl &&
+    left.secret === right.secret
+  );
+}
+
+function readErrorStatusCode(error: unknown): number | null {
+  if (!error || typeof error !== "object") {
     return null;
   }
 
-  try {
-    if (new URL(baseUrl).protocol !== "https:") {
-      return null;
+  const record = error as Record<string, unknown>;
+  const body =
+    record.body && typeof record.body === "object"
+      ? (record.body as Record<string, unknown>)
+      : null;
+  const candidates = [
+    record.statusCode,
+    record.status,
+    body?.statusCode,
+    body?.status,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "number" && Number.isInteger(candidate)) {
+      return candidate;
     }
-  } catch {
-    return null;
+
+    if (typeof candidate === "string") {
+      const numeric = Number(candidate);
+      if (Number.isInteger(numeric) && numeric >= 100 && numeric <= 599) {
+        return numeric;
+      }
+
+      switch (candidate.toUpperCase()) {
+        case "BAD_REQUEST":
+          return 400;
+        case "UNAUTHORIZED":
+          return 401;
+        case "FORBIDDEN":
+          return 403;
+        case "NOT_FOUND":
+          return 404;
+        case "CONFLICT":
+          return 409;
+        case "UNPROCESSABLE_ENTITY":
+          return 422;
+        case "TOO_MANY_REQUESTS":
+          return 429;
+        case "INTERNAL_SERVER_ERROR":
+          return 500;
+        case "SERVICE_UNAVAILABLE":
+          return 503;
+      }
+    }
   }
 
-  return { baseUrl, cookieSecret };
+  return null;
+}
+
+export function isAuthProviderUnavailableError(error: unknown): boolean {
+  const status = readErrorStatusCode(error);
+  return status === null || status < 400 || status >= 500;
 }
 
 export function getConfiguredPrivateAuth(): ConfiguredPrivateAuth | null {
-  const configuration = readAuthConfiguration();
+  const configuration = readSelfHostedAuthConfiguration();
 
   if (!configuration) {
     return null;
   }
 
-  try {
-    return {
-      issuer: configuration.baseUrl,
-      auth: createNeonAuth({
-        baseUrl: configuration.baseUrl,
-        cookies: {
-          secret: configuration.cookieSecret,
-        },
-        logLevel: "silent",
-      }),
-    };
-  } catch {
-    return null;
-  }
-}
-
-function readAuthApiError(error: unknown): Partial<NeonAuthServerApiError> | null {
-  if (!error || typeof error !== "object") {
-    return null;
-  }
-
-  return error as Partial<NeonAuthServerApiError>;
-}
-
-export function isAuthProviderUnavailableError(error: unknown): boolean {
-  const apiError = readAuthApiError(error);
-
-  if (!apiError) {
-    return true;
-  }
-
   if (
-    typeof apiError.code === "string" &&
-    (NEON_AUTH_NETWORK_ERROR_CODES as readonly string[]).includes(apiError.code)
+    runtimeCache &&
+    sameConfiguration(runtimeCache.configuration, configuration)
   ) {
-    return true;
+    return runtimeCache.configured;
   }
 
-  if (apiError.code === "INTERNAL_ERROR") {
-    return true;
+  if (runtimeCache) {
+    void runtimeCache.pool.end().catch(() => undefined);
+    runtimeCache = null;
   }
 
-  return typeof apiError.status === "number" ? apiError.status >= 500 : true;
-}
+  const pool = new Pool({
+    connectionString: configuration.authDatabaseUrl,
+    options: AUTH_SCHEMA_POOL_OPTIONS,
+    max: 5,
+    application_name: "compras-auth-runtime",
+  });
 
-function isUnauthenticatedSessionError(error: unknown): boolean {
-  const apiError = readAuthApiError(error);
-  return apiError?.status === 401 || apiError?.status === 403;
+  // Pool errors are surfaced by the auth operation that depends on the pool.
+  // Keep the event listener silent so no connection string/error detail reaches logs.
+  pool.on("error", () => undefined);
+
+  try {
+    const auth = createPrivateBetterAuth(configuration, pool);
+    const configured: ConfiguredPrivateAuth = Object.freeze({
+      issuer: SELF_HOSTED_AUTH_ISSUER,
+      auth,
+    });
+
+    runtimeCache = { configuration, configured, pool };
+    return configured;
+  } catch {
+    void pool.end().catch(() => undefined);
+    return null;
+  }
 }
 
 /**
- * Resolves session state without accepting request-supplied identity or scope.
- * Missing/expired sessions are distinct from provider/configuration failure so
- * operational routes can request sign-in before attempting protected reads.
+ * Resolves the external identity exclusively from a Better Auth session that
+ * was validated server-side. Request/client supplied issuer or subject values
+ * never participate in this function.
  */
 export async function readPrivateAuthSessionState(): Promise<PrivateAuthSessionState> {
   const configured = getConfiguredPrivateAuth();
@@ -125,21 +182,21 @@ export async function readPrivateAuthSessionState(): Promise<PrivateAuthSessionS
   }
 
   try {
-    const { data, error } = await configured.auth.getSession();
+    const session = await configured.auth.api.getSession({
+      headers: await headers(),
+    });
 
-    if (error) {
-      return isUnauthenticatedSessionError(error)
-        ? { kind: "unauthenticated" }
-        : { kind: "unavailable" };
-    }
-
-    if (!data || (data.session === null && data.user === null)) {
+    if (session === null) {
       return { kind: "unauthenticated" };
     }
 
-    const subject = data.user?.id;
+    const subject = session?.user?.id;
 
-    if (!data.session || typeof subject !== "string" || subject.length === 0) {
+    if (
+      !session?.session ||
+      typeof subject !== "string" ||
+      subject.length === 0
+    ) {
       return { kind: "unavailable" };
     }
 
@@ -150,7 +207,13 @@ export async function readPrivateAuthSessionState(): Promise<PrivateAuthSessionS
         subject,
       }),
     };
-  } catch {
+  } catch (error) {
+    const status = readErrorStatusCode(error);
+
+    if (status === 401 || status === 403) {
+      return { kind: "unauthenticated" };
+    }
+
     return { kind: "unavailable" };
   }
 }

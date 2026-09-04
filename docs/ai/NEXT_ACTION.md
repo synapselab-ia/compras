@@ -1,63 +1,67 @@
 # Next Action — Compras
 
-## F20-SELF-HOSTED-AUTH-IMPLEMENT-01 — Implementar Better Auth self-hosted mantendo a fronteira F14/F08
+## F21-PRIVATE-PREVIEW-SELF-HOSTED-PROVISION-01 — Provisionar e provar preview privado fictício com Better Auth self-hosted
 
-**Classe:** `T1 — feature` com impacto de `T2 — segurança` e `T3 — integração externa`  
+**Classe:** `T3 — integração externa` com impacto de `T2 — segurança`  
 **Estado:** READY  
-**Objetivo:** substituir o adaptador Managed Neon Auth no código por Better Auth self-hosted, com signup negado por configuração versionada, schema/roles/migrations reproduzíveis e a mesma fronteira server-side + RLS, sem provisionar ambiente hosted persistente.
+**Objetivo:** materializar em ambiente hospedado descartável a arquitetura já provada na F20, com Vercel Authentication antes de secrets, Better Auth self-hosted, roles PostgreSQL separadas, RLS e somente identidade/dados fictícios.
 
 Esta é a única `NEXT_ACTION` canônica.
 
 ## Por que esta ação agora
 
-A F19 terminou em **ADOPT** e a ADR-009 registrou a decisão arquitetural:
+A F20 terminou em PASS na CI `33869932738`:
 
-- o Managed Neon Auth observado permanece incapaz de impor/read-back signup restrito e fica `ON HOLD` como rota;
-- Better Auth self-hosted provou localmente `disableSignUp=true` com signup rejeitado;
-- a prova também validou bootstrap one-shot não roteável, sign-in de usuário existente, sessão server-side e sign-out;
-- PostgreSQL, schema separado, role Auth runtime mínima e migrations controladas permitem preservar a fronteira F14/F08/RLS;
-- nenhum provider social/plugin lateral é necessário.
+- `verify`: lint, typecheck, testes e build em PASS;
+- `database`: suíte PostgreSQL/RLS existente em PASS;
+- `auth-database`: schema Better Auth, boundary de role, red-team de `BYPASSRLS` e integração PostgreSQL Auth/domínio em PASS.
 
-A aplicação ainda usa `@neondatabase/auth`; portanto a decisão precisa virar implementação testada antes de qualquer novo provisionamento privado.
+O repositório agora possui Better Auth self-hosted implementado, `better-auth@1.6.23` pinado diretamente, migrations Auth versionadas, signup fechado, cookie/session/sign-out verificados, bootstrap fictício one-shot e isolamento entre Auth e autorização de domínio.
+
+O próximo risco relevante não é mais de implementação local: é provar que a mesma fronteira permanece válida no Preview hospedado real sem ampliar exposição ou usar dados reais.
 
 ## Execução obrigatória
 
-1. recuperar estado/contexto e validar manifest;
-2. revalidar documentação oficial Better Auth v1.6/versão escolhida e PostgreSQL/Next.js quando necessário;
-3. promover `better-auth` a dependência direta com versão exata e adicionar dependências PostgreSQL necessárias;
-4. implementar a instância Better Auth em módulo `server-only`;
-5. preservar a API estreita de `private-admission`/`readPrivateAuthSessionState` e remover dependência Managed Neon somente após equivalência;
-6. manter `/api/auth/[...path]` deny-all;
-7. configurar `emailAndPassword.enabled=true`, `disableSignUp=true`, `socialProviders={}`, trusted origins estritos e sem plugin de método lateral;
-8. implementar/testar cookies de Server Actions com `nextCookies()` oficial ou forwarding explícito;
-9. fixar issuer server-side `urn:compras:better-auth:self-hosted:v1`;
-10. separar `AUTH_DATABASE_URL` de `DATABASE_URL`;
-11. gerar/versionar schema Auth da versão pinada e criar boundary de schema/roles/grants em PostgreSQL efêmero;
-12. implementar/testar bootstrap one-shot somente fictício e não roteável;
-13. provar signup negado, sign-in, sessão, sign-out, ausência de auto-`app_user`/membership e isolamento Auth/domínio;
-14. executar red-team integral da SPEC;
-15. rodar lint, typecheck, testes, PostgreSQL/RLS e build;
-16. revisar diff e atualizar checkpoint deixando exatamente uma próxima ação.
+1. recuperar o estado real de GitHub, Vercel e Neon antes de qualquer write;
+2. revalidar documentação oficial atual aplicável a Deployment Protection, escopo de environment variables, lifecycle de Preview/rollback e PostgreSQL/roles;
+3. confirmar Vercel Authentication/Deployment Protection antes de anexar qualquer secret;
+4. criar/selecionar ambiente PostgreSQL descartável somente para prova fictícia;
+5. criar roles distintas de migration, Auth runtime e domínio runtime, sem privilégios administrativos/BYPASSRLS;
+6. aplicar migrations canônicas do domínio `0001..0003` e Auth `0001..0002`;
+7. provar isolamento Auth → domínio e domínio → Auth;
+8. executar bootstrap one-shot somente com identidade `example.invalid` fictícia e desligá-lo imediatamente;
+9. criar autorização/seed fictícios de forma separada, sem hook automático de Auth;
+10. anexar ao Preview/branch somente `AUTH_DATABASE_URL`, `DATABASE_URL`, `BETTER_AUTH_SECRET` e `COMPRAS_AUTH_BASE_URL` necessários;
+11. habilitar `COMPRAS_PERSISTENT_READ_ENABLED=true` somente após proteção, roles, migrations e seed estarem validados;
+12. provar sign-in, sessão, sign-out, signup negado, deny-all do catch-all Auth, unknown identity deny e cross-team deny/RLS;
+13. provar fail-closed sem fallback silencioso para demo;
+14. revisar logs/bundle/artifacts para ausência de secrets e conteúdo interno;
+15. executar rollback/deprovisionamento se qualquer gate falhar ou manter somente residual privado/fictício explicitamente justificado;
+16. atualizar checkpoint e deixar exatamente uma nova `NEXT_ACTION`.
 
 ## Invariantes
 
 - `REAL_DATA_ALLOWED = NO`;
-- nenhum recurso Neon/Vercel persistente novo nesta work unit;
-- nenhum secret real em Git/chat/log/artifact;
-- nenhum usuário real;
-- nenhuma rota pública de signup/OAuth/OTP/reset/admin;
+- nenhum usuário, email, processo ou conteúdo real;
+- repositório público recebe somente informação sanitizada;
+- Vercel Authentication continua obrigatória;
+- signup público continua negado;
+- `/api/auth/[...path]` continua deny-all;
+- nenhum OAuth/OTP/magic link/passkey/reset/admin público;
 - autenticação não cria autorização;
-- role Auth runtime não é owner/superuser/BYPASSRLS e não lê domínio;
-- role do domínio não ganha acesso Auth por conveniência;
-- identidade só nasce de sessão server-side;
-- falha Auth não cai silenciosamente para demo no caminho persistente;
-- Vercel Authentication continua obrigatória para o preview hospedado existente;
-- F17 continua ON HOLD, não volta a ser frente ativa por rotina.
+- identidade nasce somente de sessão validada server-side;
+- Auth runtime e domínio runtime usam credenciais/roles distintas;
+- nenhuma role runtime é owner/superuser/BYPASSRLS;
+- Auth runtime não lê domínio e domínio runtime não lê Auth;
+- credencial bootstrap/migration não vira variável runtime;
+- erro Auth/DB não cai silenciosamente para demo;
+- Managed Neon Auth permanece fora do caminho crítico;
+- F17 permanece `ON HOLD` somente como evidência histórica do blocker anterior.
 
 ## Fonte da tarefa
 
-Executar `tasks/F20-SELF-HOSTED-AUTH-IMPLEMENT-01/SPEC.md`, ADR-009, ADR-007, ADR-006, `docs/architecture/SECURITY.md` e `docs/architecture/DATABASE.md`.
+Executar `tasks/F21-PRIVATE-PREVIEW-SELF-HOSTED-PROVISION-01/SPEC.md`, ADR-009, ADR-007, ADR-006, ADR-005, ADR-003, `docs/architecture/SECURITY.md` e `docs/architecture/DATABASE.md`.
 
 ## Critério de encerramento
 
-F20 fecha somente quando Better Auth self-hosted estiver implementado no repositório e provado em CI/local efêmero como substituto seguro do adaptador Managed Neon, sem provisionamento hosted e sem dados reais. Ao final deve existir exatamente uma nova `NEXT_ACTION` executável para o preflight/provisionamento privado fictício.
+F21 fecha somente quando o Preview privado fictício com Better Auth self-hosted estiver comprovadamente protegido e funcional ponta a ponta, ou quando um blocker externo objetivo impedir a prova sem relaxamento de segurança. Em ambos os casos, registrar o estado real e deixar exatamente uma próxima ação executável.

@@ -8,7 +8,7 @@ O sistema não substitui os sistemas oficiais de processo administrativo, requis
 
 ## Estado atual
 
-A `Foundation-00` e as work units F01 a F14 estão integradas. Elas entregaram:
+A `Foundation-00` e as work units F01 a F14 estão integradas e entregaram:
 
 - protótipo Central → detalhe → Central;
 - fundação PostgreSQL default-deny com `FORCE RLS`;
@@ -17,75 +17,69 @@ A `Foundation-00` e as work units F01 a F14 estão integradas. Elas entregaram:
 - sign-in email/senha e sign-out por Server Actions;
 - `/api/auth/[...path]` deny-all para signup/OAuth/OTP/Admin e superfícies laterais não usadas.
 
-A F15/F16 prepararam a fronteira do primeiro preview privado. A F17 executou prova real nos consoles Vercel e Neon:
+F15/F16 prepararam a fronteira do primeiro preview privado. F17 provou o control plane Vercel, mas o Managed Neon Auth observado não permitia aplicar/read-back do enforcement obrigatório de signup restrito; essa rota permanece `ON HOLD` apenas como evidência histórica.
 
-- **Vercel:** PASS para Deployment Protection e variável Preview + branch, com rollback;
-- **Neon Managed Better Auth:** BLOCKED porque a superfície observada permite signup por padrão e não permite aplicar/read-back `disable_sign_up=true`; o Auth/projeto descartáveis foram removidos.
+A F18 mantém uma faixa independente de demonstração hospedada, protegida por Vercel Authentication, usando somente fixtures fictícias, sem banco/Auth interno/secrets e sem `COMPRAS_PERSISTENT_READ_ENABLED`.
 
-A F17 permanece `ON HOLD` como evidência do blocker externo, mas deixou de ser caminho crítico depois da F19.
+A F19 adotou Better Auth self-hosted pela ADR-009.
 
-## F18 — demonstração hospedada
+A F20 transformou essa decisão em implementação e passou integralmente a CI `33869932738`.
 
-A ADR-008 criou uma faixa independente de **DEMO / PUBLIC DATA** sem Auth interno, banco ou secrets.
+## F20 — Better Auth self-hosted implementado
 
-A F18 publicou com sucesso um deployment Vercel Preview da aplicação Next.js usando apenas o modo demo:
+O runtime privado agora usa Better Auth self-hosted com PostgreSQL:
 
-- deployment `READY`;
-- target Preview (`null`), não Production;
-- Vercel Authentication na frente da URL;
-- nenhum `DATABASE_URL`, `NEON_AUTH_*`, token ou secret;
-- nenhum recurso Neon;
-- `COMPRAS_PERSISTENT_READ_ENABLED` não habilitado;
-- somente fixtures fictícias;
-- Git auto-deploy restaurado para `false`.
+- `better-auth@1.6.23` é dependência direta e pinada;
+- `@neondatabase/auth` saiu do runtime;
+- `emailAndPassword.enabled=true`;
+- `disableSignUp=true`;
+- `socialProviders={}`;
+- nenhum plugin de método lateral;
+- trusted origin HTTPS exata;
+- issuer fixo `urn:compras:better-auth:self-hosted:v1`;
+- `subject` nasce somente da sessão validada no servidor;
+- cookie cache não foi habilitado;
+- `/api/auth/[...path]` continua deny-all.
 
-Essa faixa não é ambiente operacional e não autoriza dados reais.
+Sign-in e sign-out continuam exclusivamente por Server Actions estreitas. O transporte de cookies é explícito e o código somente declara sucesso depois de provar readback da sessão ou revogação real.
 
-## F19 — Better Auth self-hosted adotado
+## Banco Auth
 
-A F19 revalidou documentação oficial Better Auth v1.6 e executou prova local/efêmera real.
+Há uma trilha separada de migrations:
 
-A prova demonstrou:
+- `database/auth/migrations/0001_better_auth_1_6_23.sql`;
+- `database/auth/migrations/0002_auth_runtime_boundary.sql`.
 
-- `disableSignUp=true` rejeita signup;
-- social providers/plugins laterais podem permanecer ausentes;
-- migrations Auth podem ser controladas pela aplicação;
-- bootstrap one-shot não roteável consegue criar somente a identidade fictícia necessária ao laboratório;
-- ao voltar para configuração fechada, novo signup continua negado;
-- usuário existente autentica por server API;
-- cookie emitido resolve sessão server-side;
-- sign-out emite invalidação de cookie.
+A role `compras_auth_runtime` deve ser login não privilegiado, sem ownership, superuser, `BYPASSRLS`, `CREATEDB`, `CREATEROLE` ou replication.
 
-A CI passou em lint, typecheck, testes, build e toda a suíte PostgreSQL/RLS existente.
+A CI provou:
 
-A ADR-009 registrou **ADOPT**: o primeiro preview privado deve substituir Managed Neon Auth por Better Auth self-hosted.
+- Auth runtime não lê tabelas do domínio;
+- role de domínio não lê tabelas Auth;
+- autenticação não cria `app_users` nem membership automaticamente;
+- signup permanece fechado;
+- sign-in, sessão e sign-out funcionam com identidade fictícia;
+- toda a suíte PostgreSQL/RLS existente continua em PASS.
 
-Neon pode continuar como PostgreSQL hospedado; a política de Auth passa a ser controlada e versionada pela aplicação.
+## Bootstrap fictício
 
-Fronteira escolhida:
+Existe bootstrap one-shot administrativo e não roteável para laboratório/preflight:
 
-- catch-all Auth continua deny-all;
-- sign-in/sign-out continuam Server Actions;
-- `disableSignUp=true` no motor;
-- nenhum social provider/plugin de método lateral;
-- trusted origins estritos;
-- sessão validada server-side;
-- issuer estável `urn:compras:better-auth:self-hosted:v1`;
-- `subject` vem de `Better Auth user.id` validado;
-- Auth user não cria `app_user`/membership automaticamente;
-- schema Auth dedicado `auth`;
-- role Auth runtime separada, sem superuser/BYPASSRLS/ownership e sem grants no domínio;
-- `AUTH_DATABASE_URL` separado de `DATABASE_URL`;
-- secrets exclusivamente server-side;
-- migrations Auth geradas da versão pinada e versionadas antes de hospedagem.
+- precisa de modo explícito `FICTITIOUS_ONE_SHOT`;
+- aceita somente identidade `example.invalid`;
+- cria somente identidade Better Auth;
+- não concede autorização interna;
+- não deve permanecer habilitado após a operação.
+
+Nenhuma execução hospedada desse bootstrap foi feita na F20.
 
 ## Próxima frente
 
 A única `NEXT_ACTION` está em `docs/ai/NEXT_ACTION.md`:
 
-`F20-SELF-HOSTED-AUTH-IMPLEMENT-01 — Implementar Better Auth self-hosted mantendo a fronteira F14/F08`.
+`F21-PRIVATE-PREVIEW-SELF-HOSTED-PROVISION-01 — Provisionar e provar preview privado fictício com Better Auth self-hosted`.
 
-A F20 deve transformar a decisão F19 em código e migrations reproduzíveis, ainda somente em local/CI efêmero e sem provisionamento hosted persistente.
+A F21 deve provar a arquitetura F20 no ambiente hospedado real, ainda exclusivamente com identidade/dados fictícios, com Vercel Authentication antes de secrets e rollback se qualquer gate externo falhar.
 
 ## Modos da aplicação
 
@@ -100,7 +94,7 @@ A F20 deve transformar a decisão F19 em código e migrations reproduzíveis, ai
 
 ### Persistente
 
-Só existe quando `COMPRAS_PERSISTENT_READ_ENABLED=true` e todos os preflight/gates de Auth, banco, secrets e autorização estiverem satisfeitos.
+Só existe quando `COMPRAS_PERSISTENT_READ_ENABLED=true` e todos os gates de Auth, banco, secrets e autorização estiverem satisfeitos.
 
 Fluxo de confiança:
 
@@ -123,7 +117,7 @@ Migrations imutáveis do domínio:
 - `database/migrations/0002_trusted_identity_read_policies.sql` — helpers de identidade e primeiras policies de leitura;
 - `database/migrations/0003_team_member_directory.sql` — capability view mínima do diretório da equipe.
 
-F20 adicionará uma trilha separada de migrations Auth; não reescreverá as migrations do domínio.
+Migrations Auth ficam separadas em `database/auth/migrations/` e não reescrevem a trilha do domínio.
 
 ## Fonte de verdade
 

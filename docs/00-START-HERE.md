@@ -23,7 +23,7 @@ A F18 mantém uma faixa independente de demonstração hospedada, protegida por 
 
 A F19 adotou Better Auth self-hosted pela ADR-009.
 
-A F20 transformou essa decisão em implementação e a F22 acrescentou assets reproduzíveis de bootstrap/seed/smoke para o futuro preview persistente, todos ainda exclusivamente fictícios e provados em PostgreSQL descartável/CI.
+A F20 transformou essa decisão em implementação. A F22 acrescentou assets reproduzíveis de bootstrap/seed/smoke para o futuro preview persistente. A F23 fechou a arquitetura de controle distribuído de abuso do sign-in pela ADR-010. Tudo continua exclusivamente fictício; nenhuma dessas frentes autorizou dados reais.
 
 ## F20 — Better Auth self-hosted implementado
 
@@ -86,7 +86,7 @@ Foi confirmado que:
 
 A execução parou fail-closed porque a superfície Vercel autenticada disponível na sessão não expõe o readback/CRUD necessário para os dois gates externos obrigatórios: estado completo da proteção/bypasses e environment variables sensíveis de Preview por branch.
 
-Nenhum secret ou recurso hosted novo foi criado. F21 fica `ON HOLD` até essa capacidade de control plane estar disponível; a proteção não será reduzida para contornar o blocker.
+A recuperação F23 confirmou que essa superfície continua sem os comandos necessários para encerrar esses gates. Nenhum secret ou recurso hosted novo foi criado. F21 fica `ON HOLD` até essa capacidade de control plane estar disponível; a proteção não será reduzida para contornar o blocker.
 
 ## F22 — seed e smoke reproduzíveis
 
@@ -125,15 +125,36 @@ domínio 0001
 
 Essa ordem preserva a ownership dedicada da view `team_member_directory`. Nenhuma migration canônica foi reescrita. Depois da view ser criada, um postflight exige que a role Auth continue sem `SELECT` sobre ela.
 
-O workflow F22 usa apenas PostgreSQL 17 descartável. Credenciais operacionais são geradas no job e mascaradas; nenhum recurso Vercel/Neon hosted é criado.
+A F22 foi integrada pela PR `#38`; a CI de `main` `33880974626` e o preflight F22 `33880974672` passaram integralmente.
+
+## F23 — controle de abuso do sign-in decidido
+
+A ADR-010 define a fronteira para brute force/credential stuffing sem reabrir a API genérica do Better Auth.
+
+Decisão:
+
+- limiter apenas em memória é insuficiente;
+- Better Auth `auth.api` server-side continua sem herdar o rate limiter embutido;
+- o limiter autoritativo application-side usará PostgreSQL compartilhado;
+- Vercel Firewall/WAF será uma barreira edge adicional para reduzir volume antes da Function;
+- o runtime hosted só aceitará `x-forwarded-for` sob fronteira Vercel explícita, com exatamente um IP válido e sem forwarded chain;
+- email e IP nunca serão persistidos em claro; buckets usam HMAC com domain separation;
+- policy inicial versionada: `source` 120/15 min, `identifier` 20/15 min e `pair` 8/5 min;
+- os três buckets são consumidos atomicamente antes de `auth.api.signInEmail`;
+- limite excedido vira o mesmo estado externo `rejected` de credencial inválida;
+- falha de limiter/store/configuração vira `unavailable` e não chama Better Auth;
+- não existe bucket global bloqueante;
+- logs não recebem email, IP, HMAC individual, senha, cookie, token, connection string ou payload de sessão.
+
+F23 não provisionou Firewall, Redis/KV, banco ou environment variable hosted.
 
 ## Próxima frente
 
 A única `NEXT_ACTION` está em `docs/ai/NEXT_ACTION.md`:
 
-`F23-PRIVATE-SIGNIN-ABUSE-CONTROL-DESIGN-01 — Fechar desenho de controle de abuso do sign-in privado`.
+`F24-PRIVATE-SIGNIN-ABUSE-CONTROL-IMPLEMENT-01 — Implementar limiter distribuído do sign-in privado`.
 
-A F23 deve fechar, sem provisionamento hosted, a arquitetura de rate limiting/controle de abuso distribuído do Server Action de sign-in: confiança dos sinais de origem, política de chaveamento, concorrência, indisponibilidade, privacidade, observabilidade e testes adversariais. F21 continua `ON HOLD` até seu `resume_when` externo.
+A F24 deve materializar somente a camada application-side da ADR-010 em migration/código/testes, usando PostgreSQL 17 efêmero e dados fictícios, sem provider writes. A regra WAF hosted fica para a work unit de provider adequada quando o control plane puder ser aplicado/read-back com segurança.
 
 ## Modos da aplicação
 
@@ -210,7 +231,8 @@ Ordem mínima para uma nova sessão:
 - `docs/decisions/ADR-006-hosted-preview-boundary.md`;
 - `docs/decisions/ADR-007-private-auth-admission.md`;
 - `docs/decisions/ADR-008-public-demo-hosted-lane.md`;
-- `docs/decisions/ADR-009-self-hosted-better-auth.md`.
+- `docs/decisions/ADR-009-self-hosted-better-auth.md`;
+- `docs/decisions/ADR-010-private-signin-abuse-control.md`.
 
 ### Operação por IA
 

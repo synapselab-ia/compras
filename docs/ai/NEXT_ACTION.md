@@ -1,67 +1,65 @@
 # Next Action — Compras
 
-## F21-PRIVATE-PREVIEW-SELF-HOSTED-PROVISION-01 — Provisionar e provar preview privado fictício com Better Auth self-hosted
+## F22-PRIVATE-PREVIEW-SEED-SMOKE-ASSETS-01 — Versionar assets reproduzíveis de seed e smoke do preview privado
 
-**Classe:** `T3 — integração externa` com impacto de `T2 — segurança`  
+**Classe:** `T1 — feature de suporte` com impacto de `T2 — segurança`  
 **Estado:** READY  
-**Objetivo:** materializar em ambiente hospedado descartável a arquitetura já provada na F20, com Vercel Authentication antes de secrets, Better Auth self-hosted, roles PostgreSQL separadas, RLS e somente identidade/dados fictícios.
+**Objetivo:** preparar e provar em PostgreSQL efêmero/CI os assets determinísticos de bootstrap, autorização fictícia e smoke adversarial que a F21 precisará quando o control plane Vercel estiver novamente executável, sem realizar writes hosted.
 
 Esta é a única `NEXT_ACTION` canônica.
 
 ## Por que esta ação agora
 
-A F20 terminou em PASS na CI `33869932738`:
+A F21 recuperou o estado real dos providers e parou fail-closed antes de secrets:
 
-- `verify`: lint, typecheck, testes e build em PASS;
-- `database`: suíte PostgreSQL/RLS existente em PASS;
-- `auth-database`: schema Better Auth, boundary de role, red-team de `BYPASSRLS` e integração PostgreSQL Auth/domínio em PASS.
+- o Preview fictício F18 continua `READY` e protegido pela barreira de autenticação Vercel;
+- a criação da branch F21 não gerou novo deployment automático;
+- não existe projeto Neon dedicado a Compras e nenhum recurso Neon novo foi criado;
+- a documentação atual confirma que Vercel suporta Deployment Protection e environment variables sensíveis de Preview escopadas por branch;
+- porém a superfície Vercel autenticada disponível nesta sessão não expõe as operações de leitura/readback e CRUD necessárias para aplicar e verificar esses controles com segurança.
 
-O repositório agora possui Better Auth self-hosted implementado, `better-auth@1.6.23` pinado diretamente, migrations Auth versionadas, signup fechado, cookie/session/sign-out verificados, bootstrap fictício one-shot e isolamento entre Auth e autorização de domínio.
+F21 entrou `ON HOLD` com `resume_when` objetivo. O protocolo não mantém blocker externo como frente ativa quando existe trabalho independente e seguro.
 
-O próximo risco relevante não é mais de implementação local: é provar que a mesma fronteira permanece válida no Preview hospedado real sem ampliar exposição ou usar dados reais.
+Os cenários de bootstrap, seed administrativo, identidade sem autorização e cross-team já são requisitos explícitos da F21 e podem ser transformados em assets reproduzíveis antes da hospedagem.
 
 ## Execução obrigatória
 
-1. recuperar o estado real de GitHub, Vercel e Neon antes de qualquer write;
-2. revalidar documentação oficial atual aplicável a Deployment Protection, escopo de environment variables, lifecycle de Preview/rollback e PostgreSQL/roles;
-3. confirmar Vercel Authentication/Deployment Protection antes de anexar qualquer secret;
-4. criar/selecionar ambiente PostgreSQL descartável somente para prova fictícia;
-5. criar roles distintas de migration, Auth runtime e domínio runtime, sem privilégios administrativos/BYPASSRLS;
-6. aplicar migrations canônicas do domínio `0001..0003` e Auth `0001..0002`;
-7. provar isolamento Auth → domínio e domínio → Auth;
-8. executar bootstrap one-shot somente com identidade `example.invalid` fictícia e desligá-lo imediatamente;
-9. criar autorização/seed fictícios de forma separada, sem hook automático de Auth;
-10. anexar ao Preview/branch somente `AUTH_DATABASE_URL`, `DATABASE_URL`, `BETTER_AUTH_SECRET` e `COMPRAS_AUTH_BASE_URL` necessários;
-11. habilitar `COMPRAS_PERSISTENT_READ_ENABLED=true` somente após proteção, roles, migrations e seed estarem validados;
-12. provar sign-in, sessão, sign-out, signup negado, deny-all do catch-all Auth, unknown identity deny e cross-team deny/RLS;
-13. provar fail-closed sem fallback silencioso para demo;
-14. revisar logs/bundle/artifacts para ausência de secrets e conteúdo interno;
-15. executar rollback/deprovisionamento se qualquer gate falhar ou manter somente residual privado/fictício explicitamente justificado;
-16. atualizar checkpoint e deixar exatamente uma nova `NEXT_ACTION`.
+1. recuperar estado/contexto e confirmar que F21 continua `ON HOLD` pelo blocker documentado;
+2. inspecionar bootstrap F20, migrations domínio/Auth e testes de RLS existentes para reutilizar fronteiras, não duplicá-las;
+3. criar seed/preflight exclusivamente fictício e separado das migrations de produção;
+4. usar somente `example.invalid`, UUIDs determinísticos e conteúdo explicitamente artificial;
+5. criar duas equipes artificiais e os registros mínimos necessários a positivo/cross-team;
+6. manter criação de `app_user`/membership separada do bootstrap Auth;
+7. criar harness efêmero que prove Auth sem autorização interna -> DENY;
+8. provar usuário autorizado -> somente própria equipe;
+9. provar UUID conhecido de outra equipe -> DENY/not-found;
+10. provar fail-closed para contexto/configuração inválidos;
+11. provar isolamento Auth runtime -> domínio e domínio runtime -> Auth;
+12. garantir que output não contenha passwords, cookies, tokens, connection strings ou secrets;
+13. executar red-team integral da SPEC;
+14. rodar lint, typecheck, testes, PostgreSQL/RLS e build;
+15. revisar diff e atualizar checkpoint deixando exatamente uma próxima ação.
 
 ## Invariantes
 
 - `REAL_DATA_ALLOWED = NO`;
-- nenhum usuário, email, processo ou conteúdo real;
-- repositório público recebe somente informação sanitizada;
-- Vercel Authentication continua obrigatória;
-- signup público continua negado;
+- somente dados/identidades fictícios;
+- nenhum recurso Vercel/Neon hosted novo;
+- nenhuma environment variable hosted;
+- migrations canônicas aplicadas não são reescritas;
+- bootstrap aceita somente `example.invalid` e continua não roteável;
+- autenticação não cria autorização automaticamente;
+- roles Auth/domínio permanecem separadas e não privilegiadas;
+- RLS continua autoritativa;
 - `/api/auth/[...path]` continua deny-all;
-- nenhum OAuth/OTP/magic link/passkey/reset/admin público;
-- autenticação não cria autorização;
-- identidade nasce somente de sessão validada server-side;
-- Auth runtime e domínio runtime usam credenciais/roles distintas;
-- nenhuma role runtime é owner/superuser/BYPASSRLS;
-- Auth runtime não lê domínio e domínio runtime não lê Auth;
-- credencial bootstrap/migration não vira variável runtime;
-- erro Auth/DB não cai silenciosamente para demo;
-- Managed Neon Auth permanece fora do caminho crítico;
-- F17 permanece `ON HOLD` somente como evidência histórica do blocker anterior.
+- signup normal continua negado;
+- falha protegida não cai silenciosamente para demo;
+- F21 permanece `ON HOLD` até o `resume_when` externo ser satisfeito.
 
 ## Fonte da tarefa
 
-Executar `tasks/F21-PRIVATE-PREVIEW-SELF-HOSTED-PROVISION-01/SPEC.md`, ADR-009, ADR-007, ADR-006, ADR-005, ADR-003, `docs/architecture/SECURITY.md` e `docs/architecture/DATABASE.md`.
+Executar `tasks/F22-PRIVATE-PREVIEW-SEED-SMOKE-ASSETS-01/SPEC.md`, reutilizando F20/F21, ADR-003, ADR-005, ADR-007, ADR-009, `docs/architecture/SECURITY.md` e `docs/architecture/DATABASE.md`.
 
 ## Critério de encerramento
 
-F21 fecha somente quando o Preview privado fictício com Better Auth self-hosted estiver comprovadamente protegido e funcional ponta a ponta, ou quando um blocker externo objetivo impedir a prova sem relaxamento de segurança. Em ambos os casos, registrar o estado real e deixar exatamente uma próxima ação executável.
+F22 fecha quando os assets de bootstrap/seed/smoke necessários ao futuro preview estiverem reproduzíveis e integralmente provados em ambiente efêmero, com CI em PASS, sem hosted writes e sem dados reais. Ao final deve existir exatamente uma nova `NEXT_ACTION` executável.

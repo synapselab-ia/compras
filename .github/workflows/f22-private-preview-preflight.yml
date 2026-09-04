@@ -19,7 +19,7 @@ jobs:
         image: postgres:17-alpine
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: f22-ci-${{ github.run_id }}
+          POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: postgres
         ports:
           - 5432:5432
@@ -33,7 +33,6 @@ jobs:
       PGHOST: localhost
       PGPORT: 5432
       PGUSER: postgres
-      PGPASSWORD: f22-ci-${{ github.run_id }}
       PGDATABASE: postgres
 
     steps:
@@ -89,16 +88,22 @@ jobs:
 
           createdb -O compras_f22_migrator compras_f22_preflight
 
+          # Auth boundary is applied before the capability view. The Auth 0002
+          # migration revokes privileges on every public relation it can see;
+          # the later capability view is owned by its dedicated NOLOGIN role,
+          # so applying 0002 after 0003 would correctly fail for lack of owner
+          # authority. The final smoke test proves the later view is still
+          # inaccessible to the Auth runtime.
           PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
             psql -v ON_ERROR_STOP=1 -f database/migrations/0001_core_foundation.sql
           PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
             psql -v ON_ERROR_STOP=1 -f database/migrations/0002_trusted_identity_read_policies.sql
           PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
-            psql -v ON_ERROR_STOP=1 -f database/migrations/0003_team_member_directory.sql
-          PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
             psql -v ON_ERROR_STOP=1 -f database/auth/migrations/0001_better_auth_1_6_23.sql
           PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
             psql -v ON_ERROR_STOP=1 -f database/auth/migrations/0002_auth_runtime_boundary.sql
+          PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
+            psql -v ON_ERROR_STOP=1 -f database/migrations/0003_team_member_directory.sql
 
           PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
             psql -v ON_ERROR_STOP=1 <<'SQL'

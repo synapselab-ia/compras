@@ -1,7 +1,7 @@
 # F23-PRIVATE-SIGNIN-ABUSE-CONTROL-DESIGN-01 — Fechar desenho de controle de abuso do sign-in privado
 
 **Classe:** T0 — design/spike, com impacto T2 — segurança  
-**Estado:** DONE / PASS — PR #39 CI `33907728323`, preflight `33907728320`  
+**Estado:** DONE / PASS — PR `#39` integrada; main CI `33908077415`, preflight `33908077522`  
 **Dependências:** F14, F20, F22, F21 ON HOLD, ADR-007 e ADR-009  
 **Classificação permitida:** PUBLIC / FICTITIOUS ONLY
 
@@ -11,7 +11,7 @@ O sign-in privado é deliberadamente estreito: entra por Server Action, usa Bett
 
 A arquitetura precisa decidir onde vive um controle distribuído de tentativas e quais sinais podem ser tratados como confiáveis em ambiente serverless. Um limiter apenas em memória de uma instância não é suficiente; aceitar IP/header arbitrário do browser como chave de segurança também não é aceitável.
 
-F21 continua `ON HOLD` por capacidade de control plane Vercel ausente na sessão. F23 é trabalho independente e não deve provisionar nem alterar providers hosted.
+F21 continua `ON HOLD` por capacidade de control plane Vercel ausente na sessão. F23 é trabalho independente e não provisionou nem alterou providers hosted.
 
 ## Resultado esperado
 
@@ -30,7 +30,7 @@ Produzir uma decisão arquitetural implementável para controle de abuso do sign
 
 ## Inspeção obrigatória
 
-Ler diretamente:
+Foram lidos diretamente:
 
 - `src/server/auth/private-admission.ts`;
 - `src/server/auth/runtime.ts`;
@@ -41,11 +41,11 @@ Ler diretamente:
 - `docs/architecture/DATABASE.md`;
 - checkpoint F22/F21 vigente.
 
-Revalidar documentação oficial atual de Better Auth e Vercel antes de assumir comportamento de rate limiting, headers/proxy, Deployment Protection ou Server Actions.
+A documentação oficial atual de Better Auth e Vercel relevante a rate limiting, headers/proxy e Deployment Protection foi revalidada em 2026-09-04 antes da decisão.
 
-## Ameaças mínimas
+## Ameaças cobertas
 
-O desenho deve cobrir explicitamente:
+O desenho cobre explicitamente:
 
 - password guessing dirigido a uma conta;
 - credential stuffing em múltiplas contas;
@@ -58,79 +58,78 @@ O desenho deve cobrir explicitamente:
 - retenção indevida de email/IP;
 - logs contendo credenciais ou payloads de sessão.
 
-## Alternativas mínimas a comparar
+## Alternativas comparadas
 
-Sem provisionar nada nesta work unit, comparar pelo menos:
+Foram comparadas:
 
 1. controle em edge/provider antes da aplicação;
 2. limiter distribuído apoiado em store compartilhado;
-3. composição das duas camadas quando fizer sentido.
+3. composição das duas camadas.
 
-Uma solução apenas process-local/in-memory deve ser tratada como insuficiente para enforcement distribuído, podendo no máximo ser otimização auxiliar não autoritativa.
+Limiter apenas process-local/in-memory foi rejeitado como enforcement distribuído.
 
-Para cada alternativa registrar:
+A ADR-010 registra para as alternativas confiança de origem, atomicidade/concurrency, disponibilidade, fail-closed, privacidade/retenção, custo operacional, testabilidade, rollback e dependência de provider.
 
-- confiança nos sinais de origem;
-- atomicidade/concurrency;
-- latência e disponibilidade;
-- fail-closed/fail-safe;
-- privacidade e retenção;
-- custo/complexidade operacional;
-- testabilidade local/CI;
-- rollback;
-- dependência de provider.
+## Decisão implementada
 
-## Decisões obrigatórias
+A ADR-010 foi criada e aceita com a seguinte fronteira:
 
-A ADR resultante deve definir:
+- PostgreSQL compartilhado como limiter application-side autoritativo;
+- Vercel Firewall/WAF como defesa edge complementar;
+- trusted source hosted limitada a `x-forwarded-for` Vercel estrito;
+- buckets HMAC `source`, `identifier` e `pair` sem email/IP em claro;
+- policy inicial versionada `120/15m`, `20/15m`, `8/5m`;
+- consumo atômico antes do Better Auth;
+- `rejected` para limite excedido e `unavailable` para falha do limiter;
+- nenhum bypass silencioso;
+- retenção, observabilidade, rollback e readbacks hosted definidos.
 
-- camada(s) autoritativa(s) de enforcement;
-- chave(s) do limiter e origem confiável dos sinais;
-- janelas/limites iniciais e como serão parametrizados;
-- política para sucesso, falha de credencial e indisponibilidade;
-- resposta externa genérica para evitar enumeração;
-- tratamento de concorrência/atomicidade;
-- minimização, hashing/pseudonimização quando aplicável e retenção;
-- observabilidade sanitizada;
-- comportamento de rollback;
-- quais partes podem ser provadas em CI sem provider;
-- quais readbacks externos serão exigidos antes de declarar proteção hosted.
+Também foi criada `tasks/F24-PRIVATE-SIGNIN-ABUSE-CONTROL-IMPLEMENT-01/SPEC.md` para materializar somente a camada application-side em PostgreSQL descartável/CI.
 
-## Red-team obrigatório
+Nenhum provider hosted, secret, usuário ou dado real foi criado/alterado.
 
-Rejeitar a decisão se qualquer um ocorrer:
+## Red-team executado
+
+Rejeitados:
 
 - limiter autoritativo somente em memória local;
-- header arbitrário do browser define sozinho a chave confiável;
-- email bruto/senha/cookie/token/session payload é logado;
-- mensagens externas distinguem conta existente de inexistente de forma deliberada;
-- falha do limiter permite bypass silencioso sem decisão explícita;
-- uma única identidade atacante consegue bloquear globalmente todos os usuários por desenho trivial;
-- signup/catch-all é reaberto para aproveitar rate limiting do provider/Auth;
-- proteção Vercel é removida;
-- solução exige secret no repositório/chat;
-- recurso hosted é criado nesta work unit;
-- Managed Neon Auth é reintroduzido;
-- autorização de domínio/RLS é alterada sem necessidade.
+- header arbitrário do browser definindo sozinho a origem confiável;
+- email bruto/senha/cookie/token/session payload em logs;
+- mensagens deliberadamente distintas para conta existente/inexistente;
+- fail-open do limiter;
+- chave global capaz de bloquear todos os usuários;
+- reabertura de signup/catch-all/OAuth/OTP/Admin;
+- remoção/redução de Vercel Authentication;
+- secret no repositório/chat;
+- provider Redis/KV/Neon/Vercel novo nesta unidade;
+- Managed Neon Auth reintroduzido;
+- alteração desnecessária de autorização/RLS.
 
-## Verificação obrigatória
+Trade-off preservado: um atacante distribuído pode causar throttling temporário de uma identidade específica ao consumir seu bucket. A decisão usa janela curta, buckets source/pair e futura camada edge, sem transformar esse risco em bloqueio global.
 
-- documentação oficial externa revalidada e fontes registradas no material de decisão;
-- threat model explícito;
-- alternativas comparadas;
-- confiança de headers/origem explicitada;
-- política de falha e concorrência definida;
-- privacidade/retenção definida;
-- red-team documentado;
-- ADR criada/atualizada;
-- SPEC da implementação seguinte criada;
-- lint/test/build somente se código executável for alterado;
-- revisão integral do diff;
-- nenhum hosted write;
-- `REAL_DATA_ALLOWED = NO`;
-- exatamente uma nova `NEXT_ACTION` ao fechar.
+## Verificação executada
 
-## Fora do escopo
+PR `#39`:
+
+- primeiro ciclo CI `33907728323`: PASS;
+- primeiro preflight `33907728320`: PASS;
+- head final `b151c7bc0fb9d5c251df9c76c229f47855c81043`;
+- CI final `33907918844`: PASS em `verify`, `database` e `auth-database`;
+- preflight final `33907918969`: PASS;
+- lint, typecheck, testes completos, PostgreSQL/RLS/Auth e build: PASS;
+- diff integral: somente documentação/SPEC;
+- scan final: nenhum `postgresql://`, URL hosted Vercel/Neon, control-plane ID ou credencial persistida;
+- hosted writes: NENHUM;
+- dados/identidades reais: NENHUM.
+
+Promoção:
+
+- PR `#39`: MERGED;
+- merge commit: `52f398901de0360d7e6b31b880f08d02e999c97b`;
+- main CI `33908077415`: PASS em `verify`, `database` e `auth-database`;
+- main F22 Private Preview Preflight `33908077522`: PASS.
+
+## Fora do escopo preservado
 
 - provisionar store/limiter/Firewall;
 - alterar Deployment Protection;
@@ -141,38 +140,6 @@ Rejeitar a decisão se qualquer um ocorrer:
 - produção;
 - onboarding institucional definitivo.
 
-## Resultado implementado
+## Encerramento
 
-F23 produziu e versionou ADR-010 com a decisão:
-
-- PostgreSQL compartilhado como limiter application-side autoritativo;
-- Vercel Firewall/WAF como defesa edge complementar;
-- trusted source hosted limitada a `x-forwarded-for` Vercel estrito;
-- buckets HMAC `source`, `identifier` e `pair` sem email/IP em claro;
-- policy inicial versionada `120/15m`, `20/15m`, `8/5m`;
-- consumo atômico antes do Better Auth;
-- `rejected` para limite e `unavailable` para falha do limiter;
-- nenhum bypass silencioso;
-- retenção/observabilidade/rollback e readbacks hosted definidos.
-
-Também foi criada `tasks/F24-PRIVATE-SIGNIN-ABUSE-CONTROL-IMPLEMENT-01/SPEC.md` para materializar somente a camada application-side em PostgreSQL descartável/CI.
-
-Nenhum provider hosted, secret, usuário ou dado real foi criado/alterado.
-
-## Verificação executada
-
-Na PR `#39` sobre o head documental anterior:
-
-- CI canônica `33907728323`: PASS em `verify`, `database` e `auth-database`;
-- F22 Private Preview Preflight `33907728320`: PASS;
-- lint, typecheck, testes, PostgreSQL/RLS/Auth e build: PASS pela CI canônica;
-- diff integral: somente documentação/SPEC, sem código executável ou migration;
-- scan do diff: nenhum `postgresql://`, URL hosted Vercel/Neon, control-plane ID ou credencial persistida;
-- hosted writes: NENHUM;
-- dados/identidades reais: NENHUM.
-
-O commit documental desta marcação deve passar novamente pelos mesmos gates antes do merge final.
-
-## Critério de encerramento
-
-F23 fecha após a PR documental final permanecer em PASS, o diff final permanecer sanitizado e o checkpoint registrar a integração. A única próxima ação é F24.
+F23 está encerrada e integrada. A única próxima ação canônica é `F24-PRIVATE-SIGNIN-ABUSE-CONTROL-IMPLEMENT-01`.

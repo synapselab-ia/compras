@@ -1,7 +1,7 @@
 # Current State — Compras
 
-**PROJECT_STATUS:** F23_IMPLEMENTED_VERIFYING_F24_READY  
-**CURRENT_PHASE:** F22 integrada/verde; F23 design implementado na branch e em verificação; F24 READY; F21 ON HOLD; F17 ON HOLD histórico  
+**PROJECT_STATUS:** F23_PR_GREEN_FINAL_DOCS_VERIFYING_F24_READY  
+**CURRENT_PHASE:** F22 integrada/verde; F23 PR `#39` design completo, primeiro ciclo CI verde e checkpoint final em verificação; F24 READY; F21 ON HOLD; F17 ON HOLD histórico  
 **REPO_VISIBILITY:** PUBLIC  
 **APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_IMPLEMENTED_PERSISTENT_PREVIEW_BLOCKED_PRE_SECRETS  
 **DATABASE_STATUS:** PROTECTED_DOMAIN_READ_MODEL_VALIDATED_AUTH_SCHEMA_AND_FICTITIOUS_PREFLIGHT_EPHEMERAL_PASS  
@@ -18,7 +18,10 @@
 **F22_MAIN_CI_RUN:** `33880974626` — PASS  
 **F22_MAIN_PREFLIGHT_RUN:** `33880974672` — PASS  
 **F23_BRANCH:** `f23-private-signin-abuse-control-design`  
-**F23_STATE:** `IMPLEMENTED / VERIFYING`  
+**F23_PR:** `#39` — OPEN / FINAL DOCS VERIFYING  
+**F23_INITIAL_PR_CI_RUN:** `33907728323` — PASS  
+**F23_INITIAL_PR_PREFLIGHT_RUN:** `33907728320` — PASS  
+**F23_STATE:** `DONE / PASS DESIGN — FINAL PR HEAD VERIFYING`  
 **LAST_GOOD_COMMIT:** `1ea7b1abb47e81af318872ee5e4c683607b3e2a3`  
 **LAST_GOOD_CI_RUN:** `33880974626`  
 **F21_STATE:** `ON HOLD / BLOCKED` — Vercel control-plane surface unavailable for required protection/env readback+CRUD  
@@ -29,14 +32,14 @@
 
 A sessão recuperou `main` em `1ea7b1abb47e81af318872ee5e4c683607b3e2a3`, merge da PR F22 `#38`.
 
-Os runs pós-merge que estavam pendentes no checkpoint anterior já terminaram:
+Os runs pós-merge que estavam pendentes no checkpoint anterior terminaram em PASS:
 
-- CI canônica `33880974626`: `completed / success`;
-- F22 Private Preview Preflight `33880974672`: `completed / success`.
+- CI canônica `33880974626`;
+- F22 Private Preview Preflight `33880974672`.
 
 Portanto F22 está integrada e verde. O `LAST_GOOD_COMMIT` passa a ser `1ea7b1abb47e81af318872ee5e4c683607b3e2a3`.
 
-Não existia PR aberta nem branch F23 ativa. Foi criada `f23-private-signin-abuse-control-design` a partir do last-good.
+Não existia PR aberta nem branch F23 ativa. Foi criada `f23-private-signin-abuse-control-design` a partir do last-good e aberta a PR `#39`.
 
 ## Contexto
 
@@ -85,34 +88,27 @@ A implementação atual confirma:
 
 ## Revalidação externa F23
 
-Documentação oficial atual revalidada em 2026-09-04:
+Documentação oficial atual revalidada em 2026-09-04.
 
 ### Better Auth v1.6
 
-`https://better-auth.com/docs/1.6/concepts/rate-limit`
+Fontes oficiais registradas na ADR-010, incluindo `https://better-auth.com/docs/1.6/concepts/rate-limit` e a referência de segurança.
 
 Confirmado:
 
-- requests server-side por `auth.api` **não** são afetadas pelo rate limiter embutido;
-- storage padrão do limiter é em memória e não é apropriado como enforcement distribuído em muitos cenários serverless;
-- Better Auth suporta database/secondary/custom storage para seu limiter HTTP, mas isso não muda o bypass das chamadas `auth.api` usadas pela aplicação.
-
-Também foi revalidada a referência de segurança Better Auth v1.6.
+- requests server-side por `auth.api` não são afetadas pelo rate limiter embutido;
+- storage padrão em memória não serve como enforcement distribuído em muitos cenários serverless;
+- database/secondary/custom storage do limiter HTTP não altera o bypass das chamadas `auth.api` usadas pela aplicação.
 
 ### Vercel
 
-Foram revalidadas as páginas oficiais de:
-
-- request headers;
-- Firewall/WAF rate limiting;
-- CLI/API de Firewall;
-- Vercel Authentication/Deployment Protection.
+Foram revalidadas as páginas oficiais de request headers, Firewall/WAF rate limiting, CLI/API de Firewall e Vercel Authentication/Deployment Protection.
 
 Confirmado:
 
 - Vercel Firewall/WAF executa antes da aplicação e suporta rate limit por path/método/IP;
 - `x-forwarded-for` é sobrescrito pela Vercel com o IP público do cliente para impedir spoofing, salvo quando uma configuração explícita de trusted proxy altera essa fronteira;
-- regras WAF podem ser lidas/alteradas por control plane oficial e possuem rollback operacional;
+- regras WAF possuem control plane oficial e rollback;
 - Vercel Authentication continua sendo a barreira externa do Preview existente.
 
 ## F23 — decisão arquitetural
@@ -212,31 +208,24 @@ Atualizados:
 
 - `docs/00-START-HERE.md`;
 - `docs/ai/NEXT_ACTION.md`;
+- `tasks/F23-PRIVATE-SIGNIN-ABUSE-CONTROL-DESIGN-01/SPEC.md`;
 - este checkpoint.
 
 Nenhum arquivo executável, migration aplicada ou configuração hosted foi alterado nesta work unit de design.
 
-## Verificação aplicável
+## Verificação F23
 
-Como F23 é T0/design e não altera código executável, lint/typecheck/test/build não são exigidos antes do primeiro commit documental por mudança local. A PR ainda deve passar a CI normal do repositório antes de promoção/merge.
+Primeiro ciclo da PR `#39` sobre o head `39d328e4a493d8d72d38be6b6fd63bc4b06848d7`:
 
-Verificações já concluídas:
-
-- estado GitHub/main: RECUPERADO;
-- F22 post-merge CI: PASS;
-- F22 post-merge preflight: PASS;
-- `CONTEXT_MANIFEST`: VALID;
-- código/ADRs/SECURITY/DATABASE exigidos: INSPECIONADOS;
-- documentação Better Auth/Vercel: REVALIDADA;
-- F21 blocker: CONTINUA PRESENTE;
-- threat model: COMPLETO;
-- alternativas edge/PostgreSQL/Redis-KV: COMPARADAS;
-- confiança de origem: DEFINIDA;
-- policy/atomicidade/fail-closed: DEFINIDOS;
-- privacidade/retenção/observabilidade: DEFINIDAS;
-- red-team de design: PASS;
+- CI canônica `33907728323`: PASS em `verify`, `database` e `auth-database`;
+- F22 Private Preview Preflight `33907728320`: PASS;
+- lint, typecheck, testes completos, PostgreSQL/RLS/Auth e build Next.js: PASS;
+- diff integral: somente documentação/SPEC;
+- scan do diff: nenhum `postgresql://`, URL hosted Vercel/Neon, control-plane ID ou credential persistida;
 - hosted writes: NENHUM;
 - dados/identidades reais: NENHUM.
+
+Os commits de fechamento documental após esse primeiro ciclo devem passar novamente pelos mesmos gates antes do merge.
 
 ## Próxima ação
 

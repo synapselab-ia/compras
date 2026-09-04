@@ -1,7 +1,7 @@
 # F23-PRIVATE-SIGNIN-ABUSE-CONTROL-DESIGN-01 — Fechar desenho de controle de abuso do sign-in privado
 
 **Classe:** T0 — design/spike, com impacto T2 — segurança  
-**Estado:** IMPLEMENTED / VERIFYING  
+**Estado:** DONE / PASS — PR #39 CI `33907728323`, preflight `33907728320`  
 **Dependências:** F14, F20, F22, F21 ON HOLD, ADR-007 e ADR-009  
 **Classificação permitida:** PUBLIC / FICTITIOUS ONLY
 
@@ -159,6 +159,20 @@ Também foi criada `tasks/F24-PRIVATE-SIGNIN-ABUSE-CONTROL-IMPLEMENT-01/SPEC.md`
 
 Nenhum provider hosted, secret, usuário ou dado real foi criado/alterado.
 
+## Verificação executada
+
+Na PR `#39` sobre o head documental anterior:
+
+- CI canônica `33907728323`: PASS em `verify`, `database` e `auth-database`;
+- F22 Private Preview Preflight `33907728320`: PASS;
+- lint, typecheck, testes, PostgreSQL/RLS/Auth e build: PASS pela CI canônica;
+- diff integral: somente documentação/SPEC, sem código executável ou migration;
+- scan do diff: nenhum `postgresql://`, URL hosted Vercel/Neon, control-plane ID ou credencial persistida;
+- hosted writes: NENHUM;
+- dados/identidades reais: NENHUM.
+
+O commit documental desta marcação deve passar novamente pelos mesmos gates antes do merge final.
+
 ## Critério de encerramento
 
-F23 fecha após a PR documental passar CI, o diff final permanecer sanitizado e o checkpoint registrar a integração. A única próxima ação é F24.
+F23 fecha após a PR documental final permanecer em PASS, o diff final permanecer sanitizado e o checkpoint registrar a integração. A única próxima ação é F24.

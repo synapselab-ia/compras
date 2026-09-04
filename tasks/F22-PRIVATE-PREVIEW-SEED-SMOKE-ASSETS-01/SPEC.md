@@ -1,7 +1,7 @@
 # F22-PRIVATE-PREVIEW-SEED-SMOKE-ASSETS-01 — Versionar assets reproduzíveis de seed e smoke do preview privado
 
 **Classe:** T1 — feature de suporte, com impacto T2 — segurança  
-**Estado:** PLANNED / NEXT  
+**Estado:** COMPLETED — PR #38  
 **Dependências:** F11, F14, F20, F21 ON HOLD, ADR-003, ADR-005, ADR-007 e ADR-009  
 **Classificação permitida:** PUBLIC / FICTITIOUS ONLY
 
@@ -125,6 +125,27 @@ Rejeitar PASS se qualquer um ocorrer:
 - rate limiting para exposição pública ampla;
 - onboarding institucional definitivo.
 
+## Resultado executado
+
+A PR #38 materializou os assets sem alterar migrations canônicas:
+
+- seed one-shot de autorização em `src/server/preflight/fictitious-private-preview.ts`, protegido por `FICTITIOUS_EPHEMERAL`;
+- fixture determinística com UUIDs artificiais, duas equipes e duas contratações explicitamente fictícias;
+- validação do subject contra identidade Better Auth persistida em `example.invalid` antes de qualquer autorização de domínio;
+- conexão administrativa separada e explicitamente não-runtime para o seed em tabelas `FORCE RLS`;
+- unit tests dos guards e do postflight;
+- integração PostgreSQL que prova bootstrap sem autorização, own-team, UUID cross-team, claims inválidos, signup fechado, sessão e isolamento de roles;
+- workflow `F22 Private Preview Preflight` em PostgreSQL 17 descartável, com credenciais operacionais geradas em runtime e mascaradas;
+- ordem de composição provada: domínio `0001..0002` -> Auth `0001..0002` -> domínio `0003`, mantendo o capability view fora da role Auth;
+- CI canônica `33880106437`: PASS integral;
+- CI F22 `33880106555`: PASS integral.
+
+O primeiro ensaio F22 detectou corretamente que aplicar Auth `0002` depois de `team_member_directory` falha porque a view pertence ao capability NOLOGIN. O harness foi corrigido sem reescrever migrations: Auth boundary é aplicado antes da criação da view, e um postflight explícito exige ausência de `SELECT` da role Auth sobre a view criada depois.
+
+Nenhum recurso Vercel/Neon hosted foi criado ou alterado, nenhuma identidade/dado real foi usado e `REAL_DATA_ALLOWED` permaneceu `NO`.
+
 ## Critério de encerramento
 
 F22 fecha quando os assets de bootstrap/seed/smoke necessários ao futuro preview estiverem reproduzíveis e integralmente provados em ambiente efêmero, sem hosted writes e sem dados reais. O checkpoint deve manter F21 `ON HOLD` com seu `resume_when` objetivo e deixar exatamente uma nova `NEXT_ACTION` independente ou de retomada quando a capacidade externa estiver disponível.
+
+**Critério satisfeito pela PR #38.** A próxima ação canônica é F23, sem retomar F21 enquanto o `resume_when` externo não estiver satisfeito.

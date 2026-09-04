@@ -1,185 +1,158 @@
 # Current State — Compras
 
-**PROJECT_STATUS:** F21_ON_HOLD_VERCEL_CONTROL_PLANE_F22_READY  
-**CURRENT_PHASE:** F21 checkpoint integrado; F21 ON HOLD antes de secrets; F22 READY; F17 ON HOLD histórico  
+**PROJECT_STATUS:** F22_IMPLEMENTED_PR_GREEN_F23_READY  
+**CURRENT_PHASE:** F22 implementada e verificada na PR `#38`; F23 READY; F21 ON HOLD; F17 ON HOLD histórico  
 **REPO_VISIBILITY:** PUBLIC  
 **APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_IMPLEMENTED_PERSISTENT_PREVIEW_BLOCKED_PRE_SECRETS  
-**DATABASE_STATUS:** PROTECTED_DOMAIN_READ_MODEL_VALIDATED_AUTH_SCHEMA_VERSIONED_EPHEMERAL_PASS_NO_F21_HOSTED_DB  
-**AUTH_STATUS:** SELF_HOSTED_BETTER_AUTH_IMPLEMENTED_CI_PROVEN_HOSTED_PREVIEW_PENDING  
-**DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_VERCEL_AUTH_OBSERVED_NO_NEW_F21_DEPLOYMENT  
+**DATABASE_STATUS:** PROTECTED_DOMAIN_READ_MODEL_VALIDATED_AUTH_SCHEMA_AND_FICTITIOUS_PREFLIGHT_EPHEMERAL_PASS  
+**AUTH_STATUS:** SELF_HOSTED_BETTER_AUTH_IMPLEMENTED_FICTITIOUS_BOOTSTRAP_AND_AUTHZ_SEPARATION_PROVEN  
+**DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_VERCEL_AUTH_OBSERVED_NO_F22_HOSTED_WRITES  
 **REAL_DATA_ALLOWED:** NO  
 **CONTEXT_STATUS:** VALID  
 **FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`  
-**F20_MERGE_COMMIT:** `a5313463b3ccf7f7d3b229ca0ab8798f586cafcc`  
-**F20_PR:** `#36` — MERGED  
 **F20_FINAL_CHECKPOINT_COMMIT:** `a1037b38269c2e67e0ec249ed597eb5171eb31d2`  
-**F20_FINAL_CHECKPOINT_CI_RUN:** `33871918152` — PASS  
-**F21_CHECKPOINT_PR:** `#37` — MERGED  
 **F21_CHECKPOINT_MERGE_COMMIT:** `b38ad708a6f668b4886930a96eaff95a1251590a`  
-**F21_PR_CI_RUN:** `33873199115` — PASS  
-**F21_MAIN_CI_RUN:** `33873312591` — PASS  
-**LAST_GOOD_COMMIT:** `b38ad708a6f668b4886930a96eaff95a1251590a`  
-**LAST_GOOD_CI_RUN:** `33873312591`  
+**F21_FINAL_CHECKPOINT_COMMIT:** `73cd3ec1ef524c526c91124d40efae1eff2061ce`  
+**F21_FINAL_CHECKPOINT_CI_RUN:** `33873458508` — PASS  
+**F22_BRANCH:** `f22-private-preview-seed-smoke-assets`  
+**F22_PR:** `#38` — OPEN / GREEN PRE-CHECKPOINT  
+**F22_IMPLEMENTATION_PROOF_HEAD:** `5ef25de708b74ede8e938b5527ad6019b24bd688`  
+**F22_CANONICAL_CI_RUN:** `33880106437` — PASS  
+**F22_PREFLIGHT_CI_RUN:** `33880106555` — PASS  
+**LAST_GOOD_COMMIT:** `73cd3ec1ef524c526c91124d40efae1eff2061ce`  
+**LAST_GOOD_CI_RUN:** `33873458508`  
 **F21_STATE:** `ON HOLD / BLOCKED` — Vercel control-plane surface unavailable for required protection/env readback+CRUD  
 **F21_RESUME_WHEN:** sessão Vercel autenticada permitir readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch, sem exposição de valores  
 **ON_HOLD:** `F17-B2` histórico + `F21` conforme resume_when acima
 
-## Estado real recuperado
+## Estado real recuperado para F22
 
-A F21 partiu da `main` `a1037b38269c2e67e0ec249ed597eb5171eb31d2`, cuja CI `33871918152` estava integralmente em PASS.
+A work unit partiu da `main` `73cd3ec1ef524c526c91124d40efae1eff2061ce`, cuja CI `33873458508` estava integralmente em PASS.
 
-Não existia branch F21 ativa. A frente foi criada em `f21-private-preview-self-hosted-provision`, executada e integrada em `main` pela PR `#37`.
+Não existia branch/PR F22 ativa. Foi criada `f22-private-preview-seed-smoke-assets` e aberta a PR `#38` para executar a única `NEXT_ACTION` então canônica: `F22-PRIVATE-PREVIEW-SEED-SMOKE-ASSETS-01`.
 
-O merge/checkpoint F21 é `b38ad708a6f668b4886930a96eaff95a1251590a`. A CI da PR `33873199115` e a CI de `main` `33873312591` passaram integralmente em `verify`, `database` e `auth-database`.
+O `CONTEXT_MANIFEST` foi revalidado diretamente contra a árvore de `main`: todos os 10 inputs estáveis continuaram nos blobs esperados. `CONTEXT_STATUS = VALID`.
 
-O `CONTEXT_MANIFEST` foi revalidado. Todos os 10 inputs estáveis continuaram exatamente nos blobs esperados; portanto `CONTEXT_STATUS = VALID`.
+F21 continuou `ON HOLD` durante toda a unidade. Nenhuma condição de `resume_when` foi presumida satisfeita e nenhum write Vercel/Neon hosted foi realizado.
 
-A tarefa executada foi a única `NEXT_ACTION` então canônica: `F21-PRIVATE-PREVIEW-SELF-HOSTED-PROVISION-01`.
+## F22 — assets reproduzíveis implementados
 
-## F21 — recuperação de providers
+A F22 adicionou uma trilha operacional exclusivamente fictícia em `src/server/preflight/`, separada das migrations canônicas.
 
-### Vercel
+### Seed de autorização fictícia
 
-O projeto vinculado ao repositório e já usado na faixa F18 continua existindo.
+`fictitious-private-preview.ts`:
 
-Estado observado:
+- é `server-only`;
+- exige modo exato `FICTITIOUS_EPHEMERAL`;
+- usa UUIDs determinísticos e conteúdo explicitamente artificial;
+- contém duas equipes fictícias e duas contratações fictícias;
+- recebe somente o `subject` criado pelo bootstrap Better Auth fechado;
+- verifica esse subject na tabela Auth e exige email persistido em `example.invalid`;
+- não cria nem altera identidade Better Auth;
+- cria `app_user` e membership em operação administrativa separada;
+- concede membership somente à equipe Alpha;
+- executa postflight de todas as relações esperadas e da ausência de membership cross-team;
+- retorna somente `{ kind: "seeded" }` e usa erro genérico fail-closed.
 
-- deployment mais recente da aplicação: `READY`;
-- target: Preview, não Production;
-- nenhuma implantação nova apareceu após a criação da branch F21, confirmando que Git auto-deploy não voltou a ampliar a superfície;
-- o acesso ao Preview pela superfície autenticada do conector retornou redirecionamento para a barreira de autenticação Vercel;
-- não foi observado deployment Production `READY` correspondente à aplicação privada.
+As tabelas de domínio usam `FORCE RLS` e não possuem policy de INSERT. Por isso o seed exige conexão administrativa one-shot explicitamente privilegiada; essa credencial nunca é runtime e nunca é usada como prova de autorização operacional.
 
-Isso preserva a barreira externa F18/F21 antes de qualquer secret novo.
+### Harness PostgreSQL
 
-### Neon
+`fictitious-private-preview.postgres.test.ts` prova em PostgreSQL 17 descartável:
 
-A organização Neon foi recuperada. Não existe projeto dedicado a Compras.
+- email fora de `example.invalid` é rejeitado pelo bootstrap;
+- bootstrap Better Auth cria somente identidade Auth;
+- antes do seed, `app_users=0` e `memberships=0`;
+- identidade Auth sem autorização interna vê zero contratações;
+- seed administrativo separado cria somente a autorização fictícia esperada;
+- configuração normal continua `disableSignUp=true`;
+- sign-in, sessão e sign-out funcionam para a identidade fictícia existente;
+- usuário autorizado vê somente a própria equipe;
+- UUID conhecido da outra equipe continua invisível;
+- claims ausentes, issuer errado, subject errado e claims malformados falham fechados;
+- roles runtime Auth/domínio permanecem `NOINHERIT`, sem superuser, `BYPASSRLS`, `CREATEDB` ou `CREATEROLE`;
+- roles runtime não possuem relações;
+- Auth runtime não lê o domínio;
+- domínio runtime não lê o schema Auth.
 
-Os projetos existentes pertencem a outras frentes e não foram reutilizados. Nenhum projeto, branch, database, role, identidade ou secret Neon foi criado ou alterado durante F21.
+## Composição de migrations — achado de red-team
 
-## Revalidação externa F21
+O primeiro ensaio do workflow F22 detectou um conflito real de ownership ao tentar aplicar `database/auth/migrations/0002_auth_runtime_boundary.sql` depois de `database/migrations/0003_team_member_directory.sql`.
 
-### Vercel
+A migration Auth `0002` revoga privilégios em todas as relações `public` que já existem. A view `team_member_directory`, porém, pertence deliberadamente à capability role `compras_team_directory_view_owner`; o migrator normal não é owner dessa view e o `REVOKE ALL ... ON ALL TABLES IN SCHEMA public` falhou fechado.
 
-A documentação oficial atual confirmou que o provider suporta:
+A correção não reescreveu nenhuma migration. O preflight composto aplica:
 
-- Deployment Protection/Vercel Authentication;
-- environment variables sensíveis;
-- variáveis Preview escopadas por branch Git;
-- inspeção/alteração de Deployment Protection pelo control plane/CLI/API.
+```text
+domínio 0001
+-> domínio 0002
+-> Auth 0001
+-> Auth 0002
+-> domínio 0003
+```
 
-Entretanto, a superfície Vercel autenticada disponível nesta sessão não expõe operações para:
+Depois da criação da capability view há postflight explícito exigindo que `compras_auth_runtime` continue sem `SELECT` sobre `public.team_member_directory`.
 
-- ler/read-back o estado completo de Deployment Protection e bypasses;
-- criar/atualizar/listar metadados/remover environment variables sensíveis de Preview por branch.
+Esse achado tornou o harness mais fiel à fronteira de ownership já aprovada em ADR-005.
 
-A capability existe no provider, mas não está disponível no conector/control plane acessível pela sessão.
+## CI e verificação F22
 
-### Neon / PostgreSQL
+O head funcional `5ef25de708b74ede8e938b5527ad6019b24bd688` passou as duas suítes relevantes antes do checkpoint documental:
 
-A documentação Neon atual confirmou novamente:
+- CI canônica `33880106437`: PASS em `verify`, `database` e `auth-database`;
+- `verify`: install, lint, typecheck, testes completos e build Next.js — PASS;
+- `database`: migrations/RLS/capability/detalhe persistente — PASS;
+- `auth-database`: role Auth adversarial, migrations Auth e integração Better Auth/PostgreSQL — PASS;
+- workflow `F22 Private Preview Preflight` `33880106555`: PASS;
+- integração F22 real em PostgreSQL: PASS.
 
-- branches são isoladas e apropriadas para ambientes temporários;
-- roles criadas por Console/CLI/API recebem membership em `neon_superuser`, incompatível com runtime normal deste projeto;
-- roles limitadas podem/devem ser criadas por SQL e receber grants explícitos.
+As credenciais operacionais do workflow F22 são geradas aleatoriamente durante o job e mascaradas antes de serem colocadas no ambiente. Os URLs de conexão também são mascarados. O serviço PostgreSQL usa autenticação `trust` somente dentro do runner descartável para evitar que uma senha de serviço apareça no log de inicialização do container; isso não altera grants, ownership ou RLS usados na prova.
 
-Isso continua compatível com F20/ADR-005/ADR-009 e não reabre Managed Neon Auth.
+## Red-team F22
 
-## Decisão F21 — ON HOLD fail-closed
+Resultado:
 
-F21 não pode prosseguir para a etapa de secrets sem conseguir aplicar e ler de volta os controles Vercel obrigatórios.
+- email fora de `example.invalid` aceito: NÃO;
+- seed sem gate fictício: NÃO;
+- issuer/equipe oriundos do browser: NÃO;
+- bootstrap criando `app_user`/membership automaticamente: NÃO;
+- mesma role Auth/domínio: NÃO;
+- runtime owner/superuser/BYPASSRLS/CREATEROLE: NÃO;
+- identidade Auth sem autorização retornando dado: NÃO;
+- cross-team por UUID conhecido retornando linha: NÃO;
+- claims inválidos abrindo acesso: NÃO;
+- Auth runtime lendo domínio/capability view: NÃO;
+- domínio runtime lendo Auth: NÃO;
+- migration canônica reescrita: NÃO;
+- catch-all Auth reaberto: NÃO;
+- signup normal reaberto: NÃO;
+- output de teste contendo credencial operacional/connection string/cookie/token: NÃO nos runs verdes finais;
+- recurso Vercel/Neon hosted criado: NÃO;
+- identidade/dado real usado: NÃO.
 
-Os gates que faltam são precisamente os que impedem:
+O primeiro run F22 falho havia usado uma senha estática fictícia de serviço visível no metadata/log do container. Apesar de não ser secret operacional, isso foi tratado como falha de higiene do próprio red-team; o workflow final eliminou esse valor e os runs verdes posteriores usam somente valores gerados e mascarados.
 
-- secret em escopo maior que a branch dedicada;
-- bypass/exception não verificado;
-- ativação persistente sem proteção demonstrada.
+## F21 permanece ON HOLD
 
-Provisionar PostgreSQL hospedado antes de saber que a cadeia Vercel pode ser finalizada produziria recurso e credenciais sem caminho seguro de integração. Portanto a execução parou **antes** de criar banco/roles/secrets hosted.
+Nada na F22 altera o blocker externo da F21.
 
-Isso é um blocker de superfície de controle da sessão, não uma decisão para relaxar a arquitetura.
-
-### resume_when
-
-Retomar F21 somente quando a sessão possuir superfície Vercel autenticada capaz de:
+Retomar F21 somente quando a sessão Vercel autenticada puder:
 
 1. ler/read-back Deployment Protection/Vercel Authentication e bypasses relevantes;
-2. criar, atualizar, listar metadados e remover sensitive environment variables de Preview escopadas à branch F21;
+2. criar, atualizar, listar metadados e remover sensitive Preview env vars escopadas à branch;
 3. inspecionar/disparar o Preview sem criar Production pública por conveniência.
 
-Secrets nunca devem ser transferidos por chat para contornar esse blocker.
-
-## Red-team F21
-
-Resultado deliberado:
-
-- Preview anônimo sem barreira externa: NÃO observado; proteção Vercel continua presente;
-- Production `READY` pública criada por F21: NÃO;
-- novo deployment automático após branch F21: NÃO;
-- secret/connection string persistido em GitHub: NÃO;
-- secret anexado à Vercel sem readback de escopo: NÃO;
-- projeto/branch Neon criado prematuramente: NÃO;
-- projeto Neon de outra frente reutilizado: NÃO;
-- role control-plane privilegiada adotada como runtime: NÃO;
-- Managed Neon Auth reintroduzido: NÃO;
-- proteção externa removida para contornar blocker: NÃO;
-- dado/identidade real: NÃO.
-
-A revisão integral do diff público da PR `#37` também procurou connection strings, URLs hosted, IDs de control plane e secrets; nenhum desses valores foi persistido.
-
-O red-team rejeitou um falso PASS e preservou a fronteira aprovada.
-
-## Rollback / residual F21
-
-Não houve write de infraestrutura hosted em F21.
-
-Consequentemente:
-
-- nenhum secret F21 precisa ser revogado;
-- nenhum recurso PostgreSQL F21 precisa ser removido;
-- nenhuma identidade/sessão F21 existe para invalidar;
-- o Preview F18 preexistente continua privado/fictício e inalterado.
-
-## F20 preservada
-
-A implementação integrada continua válida:
-
-- Better Auth self-hosted `1.6.23` pinado;
-- `disableSignUp=true`;
-- `/api/auth/[...path]` deny-all;
-- sign-in/sign-out por Server Actions estreitas;
-- sessão e subject validados server-side;
-- issuer `urn:compras:better-auth:self-hosted:v1`;
-- schema Auth separado;
-- Auth runtime e domínio runtime separados;
-- migrations Auth versionadas;
-- bootstrap one-shot restrito a `example.invalid`;
-- RLS e isolamento Auth/domínio provados em CI.
-
-## Verificação F21
-
-- GitHub/main inicial: RECUPERADO;
-- `CONTEXT_MANIFEST`: VALID;
-- documentação oficial Vercel/Neon: REVALIDADA;
-- estado real Vercel/Neon: RECUPERADO antes de writes;
-- barreira Vercel do Preview existente: OBSERVADA;
-- novo deployment F21 automático: AUSENTE;
-- hosted secrets F21: NENHUM;
-- recurso PostgreSQL F21: NENHUM;
-- dados/identidades reais: NENHUM;
-- revisão do diff público: PASS;
-- CI PR `33873199115`: PASS;
-- CI `main` `33873312591`: PASS.
+Secrets nunca devem ser enviados por chat para contornar esse blocker.
 
 ## Last good
 
-O last-good canônico passa a ser o checkpoint F21 integrado `b38ad708a6f668b4886930a96eaff95a1251590a`, validado pela CI de `main` `33873312591`.
+Enquanto a PR `#38` não estiver integrada, o last-good canônico de `main` permanece `73cd3ec1ef524c526c91124d40efae1eff2061ce`, validado pela CI `33873458508`.
 
-Esse checkpoint registra corretamente um blocker externo; ele não representa preview persistente operacional. `REAL_DATA_ALLOWED` continua `NO`.
+O fechamento final F22 deve atualizar este checkpoint depois do merge e dos runs de `main`.
 
 ## Próxima ação
 
-Executar somente `F22-PRIVATE-PREVIEW-SEED-SMOKE-ASSETS-01` conforme `docs/ai/NEXT_ACTION.md` e `tasks/F22-PRIVATE-PREVIEW-SEED-SMOKE-ASSETS-01/SPEC.md`.
+Executar somente `F23-PRIVATE-SIGNIN-ABUSE-CONTROL-DESIGN-01` conforme `docs/ai/NEXT_ACTION.md` e `tasks/F23-PRIVATE-SIGNIN-ABUSE-CONTROL-DESIGN-01/SPEC.md`.
 
-F21 permanece `ON HOLD` e só volta a ser frente ativa quando seu `resume_when` for objetivamente satisfeito.
+F23 é uma frente de design independente para fechar o controle distribuído de abuso do sign-in privado. F21 permanece `ON HOLD` até seu `resume_when` ser objetivamente satisfeito.

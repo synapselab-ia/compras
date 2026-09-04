@@ -1,0 +1,161 @@
+name: F22 Private Preview Preflight
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  private-preview-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGDATABASE: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Use Node.js 24 LTS
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24.x"
+          cache: npm
+
+      - name: Install dependencies from lockfile
+        run: npm ci
+
+      - name: Provision isolated fictitious preflight database
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          MIGRATOR_PASSWORD="$(openssl rand -hex 24)"
+          SEED_ADMIN_PASSWORD="$(openssl rand -hex 24)"
+          AUTH_PASSWORD="$(openssl rand -hex 24)"
+          DOMAIN_PASSWORD="$(openssl rand -hex 24)"
+          BOOTSTRAP_PASSWORD="$(openssl rand -hex 24)"
+          BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
+
+          echo "::add-mask::$MIGRATOR_PASSWORD"
+          echo "::add-mask::$SEED_ADMIN_PASSWORD"
+          echo "::add-mask::$AUTH_PASSWORD"
+          echo "::add-mask::$DOMAIN_PASSWORD"
+          echo "::add-mask::$BOOTSTRAP_PASSWORD"
+          echo "::add-mask::$BETTER_AUTH_SECRET"
+
+          psql -v ON_ERROR_STOP=1 \
+            -v migrator_password="$MIGRATOR_PASSWORD" \
+            -v seed_admin_password="$SEED_ADMIN_PASSWORD" \
+            -v auth_password="$AUTH_PASSWORD" \
+            -v domain_password="$DOMAIN_PASSWORD" <<'SQL'
+          CREATE ROLE compras_f22_migrator
+            LOGIN CREATEROLE NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOREPLICATION
+            PASSWORD :'migrator_password';
+          CREATE ROLE compras_f22_seed_admin
+            LOGIN NOINHERIT NOSUPERUSER BYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION
+            PASSWORD :'seed_admin_password';
+          CREATE ROLE compras_auth_runtime
+            LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION
+            PASSWORD :'auth_password';
+          CREATE ROLE compras_domain_runtime_f22
+            LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION
+            PASSWORD :'domain_password';
+          SQL
+
+          createdb -O compras_f22_migrator compras_f22_preflight
+
+          # Auth boundary is applied before the capability view. Auth 0002
+          # revokes privileges on every public relation it can see. The later
+          # view is owned by its dedicated NOLOGIN capability, so applying Auth
+          # 0002 after domain 0003 would correctly fail for lack of owner
+          # authority. A postflight below proves the later view receives no
+          # Auth runtime SELECT privilege.
+          PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
+            psql -v ON_ERROR_STOP=1 -f database/migrations/0001_core_foundation.sql
+          PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
+            psql -v ON_ERROR_STOP=1 -f database/migrations/0002_trusted_identity_read_policies.sql
+          PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
+            psql -v ON_ERROR_STOP=1 -f database/auth/migrations/0001_better_auth_1_6_23.sql
+          PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
+            psql -v ON_ERROR_STOP=1 -f database/auth/migrations/0002_auth_runtime_boundary.sql
+          PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
+            psql -v ON_ERROR_STOP=1 -f database/migrations/0003_team_member_directory.sql
+
+          AUTH_DIRECTORY_SELECT="$(
+            PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
+              psql -v ON_ERROR_STOP=1 -Atqc \
+              "SELECT has_table_privilege('compras_auth_runtime', 'public.team_member_directory', 'SELECT')"
+          )"
+          if [[ "$AUTH_DIRECTORY_SELECT" != "f" ]]; then
+            echo "Auth runtime unexpectedly received directory capability access" >&2
+            exit 1
+          fi
+
+          PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
+            psql -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT USAGE ON SCHEMA public TO compras_domain_runtime_f22;
+          GRANT SELECT ON TABLE
+            public.app_users,
+            public.memberships,
+            public.teams,
+            public.contractings,
+            public.related_identifiers,
+            public.contracting_items,
+            public.contracting_events
+            TO compras_domain_runtime_f22;
+          GRANT EXECUTE ON FUNCTION public.current_auth_issuer() TO compras_domain_runtime_f22;
+          GRANT EXECUTE ON FUNCTION public.current_auth_subject() TO compras_domain_runtime_f22;
+          GRANT EXECUTE ON FUNCTION public.current_app_user_id() TO compras_domain_runtime_f22;
+
+          GRANT USAGE ON SCHEMA public, auth TO compras_f22_seed_admin;
+          GRANT SELECT ON TABLE auth."user" TO compras_f22_seed_admin;
+          GRANT SELECT, INSERT ON TABLE
+            public.teams,
+            public.app_users,
+            public.memberships,
+            public.contractings
+            TO compras_f22_seed_admin;
+          SQL
+
+          AUTH_URL="postgresql://compras_auth_runtime:${AUTH_PASSWORD}@localhost:5432/compras_f22_preflight"
+          DOMAIN_URL="postgresql://compras_domain_runtime_f22:${DOMAIN_PASSWORD}@localhost:5432/compras_f22_preflight"
+          ADMIN_URL="postgresql://compras_f22_seed_admin:${SEED_ADMIN_PASSWORD}@localhost:5432/compras_f22_preflight"
+
+          echo "::add-mask::$AUTH_URL"
+          echo "::add-mask::$DOMAIN_URL"
+          echo "::add-mask::$ADMIN_URL"
+
+          printf 'F22_AUTH_RUNTIME_DATABASE_URL=%s\n' "$AUTH_URL" >> "$GITHUB_ENV"
+          printf 'F22_DOMAIN_RUNTIME_DATABASE_URL=%s\n' "$DOMAIN_URL" >> "$GITHUB_ENV"
+          printf 'F22_ADMIN_DATABASE_URL=%s\n' "$ADMIN_URL" >> "$GITHUB_ENV"
+          printf 'F22_BOOTSTRAP_PASSWORD=%s\n' "$BOOTSTRAP_PASSWORD" >> "$GITHUB_ENV"
+          printf 'F22_BETTER_AUTH_SECRET=%s\n' "$BETTER_AUTH_SECRET" >> "$GITHUB_ENV"
+
+      - name: Verify F22 fictitious seed and smoke boundary
+        env:
+          F22_PRIVATE_PREVIEW_POSTGRES_TEST: "1"
+        run: npx vitest run src/server/preflight/fictitious-private-preview.postgres.test.ts

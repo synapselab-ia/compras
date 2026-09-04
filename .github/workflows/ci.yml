@@ -156,3 +156,75 @@ jobs:
           dropdb compras_detail_ci
           psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_team_directory_view_owner;"
           psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_f12_migrator_ci;"
+
+  auth-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Use Node.js 24 LTS
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24.x"
+          cache: npm
+
+      - name: Install dependencies from lockfile
+        run: npm ci
+
+      - name: Red-team unsafe Auth runtime role
+        run: |
+          createdb compras_auth_redteam_ci
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_auth_runtime LOGIN NOINHERIT BYPASSRLS PASSWORD 'F20-UNSAFE-RUNTIME-FICTITIOUS';"
+          PGDATABASE=compras_auth_redteam_ci psql -v ON_ERROR_STOP=1 -f database/auth/migrations/0001_better_auth_1_6_23.sql
+
+          if PGDATABASE=compras_auth_redteam_ci psql -v ON_ERROR_STOP=1 -f database/auth/migrations/0002_auth_runtime_boundary.sql; then
+            echo "unsafe BYPASSRLS Auth runtime role was accepted" >&2
+            exit 1
+          fi
+
+          dropdb compras_auth_redteam_ci
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_auth_runtime;"
+
+      - name: Provision ephemeral separated Auth roles
+        run: |
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_auth_migrator_ci LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD 'F20-AUTH-MIGRATOR-FICTITIOUS';"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_auth_runtime LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD 'F20-AUTH-RUNTIME-FICTITIOUS';"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_domain_runtime_ci LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD 'F20-DOMAIN-RUNTIME-FICTITIOUS';"
+          createdb -O compras_auth_migrator_ci compras_auth_ci
+
+          PGUSER=compras_auth_migrator_ci PGPASSWORD='F20-AUTH-MIGRATOR-FICTITIOUS' PGDATABASE=compras_auth_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0001_core_foundation.sql
+          PGUSER=compras_auth_migrator_ci PGPASSWORD='F20-AUTH-MIGRATOR-FICTITIOUS' PGDATABASE=compras_auth_ci psql -v ON_ERROR_STOP=1 -f database/auth/migrations/0001_better_auth_1_6_23.sql
+          PGUSER=compras_auth_migrator_ci PGPASSWORD='F20-AUTH-MIGRATOR-FICTITIOUS' PGDATABASE=compras_auth_ci psql -v ON_ERROR_STOP=1 -f database/auth/migrations/0002_auth_runtime_boundary.sql
+
+      - name: Verify Better Auth PostgreSQL boundary
+        env:
+          F20_AUTH_POSTGRES_TEST: "1"
+          AUTH_INTEGRATION_DATABASE_URL: postgresql://compras_auth_runtime:F20-AUTH-RUNTIME-FICTITIOUS@localhost:5432/compras_auth_ci
+          AUTH_INTEGRATION_DOMAIN_DATABASE_URL: postgresql://compras_domain_runtime_ci:F20-DOMAIN-RUNTIME-FICTITIOUS@localhost:5432/compras_auth_ci
+          AUTH_INTEGRATION_SUPERUSER_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/compras_auth_ci
+        run: npx vitest run src/server/auth/postgres-integration.test.ts

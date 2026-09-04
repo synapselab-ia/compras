@@ -1,23 +1,29 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const authMocks = vi.hoisted(() => ({
-  createNeonAuth: vi.fn(),
-  getSession: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  const pool = {
+    on: vi.fn(),
+    end: vi.fn().mockResolvedValue(undefined),
+  };
+  const api = {
+    getSession: vi.fn(),
+  };
+
+  return {
+    pool,
+    api,
+    betterAuth: vi.fn(() => ({ api })),
+    Pool: vi.fn(function Pool() {
+      return pool;
+    }),
+    headers: vi.fn(),
+  };
+});
 
 vi.mock("server-only", () => ({}));
-vi.mock("@neondatabase/auth/next/server", () => ({
-  createNeonAuth: authMocks.createNeonAuth,
-  NEON_AUTH_NETWORK_ERROR_CODES: [
-    "NETWORK_ERROR",
-    "NETWORK_DNS",
-    "NETWORK_REFUSED",
-    "NETWORK_TIMEOUT",
-    "NETWORK_TLS",
-    "NETWORK_RESET",
-    "NETWORK_ABORT",
-  ],
-}));
+vi.mock("better-auth", () => ({ betterAuth: mocks.betterAuth }));
+vi.mock("pg", () => ({ Pool: mocks.Pool }));
+vi.mock("next/headers", () => ({ headers: mocks.headers }));
 
 import {
   getConfiguredPrivateAuth,
@@ -25,115 +31,100 @@ import {
   readPrivateAuthSessionState,
 } from "./runtime";
 
-const VALID_BASE_URL = "https://auth.demo.invalid/neondb/auth";
-const VALID_SECRET = "demo-cookie-secret-with-at-least-32-characters";
+let sequence = 0;
 
-function setValidConfiguration() {
-  process.env.NEON_AUTH_BASE_URL = VALID_BASE_URL;
-  process.env.NEON_AUTH_COOKIE_SECRET = VALID_SECRET;
+function configureRuntime() {
+  sequence += 1;
+  process.env.AUTH_DATABASE_URL =
+    `postgresql://auth:fictitious@db.example.invalid/compras?run=${sequence}`;
+  process.env.DATABASE_URL =
+    `postgresql://domain:fictitious@db.example.invalid/compras?run=${sequence}`;
+  process.env.BETTER_AUTH_SECRET =
+    "f20-fictitious-runtime-test-secret-not-operational-0001";
+  process.env.COMPRAS_AUTH_BASE_URL = `https://auth-${sequence}.example.invalid`;
 }
 
-describe("private auth runtime", () => {
+describe("self-hosted private auth runtime", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    setValidConfiguration();
-    authMocks.createNeonAuth.mockReturnValue({ getSession: authMocks.getSession });
+    mocks.pool.end.mockResolvedValue(undefined);
+    configureRuntime();
+    mocks.headers.mockResolvedValue(new Headers({ cookie: "session=fictitious" }));
   });
 
-  afterEach(() => {
-    delete process.env.NEON_AUTH_BASE_URL;
-    delete process.env.NEON_AUTH_COOKIE_SECRET;
+  it("constructs Better Auth with closed admission and a dedicated auth search_path", () => {
+    const configured = getConfiguredPrivateAuth();
+    const baseUrl = process.env.COMPRAS_AUTH_BASE_URL;
+
+    expect(configured?.issuer).toBe("urn:compras:better-auth:self-hosted:v1");
+    expect(mocks.Pool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectionString: process.env.AUTH_DATABASE_URL,
+        options: "-c search_path=auth",
+        application_name: "compras-auth-runtime",
+      }),
+    );
+    expect(mocks.betterAuth).toHaveBeenCalledWith(
+      expect.objectContaining({
+        database: mocks.pool,
+        baseURL: baseUrl,
+        secret: process.env.BETTER_AUTH_SECRET,
+        trustedOrigins: [baseUrl],
+        emailAndPassword: { enabled: true, disableSignUp: true },
+        socialProviders: {},
+        plugins: [],
+      }),
+    );
   });
 
-  it("creates the server-only SDK instance only from exact trusted configuration", () => {
-    expect(getConfiguredPrivateAuth()).toMatchObject({ issuer: VALID_BASE_URL });
-    expect(authMocks.createNeonAuth).toHaveBeenCalledWith({
-      baseUrl: VALID_BASE_URL,
-      cookies: { secret: VALID_SECRET },
-      logLevel: "silent",
-    });
-
-    authMocks.createNeonAuth.mockClear();
-    process.env.NEON_AUTH_BASE_URL = "http://auth.demo.invalid/neondb/auth";
-    expect(getConfiguredPrivateAuth()).toBeNull();
-
-    setValidConfiguration();
-    process.env.NEON_AUTH_BASE_URL = ` ${VALID_BASE_URL}`;
-    expect(getConfiguredPrivateAuth()).toBeNull();
-
-    setValidConfiguration();
-    process.env.NEON_AUTH_COOKIE_SECRET = "too-short";
-    expect(getConfiguredPrivateAuth()).toBeNull();
-    expect(authMocks.createNeonAuth).not.toHaveBeenCalled();
-  });
-
-  it("distinguishes an authenticated session from no session", async () => {
-    authMocks.getSession.mockResolvedValueOnce({
-      data: {
-        session: { id: "DEMO-SESSION" },
-        user: { id: "DEMO-SUBJECT" },
-      },
-      error: null,
+  it("returns only the stable issuer and server-validated Better Auth user id", async () => {
+    mocks.api.getSession.mockResolvedValue({
+      user: { id: "better-auth-subject" },
+      session: { id: "session-id" },
     });
 
     await expect(readPrivateAuthSessionState()).resolves.toEqual({
       kind: "authenticated",
-      identity: { issuer: VALID_BASE_URL, subject: "DEMO-SUBJECT" },
+      identity: {
+        issuer: "urn:compras:better-auth:self-hosted:v1",
+        subject: "better-auth-subject",
+      },
     });
-
-    authMocks.getSession.mockResolvedValueOnce({ data: null, error: null });
-    await expect(readPrivateAuthSessionState()).resolves.toEqual({ kind: "unauthenticated" });
-
-    authMocks.getSession.mockResolvedValueOnce({
-      data: { session: null, user: null },
-      error: null,
+    expect(mocks.api.getSession).toHaveBeenCalledWith({
+      headers: expect.any(Headers),
     });
-    await expect(readPrivateAuthSessionState()).resolves.toEqual({ kind: "unauthenticated" });
   });
 
-  it("treats expired or rejected session responses as unauthenticated", async () => {
-    authMocks.getSession.mockResolvedValueOnce({
-      data: null,
-      error: { status: 401, code: "UNAUTHORIZED", message: "expired" },
+  it("distinguishes no session from malformed/provider-unavailable state", async () => {
+    mocks.api.getSession.mockResolvedValueOnce(null);
+    await expect(readPrivateAuthSessionState()).resolves.toEqual({
+      kind: "unauthenticated",
     });
-    await expect(readPrivateAuthSessionState()).resolves.toEqual({ kind: "unauthenticated" });
 
-    authMocks.getSession.mockResolvedValueOnce({
-      data: null,
-      error: { status: 403, code: "FORBIDDEN", message: "rejected" },
+    configureRuntime();
+    mocks.api.getSession.mockResolvedValueOnce({ user: { id: "missing-session" } });
+    await expect(readPrivateAuthSessionState()).resolves.toEqual({
+      kind: "unavailable",
     });
-    await expect(readPrivateAuthSessionState()).resolves.toEqual({ kind: "unauthenticated" });
+
+    configureRuntime();
+    mocks.api.getSession.mockRejectedValueOnce({ statusCode: 401 });
+    await expect(readPrivateAuthSessionState()).resolves.toEqual({
+      kind: "unauthenticated",
+    });
+
+    configureRuntime();
+    mocks.api.getSession.mockRejectedValueOnce(new Error("fictitious db failure"));
+    await expect(readPrivateAuthSessionState()).resolves.toEqual({
+      kind: "unavailable",
+    });
   });
 
-  it("fails closed as unavailable for malformed configuration, provider failure, or malformed session data", async () => {
-    delete process.env.NEON_AUTH_COOKIE_SECRET;
-    await expect(readPrivateAuthSessionState()).resolves.toEqual({ kind: "unavailable" });
-
-    setValidConfiguration();
-    authMocks.getSession.mockResolvedValueOnce({
-      data: null,
-      error: { status: 502, code: "NETWORK_TIMEOUT", message: "private details" },
-    });
-    await expect(readPrivateAuthSessionState()).resolves.toEqual({ kind: "unavailable" });
-
-    authMocks.getSession.mockRejectedValueOnce(new Error("provider transport details"));
-    await expect(readPrivateAuthSessionState()).resolves.toEqual({ kind: "unavailable" });
-
-    authMocks.getSession.mockResolvedValueOnce({
-      data: { session: { id: "DEMO-SESSION" }, user: {} },
-      error: null,
-    });
-    await expect(readPrivateAuthSessionState()).resolves.toEqual({ kind: "unavailable" });
-  });
-
-  it("classifies only provider/transport failures as unavailable for sign-in decisions", () => {
-    expect(
-      isAuthProviderUnavailableError({ status: 401, code: "INVALID_EMAIL_OR_PASSWORD" }),
-    ).toBe(false);
-    expect(isAuthProviderUnavailableError({ status: 429, code: "RATE_LIMITED" })).toBe(false);
-    expect(isAuthProviderUnavailableError({ status: 500, code: "SERVER_ERROR" })).toBe(true);
-    expect(isAuthProviderUnavailableError({ status: 502, code: "NETWORK_DNS" })).toBe(true);
-    expect(isAuthProviderUnavailableError({ status: 500, code: "INTERNAL_ERROR" })).toBe(true);
-    expect(isAuthProviderUnavailableError(new Error("unknown shape"))).toBe(true);
+  it("treats only client/API rejections as non-provider failures", () => {
+    expect(isAuthProviderUnavailableError({ statusCode: 401 })).toBe(false);
+    expect(isAuthProviderUnavailableError({ status: "FORBIDDEN" })).toBe(false);
+    expect(isAuthProviderUnavailableError({ statusCode: 429 })).toBe(false);
+    expect(isAuthProviderUnavailableError({ statusCode: 503 })).toBe(true);
+    expect(isAuthProviderUnavailableError(new Error("network"))).toBe(true);
   });
 });

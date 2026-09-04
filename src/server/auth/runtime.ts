@@ -21,7 +21,25 @@ export type PrivateAuthSessionState =
   | Readonly<{ kind: "unauthenticated" }>
   | Readonly<{ kind: "unavailable" }>;
 
-type BetterAuthInstance = ReturnType<typeof betterAuth>;
+function createPrivateBetterAuth(
+  configuration: SelfHostedAuthConfiguration,
+  pool: Pool,
+) {
+  return betterAuth({
+    database: pool,
+    baseURL: configuration.baseUrl,
+    secret: configuration.secret,
+    trustedOrigins: [configuration.baseUrl],
+    emailAndPassword: {
+      enabled: true,
+      disableSignUp: true,
+    },
+    socialProviders: {},
+    plugins: [],
+  });
+}
+
+type BetterAuthInstance = ReturnType<typeof createPrivateBetterAuth>;
 
 export type ConfiguredPrivateAuth = Readonly<{
   issuer: string;
@@ -137,20 +155,8 @@ export function getConfiguredPrivateAuth(): ConfiguredPrivateAuth | null {
   pool.on("error", () => undefined);
 
   try {
-    const auth = betterAuth({
-      database: pool,
-      baseURL: configuration.baseUrl,
-      secret: configuration.secret,
-      trustedOrigins: [configuration.baseUrl],
-      emailAndPassword: {
-        enabled: true,
-        disableSignUp: true,
-      },
-      socialProviders: {},
-      plugins: [],
-    });
-
-    const configured = Object.freeze({
+    const auth = createPrivateBetterAuth(configuration, pool);
+    const configured: ConfiguredPrivateAuth = Object.freeze({
       issuer: SELF_HOSTED_AUTH_ISSUER,
       auth,
     });

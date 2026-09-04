@@ -1,58 +1,78 @@
 # Next Action — Compras
 
-## F23-PRIVATE-SIGNIN-ABUSE-CONTROL-DESIGN-01 — Fechar desenho de controle de abuso do sign-in privado
+## F24-PRIVATE-SIGNIN-ABUSE-CONTROL-IMPLEMENT-01 — Implementar limiter distribuído do sign-in privado
 
-**Classe:** `T0 — design/spike` com impacto de `T2 — segurança`  
+**Classe:** `T1 — feature de suporte` com impacto de `T2 — segurança`  
 **Estado:** READY  
-**Objetivo:** decidir e documentar uma fronteira distribuída, fail-closed e testável para limitar abuso do Server Action de sign-in privado antes de qualquer exposição mais ampla, sem realizar writes hosted e sem alterar a proteção externa vigente.
+**Objetivo:** implementar em código/migration o limiter application-side distribuído definido pela ADR-010, provando atomicidade, fail-closed, trusted source e privacidade em PostgreSQL efêmero/CI, sem realizar writes hosted.
 
 Esta é a única `NEXT_ACTION` canônica.
 
 ## Por que esta ação agora
 
-A F22 transformou o bootstrap/seed/smoke do futuro preview persistente em assets determinísticos e integralmente reproduzíveis em PostgreSQL efêmero/CI. Ela também provou que autenticação continua separada de autorização, que cross-team permanece invisível e que as roles Auth/domínio continuam isoladas.
+A F22 foi integrada em `main` e os runs pós-merge passaram integralmente:
 
-A F21 continua `ON HOLD` antes de secrets porque a superfície Vercel autenticada disponível na sessão ainda não oferece o readback/CRUD obrigatório de Deployment Protection/bypasses e sensitive Preview environment variables escopadas à branch. Portanto F21 não deve ser retomada por conveniência.
+- CI canônica `33880974626`: PASS;
+- F22 Private Preview Preflight `33880974672`: PASS.
 
-Resta uma frente independente já explicitamente fora do escopo da F22: controle de abuso/rate limiting do sign-in. O runtime privado chama Better Auth por API server-side através de Server Action estreita; antes de ampliar exposição, a arquitetura precisa decidir onde o limite distribuído vive, como identifica a origem confiável e qual é o comportamento quando o controle fica indisponível.
+A F23 revalidou a fronteira atual e fechou a decisão arquitetural em ADR-010:
+
+- Better Auth `auth.api` server-side não herda o rate limiter embutido;
+- limiter somente em memória não é enforcement distribuído aceitável;
+- Vercel Firewall/WAF será defesa edge obrigatória para exposição hosted mais ampla, mas não é suficiente sozinho;
+- o limiter autoritativo application-side usará PostgreSQL compartilhado;
+- `x-forwarded-for` só pode ser aceito sob a fronteira Vercel validada e em formato único/estrito;
+- email/IP serão convertidos imediatamente em buckets HMAC pseudônimos, sem persistência/log em claro;
+- falha do limiter/store deve retornar `unavailable` e nunca chamar Better Auth;
+- limite excedido deve mapear para o mesmo resultado externo genérico `rejected` de credenciais inválidas.
+
+F21 continua `ON HOLD`: a superfície Vercel disponível nesta sessão ainda não fornece o readback/CRUD de Deployment Protection/bypasses e sensitive Preview env vars escopadas à branch exigido por seu `resume_when`.
 
 ## Execução obrigatória
 
-1. recuperar estado/contexto e confirmar F22 integrada/verde e F21 ainda `ON HOLD` pelo mesmo `resume_when`;
-2. revalidar documentação oficial atual de Better Auth e Vercel relevante a rate limiting, Server Actions, proxy/origin e proteção de deployment;
-3. inspecionar `src/server/auth/private-admission.ts`, configuração Better Auth, ADR-007, ADR-009 e fronteira Vercel atual;
-4. modelar ameaças de credential stuffing, password guessing, burst concorrente, enumeração de email, origem/IP forjada e múltiplas instâncias serverless;
-5. rejeitar como solução final qualquer limiter apenas em memória de uma instância;
-6. comparar alternativas distribuídas compatíveis com a arquitetura atual, incluindo camada de edge/provider e store compartilhado, sem provisionar recursos nesta work unit;
-7. definir quais sinais podem ser confiados pelo servidor e quais headers/identificadores do cliente não podem definir a chave de segurança;
-8. definir política de chaveamento, janelas/limites, resposta genérica, privacidade/retention e ausência de enumeração de contas;
-9. definir fail-closed/fail-safe explicitamente para indisponibilidade do limiter e como evitar bypass silencioso;
-10. definir observabilidade sanitizada sem email bruto, senha, cookie, token, connection string, IP desnecessário ou payload de sessão;
-11. definir testes unitários, concorrência, múltiplas instâncias e red-team necessários para a futura implementação;
-12. registrar a decisão em ADR nova ou atualizar a decisão arquitetural adequada sem reescrever histórico aceito;
-13. produzir uma SPEC executável para a implementação escolhida;
-14. revisar diff, rodar validações aplicáveis e atualizar checkpoint deixando exatamente uma nova ação.
+1. recuperar estado/contexto e confirmar ADR-010/F23 integrada antes de editar;
+2. inspecionar `private-admission.ts`, configuração Auth, migrations Auth e testes F20/F22;
+3. criar nova migration versionada para namespace/tabela/function do limiter, sem reescrever migrations aplicadas;
+4. manter `PUBLIC` sem grants e `compras_auth_runtime` sem ownership/superuser/BYPASSRLS/CREATEROLE;
+5. implementar policy versionada:
+   - `source`: 120/15 min;
+   - `identifier`: 20/15 min;
+   - `pair`: 8/5 min;
+6. consumir os três buckets atomicamente antes de `auth.api.signInEmail`;
+7. usar relógio do PostgreSQL e provar ausência de lost update sob concorrência;
+8. derivar buckets HMAC por HKDF/domain separation a partir de `BETTER_AUTH_SECRET`, sem nova secret;
+9. implementar resolver hosted que aceite somente `x-forwarded-for` Vercel único e IP válido; chains/ausência/configuração inválida devem falhar fechadas;
+10. integrar no Server Action sem alterar o fluxo já validado de cookie/session readback;
+11. limite excedido -> `rejected` sem chamar Better Auth;
+12. limiter/config/store indisponível -> `unavailable` sem chamar Better Auth;
+13. implementar purge oportunístico limitado e indexado para buckets expirados;
+14. manter logs sem email, IP, HMAC individual, password, cookie, token, connection string ou payload de sessão;
+15. executar red-team unitário/PostgreSQL/Auth, lint, typecheck, testes e build;
+16. revisar diff integral e atualizar checkpoint deixando exatamente uma próxima ação.
 
 ## Invariantes
 
 - `REAL_DATA_ALLOWED = NO`;
-- nenhum dado/identidade real;
-- nenhum secret em Git/chat/log/artifact;
-- nenhum recurso Vercel/Neon/terceiro provisionado;
-- Vercel Authentication existente não é reduzida;
+- somente identidade/dados fictícios;
+- nenhum recurso Vercel/Neon/Redis/KV hosted novo;
+- nenhuma environment variable hosted;
+- Vercel Authentication não é reduzida;
 - signup normal continua fechado;
 - `/api/auth/[...path]` continua deny-all;
 - sign-in continua Server Action estreita;
+- Better Auth não é chamado se limiter bloquear/falhar;
 - autenticação continua separada de autorização;
-- RLS permanece autoritativa;
-- headers controláveis pelo browser não podem se tornar identidade/escopo confiável;
-- erro protegido não pode cair silenciosamente para demo ou para sign-in sem limitação;
-- F21 permanece `ON HOLD` até seu `resume_when` objetivo ser satisfeito.
+- RLS/domínio não são alterados;
+- browser não define origem confiável;
+- limiter não armazena email/IP em claro;
+- runtime Auth continua sem grants no domínio;
+- migration aplicada nunca é reescrita;
+- F21 permanece `ON HOLD` até seu `resume_when` objetivo.
 
 ## Fonte da tarefa
 
-Executar `tasks/F23-PRIVATE-SIGNIN-ABUSE-CONTROL-DESIGN-01/SPEC.md`, usando ADR-007, ADR-009, `docs/architecture/SECURITY.md`, `docs/architecture/DATABASE.md`, o runtime Auth atual e evidência externa oficial revalidada.
+Executar `tasks/F24-PRIVATE-SIGNIN-ABUSE-CONTROL-IMPLEMENT-01/SPEC.md`, seguindo ADR-010, ADR-009, ADR-007, `docs/architecture/SECURITY.md`, `docs/architecture/DATABASE.md` e as provas F20/F22.
 
 ## Critério de encerramento
 
-F23 fecha quando existir uma decisão arquitetural explícita, adversarialmente revisada e implementável para controle distribuído de abuso do sign-in, com política de confiança/falha/privacidade/testes definida e exatamente uma próxima ação executável para materializar a decisão. Nenhum provider hosted deve ser alterado nesta work unit.
+F24 fecha quando o limiter application-side estiver implementado e provado em PostgreSQL 17 efêmero com concorrência real, fail-closed e privacidade, mantendo o fluxo Auth existente e toda a CI em PASS, sem qualquer provider hosted alterado. Ao final deve existir exatamente uma nova `NEXT_ACTION` executável.

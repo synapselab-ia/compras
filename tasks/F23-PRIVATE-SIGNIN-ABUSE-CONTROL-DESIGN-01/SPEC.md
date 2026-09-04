@@ -1,7 +1,7 @@
 # F23-PRIVATE-SIGNIN-ABUSE-CONTROL-DESIGN-01 — Fechar desenho de controle de abuso do sign-in privado
 
 **Classe:** T0 — design/spike, com impacto T2 — segurança  
-**Estado:** PLANNED / NEXT  
+**Estado:** IMPLEMENTED / VERIFYING  
 **Dependências:** F14, F20, F22, F21 ON HOLD, ADR-007 e ADR-009  
 **Classificação permitida:** PUBLIC / FICTITIOUS ONLY
 
@@ -141,6 +141,24 @@ Rejeitar a decisão se qualquer um ocorrer:
 - produção;
 - onboarding institucional definitivo.
 
+## Resultado implementado
+
+F23 produziu e versionou ADR-010 com a decisão:
+
+- PostgreSQL compartilhado como limiter application-side autoritativo;
+- Vercel Firewall/WAF como defesa edge complementar;
+- trusted source hosted limitada a `x-forwarded-for` Vercel estrito;
+- buckets HMAC `source`, `identifier` e `pair` sem email/IP em claro;
+- policy inicial versionada `120/15m`, `20/15m`, `8/5m`;
+- consumo atômico antes do Better Auth;
+- `rejected` para limite e `unavailable` para falha do limiter;
+- nenhum bypass silencioso;
+- retenção/observabilidade/rollback e readbacks hosted definidos.
+
+Também foi criada `tasks/F24-PRIVATE-SIGNIN-ABUSE-CONTROL-IMPLEMENT-01/SPEC.md` para materializar somente a camada application-side em PostgreSQL descartável/CI.
+
+Nenhum provider hosted, secret, usuário ou dado real foi criado/alterado.
+
 ## Critério de encerramento
 
-F23 fecha quando o repositório contiver uma decisão arquitetural explícita e implementável para controle distribuído de abuso do sign-in privado, acompanhada de threat model, red-team, estratégia de testes/rollback e uma única próxima ação de implementação. F21 continua `ON HOLD` até seu `resume_when` externo.
+F23 fecha após a PR documental passar CI, o diff final permanecer sanitizado e o checkpoint registrar a integração. A única próxima ação é F24.

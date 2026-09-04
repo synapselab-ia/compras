@@ -1,124 +1,163 @@
 # Current State — Compras
 
-**PROJECT_STATUS:** F20_INTEGRATED_F21_READY  
-**CURRENT_PHASE:** F20 integrada em `main`; F21 READY; F17 ON HOLD histórico  
+**PROJECT_STATUS:** F21_ON_HOLD_VERCEL_CONTROL_PLANE_F22_READY  
+**CURRENT_PHASE:** F20 integrada; F21 ON HOLD antes de secrets; F22 READY; F17 ON HOLD histórico  
 **REPO_VISIBILITY:** PUBLIC  
-**APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_IMPLEMENTED_HOSTED_PERSISTENT_PREVIEW_PENDING  
-**DATABASE_STATUS:** PROTECTED_DOMAIN_READ_MODEL_VALIDATED_AUTH_SCHEMA_VERSIONED_EPHEMERAL_PASS  
+**APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_IMPLEMENTED_PERSISTENT_PREVIEW_BLOCKED_PRE_SECRETS  
+**DATABASE_STATUS:** PROTECTED_DOMAIN_READ_MODEL_VALIDATED_AUTH_SCHEMA_VERSIONED_EPHEMERAL_PASS_NO_F21_HOSTED_DB  
 **AUTH_STATUS:** SELF_HOSTED_BETTER_AUTH_IMPLEMENTED_CI_PROVEN_HOSTED_PREVIEW_PENDING  
-**DEPLOYMENT_STATUS:** VERCEL_PREVIEW_READY_DEMO_ONLY_PROTECTED_NO_SECRETS_GIT_AUTODEPLOY_DISABLED  
+**DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_VERCEL_AUTH_OBSERVED_NO_NEW_F21_DEPLOYMENT  
 **REAL_DATA_ALLOWED:** NO  
 **CONTEXT_STATUS:** VALID  
 **FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`  
-**F20_IMPLEMENTATION_COMMIT:** `49bd1f346373d2c97eb5f32b009b2b2ea6551408`  
-**F20_PR:** `#36` — MERGED  
 **F20_MERGE_COMMIT:** `a5313463b3ccf7f7d3b229ca0ab8798f586cafcc`  
-**F20_PR_CI_RUN:** `33871652187` — PASS  
+**F20_PR:** `#36` — MERGED  
 **F20_MAIN_CI_RUN:** `33871786734` — PASS  
-**LAST_GOOD_COMMIT:** `a5313463b3ccf7f7d3b229ca0ab8798f586cafcc`  
-**LAST_GOOD_CI_RUN:** `33871786734`  
-**F19_DECISION:** `ADOPT` — ADR-009  
-**ON_HOLD:** `F17-B2` — Managed Better Auth observado não permitia WRITE + READBACK de `disable_sign_up=true`; permanece somente como evidência histórica
+**F20_FINAL_CHECKPOINT_COMMIT:** `a1037b38269c2e67e0ec249ed597eb5171eb31d2`  
+**F20_FINAL_CHECKPOINT_CI_RUN:** `33871918152` — PASS  
+**LAST_GOOD_COMMIT:** `a1037b38269c2e67e0ec249ed597eb5171eb31d2`  
+**LAST_GOOD_CI_RUN:** `33871918152`  
+**F21_STATE:** `ON HOLD / BLOCKED` — Vercel control-plane surface unavailable for required protection/env readback+CRUD  
+**F21_RESUME_WHEN:** sessão Vercel autenticada permitir readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch, sem exposição de valores  
+**ON_HOLD:** `F17-B2` histórico + `F21` conforme resume_when acima
 
-## Estado real
+## Estado real recuperado
 
-A F20 foi concluída, validada e integrada em `main` pela PR `#36`.
+A `main` foi recuperada em `a1037b38269c2e67e0ec249ed597eb5171eb31d2`. A CI `33871918152` terminou integralmente em PASS.
 
-O merge commit canônico é `a5313463b3ccf7f7d3b229ca0ab8798f586cafcc`. A CI de `main` `33871786734` passou integralmente:
+Não existia branch F21 ativa. Foi criada `f21-private-preview-self-hosted-provision` a partir desse checkpoint somente para registrar o estado sanitizado da execução.
 
-- `verify`: PASS — install, lint, typecheck, testes e Next.js build;
-- `database`: PASS — suíte PostgreSQL/RLS existente;
-- `auth-database`: PASS — red-team de role Auth, migrations Auth e integração Better Auth/PostgreSQL.
+O `CONTEXT_MANIFEST` foi revalidado. Todos os 10 inputs estáveis continuam exatamente nos blobs esperados; portanto `CONTEXT_STATUS = VALID`.
 
-A CI final da PR antes do merge também passou integralmente em `33871652187`.
+A tarefa executada foi a única `NEXT_ACTION` então canônica: `F21-PRIVATE-PREVIEW-SELF-HOSTED-PROVISION-01`.
 
-O `CONTEXT_MANIFEST` permaneceu válido durante a work unit. Nenhum dado real, usuário real ou secret operacional foi usado.
+## F21 — recuperação de providers
 
-## F20 — resultado integrado
+### Vercel
 
-A ADR-009 agora está materializada no runtime:
+O projeto vinculado ao repositório e já usado na faixa F18 continua existindo.
 
-- `better-auth@1.6.23` é dependência direta e pinada;
-- `pg` é dependência runtime;
-- `@neondatabase/auth` saiu do runtime;
-- Better Auth roda em módulo `server-only`;
-- email/senha habilitado com `disableSignUp=true`;
-- `socialProviders={}` e nenhum plugin de método lateral;
-- trusted origin HTTPS exata, sem wildcard/localhost hospedável;
-- issuer fixo `urn:compras:better-auth:self-hosted:v1`;
-- `subject` nasce somente da sessão validada server-side;
-- `/api/auth/[...path]` continua deny-all;
-- sign-in/sign-out continuam Server Actions estreitas;
-- `AUTH_DATABASE_URL` e `DATABASE_URL` são separados e fail-closed;
-- `BETTER_AUTH_SECRET` e `COMPRAS_AUTH_BASE_URL` permanecem server-only.
+Estado observado:
 
-## Cookies e sessão
+- deployment mais recente da aplicação: `READY`;
+- target: Preview, não Production;
+- nenhuma implantação nova apareceu após a criação da branch F21, confirmando que Git auto-deploy não voltou a ampliar a superfície;
+- o acesso ao Preview pela superfície autenticada do conector retornou redirecionamento para a barreira de autenticação Vercel;
+- não foi observado deployment Production `READY` correspondente à aplicação privada.
 
-O transporte usa forwarding explícito de `Set-Cookie`.
+Isso preserva a barreira externa F18/F21 antes de qualquer secret novo.
 
-Sign-in somente retorna sucesso após cookie ativo, readback server-side da sessão e correspondência do `user.id`. Sign-out somente retorna sucesso após cookie de invalidação e confirmação de que a sessão anterior não resolve mais.
+### Neon
 
-## Schema Auth e roles
+A organização Neon foi recuperada. Não existe projeto dedicado a Compras.
 
-Migrations integradas:
+Os projetos existentes pertencem a outras frentes e não foram reutilizados. Nenhum projeto, branch, database, role, identidade ou secret Neon foi criado ou alterado durante F21.
 
-- `database/auth/migrations/0001_better_auth_1_6_23.sql`;
-- `database/auth/migrations/0002_auth_runtime_boundary.sql`.
+## Revalidação externa F21
 
-A role `compras_auth_runtime` deve permanecer `LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION`, sem ownership das relações Auth e sem grants de domínio.
+### Vercel
 
-A CI provou isolamento nos dois sentidos:
+A documentação oficial atual confirmou que o provider suporta:
 
-- Auth runtime não lê o domínio;
-- domínio runtime não lê o schema Auth.
+- Deployment Protection/Vercel Authentication;
+- environment variables sensíveis;
+- variáveis Preview escopadas por branch Git;
+- inspeção/alteração de Deployment Protection pelo control plane/CLI/API.
 
-## Bootstrap fictício
+Entretanto, a superfície Vercel autenticada disponível nesta sessão não expõe operações para:
 
-Existe bootstrap one-shot administrativo, não roteável e restrito a `example.invalid`.
+- ler/read-back o estado completo de Deployment Protection e bypasses;
+- criar/atualizar/listar metadados/remover environment variables sensíveis de Preview por branch.
 
-Ele cria somente identidade Better Auth, não cria `app_users`/membership e retorna apenas o `subject`. A execução hospedada desse bootstrap ainda não ocorreu.
+A capability existe no provider, mas não está disponível no conector/control plane acessível pela sessão.
 
-## Red-team F20
+### Neon / PostgreSQL
 
-PASS para os principais gates:
+A documentação Neon atual confirmou novamente:
 
-- signup fechado;
-- catch-all Auth permanece deny-all;
-- métodos laterais ausentes;
-- trusted origin estrita;
-- subject não aceito do browser;
-- sign-in sem cookie/session real não é aceito;
-- sign-out sem revogação real não é aceito;
-- autenticação não cria autorização automaticamente;
-- role Auth com `BYPASSRLS` é rejeitada;
-- Auth → domínio: DENY;
-- domínio → Auth: DENY;
-- runtime Auth não é owner;
-- migrations Auth são versionadas da versão pinada;
-- nenhum fallback silencioso para demo foi introduzido;
-- nenhum recurso hosted persistente ou dado real foi criado na F20.
+- branches são isoladas e apropriadas para ambientes temporários;
+- roles criadas por Console/CLI/API recebem membership em `neon_superuser`, incompatível com runtime normal deste projeto;
+- roles limitadas podem/devem ser criadas por SQL e receber grants explícitos.
 
-## Providers / hosted
+Isso continua compatível com F20/ADR-005/ADR-009 e não reabre Managed Neon Auth.
 
-F20 não provisionou nem alterou recursos persistentes Vercel/Neon.
+## Decisão F21 — ON HOLD fail-closed
 
-A faixa F18 continua como demonstração hospedada separada:
+F21 não pode prosseguir para a etapa de secrets sem conseguir aplicar e ler de volta os controles Vercel obrigatórios.
 
-- Preview `READY`;
-- Vercel Authentication ativa;
-- somente fixtures fictícias;
-- nenhum banco/Auth interno/secret;
-- `COMPRAS_PERSISTENT_READ_ENABLED` não habilitado;
-- Git auto-deploy permanece desabilitado conforme checkpoint anterior.
+Os gates que faltam são precisamente os que impedem:
 
-F17 continua `ON HOLD` apenas como histórico do blocker do Managed Neon Auth e não é caminho crítico.
+- secret em escopo maior que a branch dedicada;
+- bypass/exception não verificado;
+- ativação persistente sem proteção demonstrada.
+
+Provisionar PostgreSQL hospedado antes de saber que a cadeia Vercel pode ser finalizada produziria recurso e credenciais sem caminho seguro de integração. Portanto a execução parou **antes** de criar banco/roles/secrets hosted.
+
+Isso é um blocker de superfície de controle da sessão, não uma decisão para relaxar a arquitetura.
+
+### resume_when
+
+Retomar F21 somente quando a sessão possuir superfície Vercel autenticada capaz de:
+
+1. ler/read-back Deployment Protection/Vercel Authentication e bypasses relevantes;
+2. criar, atualizar, listar metadados e remover sensitive environment variables de Preview escopadas à branch F21;
+3. inspecionar/disparar o Preview sem criar Production pública por conveniência.
+
+Secrets nunca devem ser transferidos por chat para contornar esse blocker.
+
+## Red-team F21
+
+Resultado deliberado:
+
+- Preview anônimo sem barreira externa: NÃO observado; proteção Vercel continua presente;
+- Production `READY` pública criada por F21: NÃO;
+- novo deployment automático após branch F21: NÃO;
+- secret/connection string persistido em GitHub: NÃO;
+- secret anexado à Vercel sem readback de escopo: NÃO;
+- projeto/branch Neon criado prematuramente: NÃO;
+- projeto Neon de outra frente reutilizado: NÃO;
+- role control-plane privilegiada adotada como runtime: NÃO;
+- Managed Neon Auth reintroduzido: NÃO;
+- proteção externa removida para contornar blocker: NÃO;
+- dado/identidade real: NÃO.
+
+O red-team, portanto, rejeitou um falso PASS e preservou a fronteira aprovada.
+
+## Rollback / residual F21
+
+Não houve write de infraestrutura hosted em F21.
+
+Consequentemente:
+
+- nenhum secret F21 precisa ser revogado;
+- nenhum recurso PostgreSQL F21 precisa ser removido;
+- nenhuma identidade/sessão F21 existe para invalidar;
+- o Preview F18 preexistente continua privado/fictício e inalterado.
+
+## F20 preservada
+
+A implementação integrada continua válida:
+
+- Better Auth self-hosted `1.6.23` pinado;
+- `disableSignUp=true`;
+- `/api/auth/[...path]` deny-all;
+- sign-in/sign-out por Server Actions estreitas;
+- sessão e subject validados server-side;
+- issuer `urn:compras:better-auth:self-hosted:v1`;
+- schema Auth separado;
+- Auth runtime e domínio runtime separados;
+- migrations Auth versionadas;
+- bootstrap one-shot restrito a `example.invalid`;
+- RLS e isolamento Auth/domínio já provados em CI.
 
 ## Last good
 
-O last-good canônico passa a ser o merge F20 `a5313463b3ccf7f7d3b229ca0ab8798f586cafcc`, validado pela CI de `main` `33871786734`.
+O last-good canônico permanece o checkpoint F20 em `main` `a1037b38269c2e67e0ec249ed597eb5171eb31d2`, validado pela CI `33871918152`.
 
-Isso ainda não representa um preview persistente operacional. `REAL_DATA_ALLOWED` continua `NO`.
+Não existe preview persistente operacional e `REAL_DATA_ALLOWED` continua `NO`.
 
 ## Próxima ação
 
-Executar somente `F21-PRIVATE-PREVIEW-SELF-HOSTED-PROVISION-01` conforme `docs/ai/NEXT_ACTION.md` e `tasks/F21-PRIVATE-PREVIEW-SELF-HOSTED-PROVISION-01/SPEC.md`.
+Executar somente `F22-PRIVATE-PREVIEW-SEED-SMOKE-ASSETS-01` conforme `docs/ai/NEXT_ACTION.md` e `tasks/F22-PRIVATE-PREVIEW-SEED-SMOKE-ASSETS-01/SPEC.md`.
+
+F21 permanece `ON HOLD` e só volta a ser frente ativa quando seu `resume_when` for objetivamente satisfeito.

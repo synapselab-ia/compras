@@ -1,7 +1,7 @@
 # F21-PRIVATE-PREVIEW-SELF-HOSTED-PROVISION-01 — Provisionar e provar preview privado fictício com Better Auth self-hosted
 
 **Classe:** T3 — integração externa, com impacto T2 — segurança  
-**Estado:** PLANNED / NEXT  
+**Estado:** ON HOLD / BLOCKED  
 **Dependências:** F11, F14, F18, F19, F20, ADR-003, ADR-005, ADR-006, ADR-007, ADR-008 e ADR-009  
 **Classificação permitida:** PUBLIC / FICTITIOUS ONLY
 
@@ -10,6 +10,65 @@
 A F20 substituiu o Managed Neon Auth por Better Auth self-hosted no repositório e provou em CI a fronteira de autenticação, cookies, schema Auth, roles e isolamento Auth/domínio. Falta provar a mesma arquitetura em um Preview hospedado real, protegido externamente, usando somente dados e identidades fictícios.
 
 A work unit não deve colocar o sistema em produção nem introduzir dados reais. Se o provider, plano, proteção de deployment, escopo de secrets ou controle de roles não permitir provar a fronteira aprovada, a execução deve parar em estado BLOCKED e fazer rollback seguro.
+
+## Resultado da execução de 2026-09-04
+
+A execução F21 recuperou o estado real do GitHub, Vercel e Neon antes de qualquer write de infraestrutura e revalidou a documentação oficial vigente.
+
+### GitHub / contexto
+
+- `main` estava no checkpoint F20 integrado e com CI integralmente em PASS;
+- `CONTEXT_MANIFEST` foi revalidado e todos os blobs estáveis coincidiram;
+- não existia frente F21 prévia; foi aberta a branch `f21-private-preview-self-hosted-provision` somente para registrar o checkpoint sanitizado;
+- a criação da branch não disparou novo deployment Vercel, preservando a política de não ampliar exposição automaticamente.
+
+### Vercel
+
+O projeto já usado pela faixa F18 continua com um deployment Preview `READY`, sem deployment Production `READY` correspondente. O acesso ao Preview foi testado pela superfície autenticada do conector e retornou redirecionamento para a barreira de autenticação da Vercel, confirmando que a proteção externa continua efetiva.
+
+A documentação oficial atual confirma que Vercel suporta:
+
+- Deployment Protection/Vercel Authentication;
+- environment variables de Preview escopáveis por branch Git;
+- variáveis sensíveis;
+- inspeção e alteração de proteção via control plane/CLI/API.
+
+Entretanto, a superfície Vercel autenticada disponível nesta sessão não expõe as operações necessárias de leitura/readback e escrita para:
+
+- estado completo de Deployment Protection e bypasses do projeto;
+- criação/remoção/readback de environment variables sensíveis de Preview escopadas à branch F21.
+
+Esses controles são gates obrigatórios da ADR-006/F21. Não é aceitável anexar secrets sem conseguir aplicar e verificar o escopo aprovado, nem contornar a proteção externa.
+
+### Neon / PostgreSQL
+
+O estado real da organização Neon foi recuperado. Não existe projeto dedicado a `compras`; os projetos existentes pertencem a outras frentes e não foram reutilizados.
+
+A documentação Neon atual revalidou que:
+
+- branches são ambientes isolados e descartáveis apropriados para preview;
+- roles criadas por Console/CLI/API recebem membership em `neon_superuser`, incluindo poderes incompatíveis com runtime normal;
+- roles limitadas devem ser criadas por SQL, preservando a decisão F20/ADR-005.
+
+Nenhum projeto, branch, role, database, usuário ou secret Neon foi criado nesta execução.
+
+### Decisão fail-closed
+
+F21 fica **ON HOLD** antes da etapa de secrets e antes de qualquer recurso PostgreSQL novo.
+
+Provisionar Neon sabendo que a sessão não consegue concluir/read-back o gate Vercel produziria recurso e credenciais sem caminho seguro para completar a cadeia hospedada. A execução parou antes disso, como exigido pela SPEC.
+
+**resume_when:** existir na sessão uma superfície Vercel autenticada capaz de, sem expor valores sensíveis em chat/Git/logs:
+
+1. ler/read-back Deployment Protection, Vercel Authentication e bypasses relevantes;
+2. criar, atualizar, listar metadados e remover environment variables sensíveis de Preview escopadas à branch dedicada;
+3. disparar/inspecionar o Preview resultante sem transformar Production em superfície pública.
+
+Não é necessário reabrir Managed Neon Auth. Better Auth self-hosted continua sendo a arquitetura adotada.
+
+### Rollback / residual
+
+Como nenhum secret ou recurso hospedado novo foi criado, não há infraestrutura F21 a desfazer. O Preview fictício F18 preexistente permaneceu protegido e inalterado.
 
 ## Resultado esperado
 

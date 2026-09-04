@@ -1,155 +1,162 @@
 # Current State — Compras
 
-**PROJECT_STATUS:** F19_AUTH_PORTABILITY_ADOPTED_F20_READY  
-**CURRENT_PHASE:** F19 concluída / ADOPT; F20 pronta; F17 ON HOLD  
+**PROJECT_STATUS:** F20_SELF_HOSTED_AUTH_IMPLEMENTED_F21_READY  
+**CURRENT_PHASE:** F20 concluída / PASS; F21 READY; F17 ON HOLD histórico  
 **REPO_VISIBILITY:** PUBLIC  
-**APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_PRIVATE_AUTH_MIGRATION_DESIGNED_NOT_IMPLEMENTED  
-**DATABASE_STATUS:** PROTECTED_DOMAIN_READ_MODEL_VALIDATED_AUTH_SCHEMA_NOT_YET_IMPLEMENTED  
-**AUTH_STATUS:** SELF_HOSTED_BETTER_AUTH_ADOPTED_DESIGN_PROVEN_NOT_YET_RUNTIME  
+**APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_IMPLEMENTED_HOSTED_PERSISTENT_PREVIEW_PENDING  
+**DATABASE_STATUS:** PROTECTED_DOMAIN_READ_MODEL_VALIDATED_AUTH_SCHEMA_VERSIONED_EPHEMERAL_PASS  
+**AUTH_STATUS:** SELF_HOSTED_BETTER_AUTH_IMPLEMENTED_CI_PROVEN_HOSTED_PREVIEW_PENDING  
 **DEPLOYMENT_STATUS:** VERCEL_PREVIEW_READY_DEMO_ONLY_PROTECTED_NO_SECRETS_GIT_AUTODEPLOY_DISABLED  
 **REAL_DATA_ALLOWED:** NO  
 **CONTEXT_STATUS:** VALID  
 **FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`  
-**LAST_GOOD_COMMIT:** `6c3891d0e4839daa067741bbcf5eafdea542a329`  
-**LAST_GOOD_CI_RUN:** `33670574481`  
-**F19_INPUT_COMMIT:** `50fd91ced1f5b88761b241c3e9626a7defbb44a5`  
-**F19_INPUT_CI_RUN:** `33800687046`  
-**F19_PROOF_COMMIT:** `22281e8587ad4f84eae69add3d1e46c64701b70a`  
-**F19_PROOF_CI_RUN:** `33804487955`  
+**F20_IMPLEMENTATION_COMMIT:** `49bd1f346373d2c97eb5f32b009b2b2ea6551408`  
+**F20_CI_RUN:** `33869932738`  
+**F20_PR:** `#36`  
+**LAST_GOOD_COMMIT:** `49bd1f346373d2c97eb5f32b009b2b2ea6551408`  
+**LAST_GOOD_CI_RUN:** `33869932738`  
 **F19_DECISION:** `ADOPT` — ADR-009  
-**ON_HOLD:** `F17-B2` — Managed Better Auth observado não permite WRITE + READBACK de `disable_sign_up=true`
+**ON_HOLD:** `F17-B2` — Managed Better Auth observado não permitia WRITE + READBACK de `disable_sign_up=true`; permanece somente como evidência histórica
 
 ## Estado real
 
-A F19 foi executada pelo protocolo canônico a partir da `main` `50fd91ced1f5b88761b241c3e9626a7defbb44a5`, cujo CI `33800687046` estava integralmente em PASS. O `CONTEXT_MANIFEST` permaneceu válido: os 10 inputs estáveis continuam com os blobs esperados.
+A frente ativa F20 está na branch `f20-self-hosted-auth-implement` / PR `#36` contra `main`. O commit funcional validado é `49bd1f346373d2c97eb5f32b009b2b2ea6551408`.
 
-A frente ativa era a PR/branch F19. Não houve necessidade de reabrir F17 nem de escrever em Vercel/Neon.
+A CI `33869932738` terminou integralmente em PASS:
 
-## F17 — ON HOLD
+- `verify`: PASS — install, lint, typecheck, testes e Next.js build;
+- `database`: PASS — toda a suíte PostgreSQL/RLS existente, incluindo default-deny, trusted reads, capability de diretório e detalhe protegido;
+- `auth-database`: PASS — red-team de role Auth insegura, provisionamento de roles separadas e integração Better Auth/PostgreSQL.
 
-A prova provider-side anterior continua válida:
+O `CONTEXT_MANIFEST` permaneceu válido durante a execução F20. Nenhum dado real, usuário real ou secret operacional foi usado.
 
-- Vercel control plane: PASS;
-- Managed Neon Auth: BLOCKED porque signup restrito não pôde ser aplicado/read-back;
-- Auth/projeto Neon descartáveis foram removidos;
-- nenhum dado real, usuário ou secret foi criado.
+## F20 — Better Auth self-hosted implementado
 
-A F17 permanece `ON HOLD` como evidência histórica. Ela não é mais dependência do caminho crítico depois da decisão F19.
+A decisão ADR-009 deixou de ser apenas design/prova e virou implementação no repositório.
 
-## F18 — Hosted demo preservada
+Resultado material:
 
-A demonstração Vercel continua sendo somente UI/dados fictícios:
-
-- deployment Preview `READY`;
-- Vercel Authentication na frente da URL;
-- nenhum banco/Auth interno/secret;
-- `COMPRAS_PERSISTENT_READ_ENABLED` não habilitado;
-- Git auto-deploy restaurado para `false`.
-
-F19 não alterou recurso provider, deployment ou configuração hosted.
-
-## F19 — Auth Portability Design
-
-### Documentação oficial revalidada
-
-A documentação Better Auth v1.6 foi revalidada para PostgreSQL, database/migrations, options, server API, email/password, Next.js, session e rate limit.
-
-Os pontos materiais confirmados foram:
-
-- PostgreSQL direto e schema não-default via `search_path`;
-- migrations/schema controláveis pela aplicação;
-- `emailAndPassword.disableSignUp=true`;
-- `trustedOrigins` explícitos;
-- `auth.api.signInEmail`, `getSession` e `signOut` server-side;
-- cookies de Server Actions precisam de integração/forwarding correto;
-- social providers/plugins são opt-in;
-- cookie cache é opt-in;
-- `auth.api` server-side não herda o rate limit client-side.
-
-### Prova executável
-
-`src/server/auth/self-hosted-proof.test.ts` executou Better Auth real em SQLite em memória com somente valores fictícios.
-
-O commit final da prova `22281e8587ad4f84eae69add3d1e46c64701b70a` passou a CI `33804487955`:
-
-- `verify`: PASS — lint, typecheck, testes e Next.js build;
-- `database`: PASS — toda a suíte PostgreSQL/RLS existente.
-
-A prova demonstrou:
-
-1. signup rejeitado com `disableSignUp=true` antes de qualquer tabela Auth existir;
-2. ausência de social providers/plugins laterais na instância de prova;
-3. migrations Better Auth programáticas em storage descartável;
-4. bootstrap one-shot não roteável em instância separada;
-5. novo signup continuou negado ao retornar para a configuração guardada;
-6. usuário fictício existente autenticou por server API;
-7. cookie emitido resolveu sessão server-side e `subject`;
-8. sign-out emitiu cookie de expiração e a sessão antiga deixou de resolver.
-
-Nenhum usuário real, secret operacional, banco hospedado, recurso Neon ou dado de contratação foi usado.
-
-## Decisão F19 — ADOPT
-
-ADR-009 adota Better Auth self-hosted e remove Managed Neon Auth do caminho crítico.
-
-Neon pode continuar como PostgreSQL hospedado, porém a aplicação passa a controlar a política Auth versionada.
-
-Fronteira escolhida:
-
+- `better-auth@1.6.23` é dependência direta e pinada;
+- `pg` é dependência runtime para PostgreSQL Auth;
+- a dependência runtime de `@neondatabase/auth` foi removida;
+- instância Better Auth vive em módulo `server-only`;
+- `emailAndPassword.enabled=true` e `disableSignUp=true`;
+- `socialProviders={}` e nenhum plugin de método lateral;
+- `trustedOrigins` aceita somente origem HTTPS exata, sem wildcard/localhost hospedável;
+- issuer confiável fixo: `urn:compras:better-auth:self-hosted:v1`;
+- `subject` nasce somente de sessão Better Auth validada server-side;
 - `/api/auth/[...path]` continua deny-all;
 - sign-in/sign-out continuam Server Actions estreitas;
-- sessão é validada server-side;
-- `issuer = urn:compras:better-auth:self-hosted:v1`;
-- `subject = Better Auth user.id` vindo de sessão validada;
-- `app_users`/membership continuam autorização separada e nunca nascem automaticamente de Auth;
-- schema Auth dedicado `auth`;
-- migrator/owner separado de runtime Auth;
-- runtime Auth sem superuser/BYPASSRLS/ownership e sem grants de domínio;
-- `AUTH_DATABASE_URL` separado de `DATABASE_URL`;
-- `BETTER_AUTH_SECRET` e `COMPRAS_AUTH_BASE_URL` server-only;
-- `disableSignUp=true`, `socialProviders={}`, trusted origins estritos;
-- nenhum plugin de método lateral;
-- integration plugin `nextCookies()` pode ser usado apenas para transporte de cookies se F20 o provar corretamente;
-- cookie cache não deve ser habilitado no primeiro preview.
+- `AUTH_DATABASE_URL` e `DATABASE_URL` são configurações separadas e fail-closed;
+- `BETTER_AUTH_SECRET` e `COMPRAS_AUTH_BASE_URL` permanecem server-only.
 
-O proof usou o `better-auth@1.6.23` transitivo já fixado no lockfile. Isso não é aceito para runtime final: F20 deve transformar Better Auth em dependência direta com versão exata antes da implementação.
+## Cookies e sessão
 
-## Red-team F19
+A F20 escolheu forwarding explícito de `Set-Cookie` em vez de ampliar plugins.
 
-- signup por endpoint direto apesar de botão ausente: rejeitado por dupla barreira planejada, deny-all HTTP + `disableSignUp=true`;
-- OAuth/social/plugin lateral: não configurados;
-- wildcard/localhost hosted: proibidos;
-- Auth user ganhando autorização automaticamente: proibido;
-- role Auth privilegiada ou com acesso ao domínio: proibida;
-- reset/OTP/magic link/Admin API públicos: fora da superfície HTTP;
-- secret no browser: configuração deve permanecer `server-only`;
-- subject fornecido pelo cliente: rejeitado;
-- cookie de Server Action presumido: identificado como gate explícito F20;
-- migration via painel/manual/latest: rejeitada; versão pinada + SQL versionado;
-- dependência transitiva: identificada e promovida a gate da F20;
-- brute force: identificado que `auth.api` server-side não recebe rate limit client-side; Vercel Authentication continua obrigatória no primeiro preview e exposição mais ampla exigirá controle deliberado;
-- cookie cache/revogação atrasada: cookie cache não será habilitado no primeiro preview.
+O sign-in somente retorna sucesso depois de:
+
+1. Better Auth autenticar credenciais existentes;
+2. emitir cookie de sessão ativo;
+3. a sessão ser lida de volta server-side com o cookie emitido;
+4. o `user.id` da sessão corresponder ao usuário autenticado;
+5. o cookie ser persistido pela Server Action.
+
+O sign-out somente retorna sucesso depois de:
+
+1. Better Auth emitir invalidação do cookie de sessão;
+2. a sessão anterior deixar de resolver;
+3. a invalidação ser persistida pela Server Action.
+
+Assim, a aplicação não presume sucesso de cookie/session.
+
+## Schema Auth e roles
+
+Foi adicionada trilha de migration própria:
+
+- `database/auth/migrations/0001_better_auth_1_6_23.sql` — schema gerado da versão pinada contra PostgreSQL 17;
+- `database/auth/migrations/0002_auth_runtime_boundary.sql` — boundary de runtime.
+
+A boundary exige `compras_auth_runtime` com `LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION`, sem ownership de relações Auth e sem grants de domínio.
+
+A CI provou também o isolamento inverso: role de domínio sem acesso ao schema Auth.
+
+## Bootstrap fictício
+
+Existe mecanismo one-shot não roteável para laboratório/preflight:
+
+- exige modo explícito `FICTITIOUS_ONE_SHOT`;
+- aceita somente identidade em `example.invalid`;
+- cria somente identidade Better Auth;
+- não cria `app_users`, membership ou autorização de domínio;
+- retorna somente o `subject` necessário à etapa administrativa futura;
+- permanece fora de qualquer rota pública.
+
+A execução hospedada desse bootstrap não ocorreu na F20.
+
+## Red-team F20
+
+Os principais ataques/erros procurados foram cobertos:
+
+- signup apesar de `disableSignUp=true`: REJEITADO;
+- catch-all Auth delegando para Better Auth: NÃO;
+- OAuth/OTP/magic link/passkey/admin/reset laterais: AUSENTES;
+- origem wildcard/localhost hospedável: REJEITADA;
+- subject vindo do browser: REJEITADO pela fronteira server-side;
+- sign-in sem cookie/session comprovados: NÃO ACEITO;
+- sign-out sem revogação comprovada: NÃO ACEITO;
+- criação automática de `app_user`/membership: NÃO OCORRE;
+- role Auth com `BYPASSRLS`: migration REJEITOU em CI;
+- Auth runtime lendo `public.teams`: DENY `42501`;
+- domínio runtime lendo `auth.user`: DENY `42501`;
+- Auth runtime como owner: NÃO;
+- migration via painel/manual/latest: NÃO; SQL versionado da versão pinada;
+- fallback silencioso para demo em falha Auth: NÃO introduzido;
+- recurso hosted persistente/dado real: NÃO criado.
 
 ## Verificação
 
-- `main` de entrada: `50fd91ced1f5b88761b241c3e9626a7defbb44a5`;
-- CI de entrada `33800687046`: PASS;
-- `CONTEXT_MANIFEST`: VALID;
-- documentação oficial Better Auth: REVALIDADA;
-- runtime F14 atual: INSPECIONADO;
-- catch-all deny-all: INSPECIONADO;
-- proof F19 final: PASS;
-- CI proof `33804487955`: PASS em verify + database;
-- provider writes durante F19: NENHUM;
-- secret operacional: NENHUM;
-- usuário/dado real: NENHUM.
+CI final funcional F20: `33869932738`.
+
+Resultado:
+
+- install from lockfile: PASS;
+- lint: PASS;
+- typecheck: PASS;
+- testes unitários: PASS;
+- testes de Auth/cookies/session/sign-out: PASS;
+- Next.js build: PASS;
+- PostgreSQL/RLS legado: PASS;
+- red-team role Auth privilegiada: PASS;
+- migrations Auth: PASS;
+- integração Better Auth PostgreSQL: PASS;
+- isolamento Auth/domínio: PASS;
+- signup fechado: PASS;
+- bootstrap fictício sem autorização automática: PASS.
+
+Uma primeira execução da PR detectou incompatibilidade de tipagem na abstração `ReturnType<typeof betterAuth>`; a correção preservou o tipo inferido da instância configurada. A CI subsequente acima passou integralmente.
+
+## Providers / hosted
+
+F20 não provisionou nem alterou ambiente persistente Vercel/Neon.
+
+A faixa F18 continua como demonstração hospedada separada:
+
+- Preview `READY`;
+- Vercel Authentication ativa;
+- somente fixtures fictícias;
+- nenhum banco/Auth interno/secret;
+- `COMPRAS_PERSISTENT_READ_ENABLED` não habilitado;
+- Git auto-deploy permanece desabilitado conforme checkpoint anterior.
+
+F17 continua `ON HOLD` somente como histórico do blocker do Managed Neon Auth e não voltou ao caminho crítico.
 
 ## Last good
 
-O last-good funcional privado continua F14/`6c3891d0e4839daa067741bbcf5eafdea542a329` com CI `33670574481` até que o novo Auth self-hosted seja implementado e o preview persistente passe todos os gates.
+O last-good de implementação do repositório passa a ser F20 / `49bd1f346373d2c97eb5f32b009b2b2ea6551408`, validado pela CI `33869932738`.
 
-A F18 continua sendo o last-good de demonstração hospedada separado.
+Isso não significa que exista preview persistente operacional: a prova hosted com Better Auth self-hosted ainda é a próxima work unit. `REAL_DATA_ALLOWED` continua `NO`.
 
 ## Próxima ação
 
-Executar somente `F20-SELF-HOSTED-AUTH-IMPLEMENT-01` conforme `docs/ai/NEXT_ACTION.md`, `tasks/F20-SELF-HOSTED-AUTH-IMPLEMENT-01/SPEC.md` e ADR-009.
+Executar somente `F21-PRIVATE-PREVIEW-SELF-HOSTED-PROVISION-01` conforme `docs/ai/NEXT_ACTION.md` e `tasks/F21-PRIVATE-PREVIEW-SELF-HOSTED-PROVISION-01/SPEC.md`.

@@ -1,158 +1,245 @@
 # Current State — Compras
 
-**PROJECT_STATUS:** F22_IMPLEMENTED_PR_GREEN_F23_READY  
-**CURRENT_PHASE:** F22 implementada e verificada na PR `#38`; F23 READY; F21 ON HOLD; F17 ON HOLD histórico  
+**PROJECT_STATUS:** F23_IMPLEMENTED_VERIFYING_F24_READY  
+**CURRENT_PHASE:** F22 integrada/verde; F23 design implementado na branch e em verificação; F24 READY; F21 ON HOLD; F17 ON HOLD histórico  
 **REPO_VISIBILITY:** PUBLIC  
 **APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_IMPLEMENTED_PERSISTENT_PREVIEW_BLOCKED_PRE_SECRETS  
 **DATABASE_STATUS:** PROTECTED_DOMAIN_READ_MODEL_VALIDATED_AUTH_SCHEMA_AND_FICTITIOUS_PREFLIGHT_EPHEMERAL_PASS  
-**AUTH_STATUS:** SELF_HOSTED_BETTER_AUTH_IMPLEMENTED_FICTITIOUS_BOOTSTRAP_AND_AUTHZ_SEPARATION_PROVEN  
-**DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_VERCEL_AUTH_OBSERVED_NO_F22_HOSTED_WRITES  
+**AUTH_STATUS:** SELF_HOSTED_BETTER_AUTH_IMPLEMENTED_ABUSE_CONTROL_DESIGN_DECIDED_NOT_YET_IMPLEMENTED  
+**DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_VERCEL_AUTH_OBSERVED_NO_F23_HOSTED_WRITES  
 **REAL_DATA_ALLOWED:** NO  
 **CONTEXT_STATUS:** VALID  
 **FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`  
 **F20_FINAL_CHECKPOINT_COMMIT:** `a1037b38269c2e67e0ec249ed597eb5171eb31d2`  
 **F21_CHECKPOINT_MERGE_COMMIT:** `b38ad708a6f668b4886930a96eaff95a1251590a`  
 **F21_FINAL_CHECKPOINT_COMMIT:** `73cd3ec1ef524c526c91124d40efae1eff2061ce`  
-**F21_FINAL_CHECKPOINT_CI_RUN:** `33873458508` — PASS  
-**F22_BRANCH:** `f22-private-preview-seed-smoke-assets`  
-**F22_PR:** `#38` — OPEN / GREEN PRE-CHECKPOINT  
-**F22_IMPLEMENTATION_PROOF_HEAD:** `5ef25de708b74ede8e938b5527ad6019b24bd688`  
-**F22_CANONICAL_CI_RUN:** `33880106437` — PASS  
-**F22_PREFLIGHT_CI_RUN:** `33880106555` — PASS  
-**LAST_GOOD_COMMIT:** `73cd3ec1ef524c526c91124d40efae1eff2061ce`  
-**LAST_GOOD_CI_RUN:** `33873458508`  
+**F22_PR:** `#38` — MERGED  
+**F22_MERGE_COMMIT:** `1ea7b1abb47e81af318872ee5e4c683607b3e2a3`  
+**F22_MAIN_CI_RUN:** `33880974626` — PASS  
+**F22_MAIN_PREFLIGHT_RUN:** `33880974672` — PASS  
+**F23_BRANCH:** `f23-private-signin-abuse-control-design`  
+**F23_STATE:** `IMPLEMENTED / VERIFYING`  
+**LAST_GOOD_COMMIT:** `1ea7b1abb47e81af318872ee5e4c683607b3e2a3`  
+**LAST_GOOD_CI_RUN:** `33880974626`  
 **F21_STATE:** `ON HOLD / BLOCKED` — Vercel control-plane surface unavailable for required protection/env readback+CRUD  
 **F21_RESUME_WHEN:** sessão Vercel autenticada permitir readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch, sem exposição de valores  
 **ON_HOLD:** `F17-B2` histórico + `F21` conforme resume_when acima
 
-## Estado real recuperado para F22
+## Recuperação da sessão F23
 
-A work unit partiu da `main` `73cd3ec1ef524c526c91124d40efae1eff2061ce`, cuja CI `33873458508` estava integralmente em PASS.
+A sessão recuperou `main` em `1ea7b1abb47e81af318872ee5e4c683607b3e2a3`, merge da PR F22 `#38`.
 
-Não existia branch/PR F22 ativa. Foi criada `f22-private-preview-seed-smoke-assets` e aberta a PR `#38` para executar a única `NEXT_ACTION` então canônica: `F22-PRIVATE-PREVIEW-SEED-SMOKE-ASSETS-01`.
+Os runs pós-merge que estavam pendentes no checkpoint anterior já terminaram:
 
-O `CONTEXT_MANIFEST` foi revalidado diretamente contra a árvore de `main`: todos os 10 inputs estáveis continuaram nos blobs esperados. `CONTEXT_STATUS = VALID`.
+- CI canônica `33880974626`: `completed / success`;
+- F22 Private Preview Preflight `33880974672`: `completed / success`.
 
-F21 continuou `ON HOLD` durante toda a unidade. Nenhuma condição de `resume_when` foi presumida satisfeita e nenhum write Vercel/Neon hosted foi realizado.
+Portanto F22 está integrada e verde. O `LAST_GOOD_COMMIT` passa a ser `1ea7b1abb47e81af318872ee5e4c683607b3e2a3`.
 
-## F22 — assets reproduzíveis implementados
+Não existia PR aberta nem branch F23 ativa. Foi criada `f23-private-signin-abuse-control-design` a partir do last-good.
 
-A F22 adicionou uma trilha operacional exclusivamente fictícia em `src/server/preflight/`, separada das migrations canônicas.
+## Contexto
 
-### Seed de autorização fictícia
+O `CONTEXT_MANIFEST` foi revalidado diretamente contra `main`.
 
-`fictitious-private-preview.ts`:
+Todos os 10 inputs estáveis continuam exatamente nos blobs esperados:
 
-- é `server-only`;
-- exige modo exato `FICTITIOUS_EPHEMERAL`;
-- usa UUIDs determinísticos e conteúdo explicitamente artificial;
-- contém duas equipes fictícias e duas contratações fictícias;
-- recebe somente o `subject` criado pelo bootstrap Better Auth fechado;
-- verifica esse subject na tabela Auth e exige email persistido em `example.invalid`;
-- não cria nem altera identidade Better Auth;
-- cria `app_user` e membership em operação administrativa separada;
-- concede membership somente à equipe Alpha;
-- executa postflight de todas as relações esperadas e da ausência de membership cross-team;
-- retorna somente `{ kind: "seeded" }` e usa erro genérico fail-closed.
+- produto: `PROJECT_DESIGN`, `DOMAIN_MODEL`, `BUSINESS_WORKFLOW`, `OPEN_QUESTIONS` — MATCH;
+- arquitetura: `ARCHITECTURE`, `SECURITY`, `DATABASE` — MATCH;
+- qualidade: `DEFINITION_OF_DONE` — MATCH;
+- operação: `SOURCE_OF_TRUTH`, `WORK_PROTOCOL` — MATCH.
 
-As tabelas de domínio usam `FORCE RLS` e não possuem policy de INSERT. Por isso o seed exige conexão administrativa one-shot explicitamente privilegiada; essa credencial nunca é runtime e nunca é usada como prova de autorização operacional.
+`CONTEXT_STATUS = VALID`.
 
-### Harness PostgreSQL
+A única `NEXT_ACTION` recuperada foi `F23-PRIVATE-SIGNIN-ABUSE-CONTROL-DESIGN-01`.
 
-`fictitious-private-preview.postgres.test.ts` prova em PostgreSQL 17 descartável:
+## F21 continua ON HOLD
 
-- email fora de `example.invalid` é rejeitado pelo bootstrap;
-- bootstrap Better Auth cria somente identidade Auth;
-- antes do seed, `app_users=0` e `memberships=0`;
-- identidade Auth sem autorização interna vê zero contratações;
-- seed administrativo separado cria somente a autorização fictícia esperada;
-- configuração normal continua `disableSignUp=true`;
-- sign-in, sessão e sign-out funcionam para a identidade fictícia existente;
-- usuário autorizado vê somente a própria equipe;
-- UUID conhecido da outra equipe continua invisível;
-- claims ausentes, issuer errado, subject errado e claims malformados falham fechados;
-- roles runtime Auth/domínio permanecem `NOINHERIT`, sem superuser, `BYPASSRLS`, `CREATEDB` ou `CREATEROLE`;
-- roles runtime não possuem relações;
-- Auth runtime não lê o domínio;
-- domínio runtime não lê o schema Auth.
+A disponibilidade de ferramentas Vercel foi novamente inspecionada antes da decisão F23.
 
-## Composição de migrations — achado de red-team
+A superfície autenticada da sessão continua oferecendo leitura/deploy/logs/acesso a deployment protegido e pesquisa de documentação, mas não expõe CRUD/readback de sensitive Preview environment variables por branch nem a leitura completa de Deployment Protection/bypasses exigida pela F21.
 
-O primeiro ensaio do workflow F22 detectou um conflito real de ownership ao tentar aplicar `database/auth/migrations/0002_auth_runtime_boundary.sql` depois de `database/migrations/0003_team_member_directory.sql`.
+Portanto o `resume_when` da F21 não foi presumido satisfeito e nenhum write hosted foi realizado.
 
-A migration Auth `0002` revoga privilégios em todas as relações `public` que já existem. A view `team_member_directory`, porém, pertence deliberadamente à capability role `compras_team_directory_view_owner`; o migrator normal não é owner dessa view e o `REVOKE ALL ... ON ALL TABLES IN SCHEMA public` falhou fechado.
+## Inspeção F23
 
-A correção não reescreveu nenhuma migration. O preflight composto aplica:
+Foram lidos diretamente:
 
-```text
-domínio 0001
--> domínio 0002
--> Auth 0001
--> Auth 0002
--> domínio 0003
-```
+- `src/server/auth/private-admission.ts`;
+- `src/server/auth/runtime.ts`;
+- `src/server/auth/configuration.ts`;
+- ADR-007;
+- ADR-009;
+- `docs/architecture/SECURITY.md`;
+- `docs/architecture/DATABASE.md`;
+- SPEC F23 e checkpoint vigente.
 
-Depois da criação da capability view há postflight explícito exigindo que `compras_auth_runtime` continue sem `SELECT` sobre `public.team_member_directory`.
+A implementação atual confirma:
 
-Esse achado tornou o harness mais fiel à fronteira de ownership já aprovada em ADR-005.
+- `signInExistingIdentity()` chama `configured.auth.api.signInEmail()` server-side;
+- não existe limiter antes dessa chamada;
+- a jornada normal mantém `disableSignUp=true`;
+- `/api/auth/[...path]` continua fora do fluxo de admissão;
+- sucesso só é persistido depois de readback da sessão/cookie;
+- erro Auth indisponível e credencial rejeitada já possuem estados genéricos separados.
 
-## CI e verificação F22
+## Revalidação externa F23
 
-O head funcional `5ef25de708b74ede8e938b5527ad6019b24bd688` passou as duas suítes relevantes antes do checkpoint documental:
+Documentação oficial atual revalidada em 2026-09-04:
 
-- CI canônica `33880106437`: PASS em `verify`, `database` e `auth-database`;
-- `verify`: install, lint, typecheck, testes completos e build Next.js — PASS;
-- `database`: migrations/RLS/capability/detalhe persistente — PASS;
-- `auth-database`: role Auth adversarial, migrations Auth e integração Better Auth/PostgreSQL — PASS;
-- workflow `F22 Private Preview Preflight` `33880106555`: PASS;
-- integração F22 real em PostgreSQL: PASS.
+### Better Auth v1.6
 
-As credenciais operacionais do workflow F22 são geradas aleatoriamente durante o job e mascaradas antes de serem colocadas no ambiente. Os URLs de conexão também são mascarados. O serviço PostgreSQL usa autenticação `trust` somente dentro do runner descartável para evitar que uma senha de serviço apareça no log de inicialização do container; isso não altera grants, ownership ou RLS usados na prova.
+`https://better-auth.com/docs/1.6/concepts/rate-limit`
 
-## Red-team F22
+Confirmado:
+
+- requests server-side por `auth.api` **não** são afetadas pelo rate limiter embutido;
+- storage padrão do limiter é em memória e não é apropriado como enforcement distribuído em muitos cenários serverless;
+- Better Auth suporta database/secondary/custom storage para seu limiter HTTP, mas isso não muda o bypass das chamadas `auth.api` usadas pela aplicação.
+
+Também foi revalidada a referência de segurança Better Auth v1.6.
+
+### Vercel
+
+Foram revalidadas as páginas oficiais de:
+
+- request headers;
+- Firewall/WAF rate limiting;
+- CLI/API de Firewall;
+- Vercel Authentication/Deployment Protection.
+
+Confirmado:
+
+- Vercel Firewall/WAF executa antes da aplicação e suporta rate limit por path/método/IP;
+- `x-forwarded-for` é sobrescrito pela Vercel com o IP público do cliente para impedir spoofing, salvo quando uma configuração explícita de trusted proxy altera essa fronteira;
+- regras WAF podem ser lidas/alteradas por control plane oficial e possuem rollback operacional;
+- Vercel Authentication continua sendo a barreira externa do Preview existente.
+
+## F23 — decisão arquitetural
+
+A ADR-010 foi criada e aceita.
+
+### Camadas
+
+1. **Limiter application-side autoritativo:** PostgreSQL compartilhado, executado antes de `auth.api.signInEmail`.
+2. **Vercel Firewall/WAF:** defesa edge obrigatória para exposição hosted mais ampla, reduzindo volume antes da Function, mas não substituindo o limiter application-side.
+
+Limiter somente process-local/in-memory foi rejeitado.
+
+Redis/KV dedicado foi comparado e rejeitado nesta etapa porque adicionaria provider/secret/dependência operacional sem necessidade; PostgreSQL já existe no desenho Auth, oferece atomicidade e é reproduzível integralmente em CI.
+
+### Trusted source
+
+Em hosted Vercel, `x-forwarded-for` só poderá ser usado quando:
+
+- o runtime comprovar ambiente Vercel;
+- existir exatamente um IP válido;
+- não houver cadeia com vírgulas;
+- o preflight hosted confirmar que a configuração de proxy preserva a fronteira esperada.
+
+Ausência/ambiguidade -> limiter `unavailable` -> sign-in fail-closed.
+
+Headers alternativos/browser-supplied não podem virar fallback confiável.
+
+### Pseudonimização
+
+Nenhum email/IP será armazenado em claro.
+
+A implementação deve derivar chave do limiter a partir de `BETTER_AUTH_SECRET` com HKDF/HMAC e domain separation `compras/signin-limiter/v1`, evitando uma nova secret.
+
+Buckets:
+
+- `source` = HMAC(origem confiável);
+- `identifier` = HMAC(email normalizado para bucket defensivo);
+- `pair` = HMAC(origem + email normalizado).
+
+Email continua input de credencial, não identidade/autorização confiável.
+
+### Policy inicial versionada
+
+| Bucket | Janela | Máximo |
+|---|---:|---:|
+| `source` | 15 min | 120 |
+| `identifier` | 15 min | 20 |
+| `pair` | 5 min | 8 |
+
+As três reservas são atômicas e ocorrem antes do Better Auth, independentemente de conta existir ou senha estar correta.
+
+Não existe bucket global bloqueante.
+
+### Estados externos
+
+- allow -> segue para Better Auth;
+- limit exceeded -> `rejected`, igual a credencial inválida;
+- limiter/store/config unavailable -> `unavailable`, sem chamar Better Auth;
+- nenhum caminho cai para sign-in sem limiter ou para demo.
+
+### Privacidade/observabilidade
+
+Persistência do limiter fica restrita a digest pseudônimo, bucket/policy, contador e timestamps mínimos.
+
+Proibido logar email, IP, digest individual, senha, cookie, token, connection string ou session payload.
+
+Janela máxima de enforcement: 15 minutos. Retenção física alvo: <=24h após expiração, com purge oportunístico na F24 e requisito de cleanup periódico/readback antes de garantia formal de produção.
+
+## Red-team F23
 
 Resultado:
 
-- email fora de `example.invalid` aceito: NÃO;
-- seed sem gate fictício: NÃO;
-- issuer/equipe oriundos do browser: NÃO;
-- bootstrap criando `app_user`/membership automaticamente: NÃO;
-- mesma role Auth/domínio: NÃO;
-- runtime owner/superuser/BYPASSRLS/CREATEROLE: NÃO;
-- identidade Auth sem autorização retornando dado: NÃO;
-- cross-team por UUID conhecido retornando linha: NÃO;
-- claims inválidos abrindo acesso: NÃO;
-- Auth runtime lendo domínio/capability view: NÃO;
-- domínio runtime lendo Auth: NÃO;
-- migration canônica reescrita: NÃO;
-- catch-all Auth reaberto: NÃO;
-- signup normal reaberto: NÃO;
-- output de teste contendo credencial operacional/connection string/cookie/token: NÃO nos runs verdes finais;
-- recurso Vercel/Neon hosted criado: NÃO;
-- identidade/dado real usado: NÃO.
+- limiter autoritativo somente em memória: REJEITADO;
+- Better Auth catch-all reaberto para herdar limiter: REJEITADO;
+- signup/OAuth/OTP/Admin reaberto: REJEITADO;
+- IP arbitrário/browser header como única confiança: REJEITADO;
+- somente IP como defesa completa: REJEITADO;
+- somente email/global key como defesa: REJEITADO;
+- falha do limiter permitindo auth: REJEITADO;
+- raw email/IP/credential em logs/store: REJEITADO;
+- Redis/KV/provider novo sem necessidade: REJEITADO;
+- Vercel Authentication reduzida: REJEITADO;
+- alteração de domínio/RLS: REJEITADO;
+- hosted write em F23: NÃO.
 
-O primeiro run F22 falho havia usado uma senha estática fictícia de serviço visível no metadata/log do container. Apesar de não ser secret operacional, isso foi tratado como falha de higiene do próprio red-team; o workflow final eliminou esse valor e os runs verdes posteriores usam somente valores gerados e mascarados.
+Trade-off explícito mantido: um atacante distribuído pode causar throttling temporário de uma identidade específica ao consumir seu bucket. O desenho evita lockout global e usa janela curta + edge defense; métricas futuras podem justificar ajuste versionado dos limites.
 
-## F21 permanece ON HOLD
+## Artefatos F23
 
-Nada na F22 altera o blocker externo da F21.
+Criados:
 
-Retomar F21 somente quando a sessão Vercel autenticada puder:
+- `docs/decisions/ADR-010-private-signin-abuse-control.md`;
+- `tasks/F24-PRIVATE-SIGNIN-ABUSE-CONTROL-IMPLEMENT-01/SPEC.md`.
 
-1. ler/read-back Deployment Protection/Vercel Authentication e bypasses relevantes;
-2. criar, atualizar, listar metadados e remover sensitive Preview env vars escopadas à branch;
-3. inspecionar/disparar o Preview sem criar Production pública por conveniência.
+Atualizados:
 
-Secrets nunca devem ser enviados por chat para contornar esse blocker.
+- `docs/00-START-HERE.md`;
+- `docs/ai/NEXT_ACTION.md`;
+- este checkpoint.
 
-## Last good
+Nenhum arquivo executável, migration aplicada ou configuração hosted foi alterado nesta work unit de design.
 
-Enquanto a PR `#38` não estiver integrada, o last-good canônico de `main` permanece `73cd3ec1ef524c526c91124d40efae1eff2061ce`, validado pela CI `33873458508`.
+## Verificação aplicável
 
-O fechamento final F22 deve atualizar este checkpoint depois do merge e dos runs de `main`.
+Como F23 é T0/design e não altera código executável, lint/typecheck/test/build não são exigidos antes do primeiro commit documental por mudança local. A PR ainda deve passar a CI normal do repositório antes de promoção/merge.
+
+Verificações já concluídas:
+
+- estado GitHub/main: RECUPERADO;
+- F22 post-merge CI: PASS;
+- F22 post-merge preflight: PASS;
+- `CONTEXT_MANIFEST`: VALID;
+- código/ADRs/SECURITY/DATABASE exigidos: INSPECIONADOS;
+- documentação Better Auth/Vercel: REVALIDADA;
+- F21 blocker: CONTINUA PRESENTE;
+- threat model: COMPLETO;
+- alternativas edge/PostgreSQL/Redis-KV: COMPARADAS;
+- confiança de origem: DEFINIDA;
+- policy/atomicidade/fail-closed: DEFINIDOS;
+- privacidade/retenção/observabilidade: DEFINIDAS;
+- red-team de design: PASS;
+- hosted writes: NENHUM;
+- dados/identidades reais: NENHUM.
 
 ## Próxima ação
 
-Executar somente `F23-PRIVATE-SIGNIN-ABUSE-CONTROL-DESIGN-01` conforme `docs/ai/NEXT_ACTION.md` e `tasks/F23-PRIVATE-SIGNIN-ABUSE-CONTROL-DESIGN-01/SPEC.md`.
+Executar somente `F24-PRIVATE-SIGNIN-ABUSE-CONTROL-IMPLEMENT-01` conforme `docs/ai/NEXT_ACTION.md`, `tasks/F24-PRIVATE-SIGNIN-ABUSE-CONTROL-IMPLEMENT-01/SPEC.md` e ADR-010.
 
-F23 é uma frente de design independente para fechar o controle distribuído de abuso do sign-in privado. F21 permanece `ON HOLD` até seu `resume_when` ser objetivamente satisfeito.
+F21 permanece `ON HOLD` até seu `resume_when` externo ser objetivamente satisfeito.

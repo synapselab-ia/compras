@@ -23,7 +23,7 @@ A F18 mantém uma faixa independente de demonstração hospedada, protegida por 
 
 A F19 adotou Better Auth self-hosted pela ADR-009.
 
-A F20 transformou essa decisão em implementação e passou integralmente a CI `33869932738`.
+A F20 transformou essa decisão em implementação, foi integrada em `main` e passou integralmente as suítes de CI.
 
 ## F20 — Better Auth self-hosted implementado
 
@@ -71,15 +71,30 @@ Existe bootstrap one-shot administrativo e não roteável para laboratório/pref
 - não concede autorização interna;
 - não deve permanecer habilitado após a operação.
 
-Nenhuma execução hospedada desse bootstrap foi feita na F20.
+Nenhuma execução hospedada desse bootstrap ocorreu até o checkpoint atual.
+
+## F21 — preview persistente ON HOLD antes de secrets
+
+A F21 recuperou o estado real de GitHub, Vercel e Neon e revalidou a documentação oficial vigente.
+
+Foi confirmado que:
+
+- o Preview fictício F18 continua `READY` e atrás da barreira de autenticação Vercel;
+- a criação da branch F21 não disparou novo deployment automático;
+- não existe projeto Neon dedicado a Compras e nenhum recurso Neon foi criado para F21;
+- Vercel suporta Deployment Protection e sensitive Preview environment variables escopadas por branch.
+
+A execução parou fail-closed porque a superfície Vercel autenticada disponível na sessão não expõe o readback/CRUD necessário para os dois gates externos obrigatórios: estado completo da proteção/bypasses e environment variables sensíveis de Preview por branch.
+
+Nenhum secret ou recurso hosted novo foi criado. F21 fica `ON HOLD` até essa capacidade de control plane estar disponível; a proteção não será reduzida para contornar o blocker.
 
 ## Próxima frente
 
 A única `NEXT_ACTION` está em `docs/ai/NEXT_ACTION.md`:
 
-`F21-PRIVATE-PREVIEW-SELF-HOSTED-PROVISION-01 — Provisionar e provar preview privado fictício com Better Auth self-hosted`.
+`F22-PRIVATE-PREVIEW-SEED-SMOKE-ASSETS-01 — Versionar assets reproduzíveis de seed e smoke do preview privado`.
 
-A F21 deve provar a arquitetura F20 no ambiente hospedado real, ainda exclusivamente com identidade/dados fictícios, com Vercel Authentication antes de secrets e rollback se qualquer gate externo falhar.
+A F22 deve transformar os requisitos já definidos de bootstrap/seed/cross-team/fail-closed em assets totalmente fictícios e reproduzíveis em PostgreSQL efêmero/CI, sem qualquer write hosted, enquanto F21 aguarda o `resume_when` externo.
 
 ## Modos da aplicação
 

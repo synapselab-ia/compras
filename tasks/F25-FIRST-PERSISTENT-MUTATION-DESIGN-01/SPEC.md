@@ -1,7 +1,7 @@
 # F25-FIRST-PERSISTENT-MUTATION-DESIGN-01 — Definir a primeira mutação persistente rastreável
 
 **Classe:** T5 — decisão arquitetural pequena, com impacto T2 — banco/segurança  
-**Estado:** PLANNED / NEXT  
+**Estado:** VERIFIED / READY TO MERGE  
 **Dependências:** F12, F20, F22, F24, ADR-003, ADR-005, ADR-009, `DATABASE.md` e `SECURITY.md`  
 **Classificação permitida:** PUBLIC / FICTITIOUS ONLY
 
@@ -143,3 +143,33 @@ Rejeitar a decisão se ela permitir:
 ## Critério de encerramento
 
 F25 fecha quando existir uma ADR aceita, pequena e executável para a primeira mutação persistente de `next_action`, com autorização pilot-only sem inferir Q-009, atomicidade estado+evento, estratégia de concorrência e plano de testes adversariais suficientes para uma implementação subsequente.
+
+## Resultado executado
+
+A decisão foi fechada em `docs/decisions/ADR-011-first-persistent-next-action-mutation.md`.
+
+A ADR escolhe uma primitive PostgreSQL estreita `SECURITY DEFINER`, com owner técnico `NOLOGIN` não privilegiado, em vez de conceder DML direto à role runtime. O runtime continuará apenas com `EXECUTE` sobre a capability específica.
+
+A autorização permanece **pilot-only**: o usuário corrente precisa ser a única membership não revogada da equipe da contratação. Se houver segunda membership ativa, a escrita falha fechada; Q-009 permanece explicitamente aberta.
+
+A concorrência foi definida como `SELECT ... FOR UPDATE` combinado com precondição otimista null-safe sobre o valor anterior de `next_action`. Chamadas concorrentes com o mesmo expected não podem produzir last-write-wins silencioso: somente uma vence; as demais retornam conflito sem evento.
+
+A alteração real deve atualizar `next_action` + `updated_at` e inserir exatamente um `contracting_events` na mesma transação, com actor/team/contracting derivados do banco. No-op não altera timestamp e não gera evento.
+
+A matriz adversarial da implementação foi versionada em `tasks/F26-FIRST-PERSISTENT-NEXT-ACTION-MUTATION-IMPLEMENT-01/SPEC.md`.
+
+Red-team da decisão rejeitou:
+
+- actor/team/membership fornecidos pelo browser;
+- membership como permissão multiusuário implícita;
+- DML amplo para runtime;
+- owner/superuser/`BYPASSRLS` como runtime normal;
+- `SECURITY DEFINER` com search path inseguro;
+- estado sem evento ou evento sem estado;
+- lost update silencioso;
+- side channel cross-team por UUID conhecido;
+- alteração de migrations aplicadas;
+- dependência de provider hosted;
+- dado real.
+
+Nenhuma migration, Server Action, UI de escrita ou recurso hosted foi criado nesta F25. `REAL_DATA_ALLOWED = NO`.

@@ -1,7 +1,7 @@
 # F24-PRIVATE-SIGNIN-ABUSE-CONTROL-IMPLEMENT-01 — Implementar limiter distribuído do sign-in privado
 
 **Classe:** T1 — feature de suporte, com impacto T2 — segurança  
-**Estado:** VERIFIED / READY TO MERGE  
+**Estado:** COMPLETE / INTEGRATED  
 **Dependências:** F20, F22, F23, ADR-007, ADR-009 e ADR-010  
 **Classificação permitida:** PUBLIC / FICTITIOUS ONLY
 
@@ -269,10 +269,14 @@ O red-team corrigiu duas fragilidades antes do checkpoint:
 
 Head funcional verificado: `3291a62f57b350edf8b882ec08cc2655ed54d99d`.
 
+Checkpoint final da PR: `fbd5be5bec0d0b916c4b16a0a9bf8988c18ced02`.
+
 Verificação real:
 
-- CI `34476876653`: PASS (`verify`, `database`, `auth-database`);
-- F22 Private Preview Preflight `34476876664`: PASS;
+- CI funcional `34476876653`: PASS (`verify`, `database`, `auth-database`);
+- preflight funcional `34476876664`: PASS;
+- CI final da PR `34479092121`: PASS (`verify`, `database`, `auth-database`);
+- F22 Private Preview Preflight final da PR `34479092184`: PASS;
 - lint/typecheck/test/build: PASS;
 - PostgreSQL 17: PASS;
 - thresholds exatos: PASS;
@@ -287,4 +291,11 @@ Verificação real:
 - dado real: NÃO;
 - `REAL_DATA_ALLOWED = NO`.
 
-F21 continua `ON HOLD` sob o mesmo `resume_when` externo. A próxima unidade independente foi definida como `F25-FIRST-PERSISTENT-MUTATION-DESIGN-01`.
+Promoção:
+
+- PR `#40`: MERGED;
+- merge commit: `8c4afd1b242781f7e0ef499ab7d879ce1adf635d`;
+- main CI `34479463372`: PASS;
+- main F22 Private Preview Preflight `34479463381`: PASS.
+
+F21 continua `ON HOLD` sob o mesmo `resume_when` externo. A única próxima unidade canônica é `F25-FIRST-PERSISTENT-MUTATION-DESIGN-01`.

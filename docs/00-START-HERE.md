@@ -4,168 +4,240 @@
 
 Construir um sistema operacional para equipes de compras públicas acompanharem contratações de ponta a ponta em uma única fonte de verdade, com foco em velocidade, rastreabilidade, segurança e redução de trabalho manual.
 
-O sistema não substitui sistemas oficiais. O repositório continua público; somente código/documentação sanitizados e dados fictícios podem ser usados.
+O sistema não substitui os sistemas oficiais de processo administrativo, requisição ou publicação. O repositório continua público; somente código/documentação sanitizados e dados fictícios podem ser usados.
 
 ## Estado atual
 
-A `Foundation-00` e F01–F14 estabeleceram protótipo Central → detalhe, PostgreSQL default-deny/`FORCE RLS`, identidade confiável `issuer + subject`, leituras persistentes protegidas, diretório mínimo, sign-in/sign-out por Server Actions e `/api/auth/[...path]` deny-all.
+A `Foundation-00` e as work units F01 a F14 estão integradas e entregaram:
 
-F15/F16 prepararam a fronteira de preview privado. F17 ficou `ON HOLD` historicamente após provar que o Managed Neon Auth observado não oferecia o enforcement/readback de signup exigido. F18 mantém demonstração hospedada fictícia atrás de Vercel Authentication, sem banco/Auth interno/secrets.
+- protótipo Central → detalhe → Central;
+- fundação PostgreSQL default-deny com `FORCE RLS`;
+- identidade confiável `issuer + subject` estabelecida no servidor;
+- leituras persistentes protegidas e diretório mínimo da equipe;
+- sign-in email/senha e sign-out por Server Actions;
+- `/api/auth/[...path]` deny-all para signup/OAuth/OTP/Admin e superfícies laterais não usadas.
 
-F19 adotou Better Auth self-hosted pela ADR-009; F20 implementou essa decisão. F21 permanece `ON HOLD` antes de secrets por ausência, na superfície Vercel autenticada disponível, de readback/CRUD suficiente para Deployment Protection/bypasses e sensitive Preview environment variables por branch.
+F15/F16 prepararam a fronteira do primeiro preview privado. F17 provou o control plane Vercel, mas o Managed Neon Auth observado não permitia aplicar/read-back do enforcement obrigatório de signup restrito; essa rota permanece `ON HOLD` apenas como evidência histórica.
 
-F22 criou seed/smoke fictícios reproduzíveis. F23 definiu controle distribuído de abuso pela ADR-010. F24 implementou limiter PostgreSQL distribuído e foi integrada pela PR `#40`.
+A F18 mantém uma faixa independente de demonstração hospedada, protegida por Vercel Authentication, usando somente fixtures fictícias, sem banco/Auth interno/secrets e sem `COMPRAS_PERSISTENT_READ_ENABLED`.
 
-F25 definiu, pela ADR-011, a primeira mutação persistente rastreável. A próxima implementação é F26.
+A F19 adotou Better Auth self-hosted pela ADR-009. A F20 implementou essa decisão. A F22 acrescentou assets reproduzíveis de bootstrap/seed/smoke. A F23 fechou a arquitetura de controle distribuído de abuso pela ADR-010. A F24 implementou e provou a camada application-side do limiter em PostgreSQL 17 efêmero e foi integrada pela PR `#40`.
 
-`REAL_DATA_ALLOWED = NO` permanece invariável.
+A F25 definiu pela ADR-011 a fronteira da primeira mutação persistente rastreável de `contractings.next_action`. A implementação fica para F26.
 
-## Autenticação e limiter
+Tudo continua exclusivamente fictício. Nenhuma dessas frentes autorizou dados reais.
 
-O runtime privado usa Better Auth self-hosted:
+## F20 — Better Auth self-hosted implementado
 
-- `better-auth@1.6.23` pinado;
-- email/senha habilitado, signup desabilitado;
-- nenhum provider social/método lateral;
-- trusted origin exata;
+O runtime privado usa Better Auth self-hosted com PostgreSQL:
+
+- `better-auth@1.6.23` é dependência direta e pinada;
+- `@neondatabase/auth` saiu do runtime;
+- `emailAndPassword.enabled=true`;
+- `disableSignUp=true`;
+- `socialProviders={}`;
+- nenhum plugin de método lateral;
+- trusted origin HTTPS exata;
 - issuer fixo `urn:compras:better-auth:self-hosted:v1`;
-- sessão/subject validados server-side;
-- catch-all Auth deny-all.
+- `subject` nasce somente da sessão validada no servidor;
+- cookie cache não foi habilitado;
+- `/api/auth/[...path]` continua deny-all.
 
-Migrations Auth/custom guard:
+Sign-in e sign-out continuam exclusivamente por Server Actions estreitas. O transporte de cookies é explícito e o código somente declara sucesso depois de provar readback da sessão ou revogação real.
+
+## Banco Auth e proteção do sign-in
+
+Há uma trilha separada de migrations:
 
 - `database/auth/migrations/0001_better_auth_1_6_23.sql`;
 - `database/auth/migrations/0002_auth_runtime_boundary.sql`;
 - `database/auth/migrations/0003_signin_abuse_limiter.sql`.
 
-O limiter F24 usa namespace `auth_guard`, PostgreSQL compartilhado, HMAC/HKDF e buckets fixos:
+A role `compras_auth_runtime` deve ser login não privilegiado, sem ownership, superuser, `BYPASSRLS`, `CREATEDB`, `CREATEROLE` ou replication.
 
-- `source`: 120/15 min;
-- `identifier`: 20/15 min;
-- `pair`: 8/5 min.
+A migration F24 cria namespace isolado `auth_guard`. O runtime Auth recebe somente `USAGE` no schema e `EXECUTE` no primitive estreito do limiter, sem DML direto na tabela de buckets.
 
-`compras_auth_runtime` permanece não privilegiada e sem DML direto no limiter. Origem hosted aceita somente `x-forwarded-for` único sob runtime Vercel explícito. `rejected`/`unavailable` nunca chamam Better Auth. A prova concorrente executa 32 chamadas no mesmo pair e obtém exatamente 8 `allowed` e 24 `rejected`.
+A CI prova:
 
-## Persistência e RLS
+- Auth runtime não lê tabelas do domínio;
+- role de domínio não lê tabelas Auth nem o limiter;
+- autenticação não cria `app_users` nem membership automaticamente;
+- signup permanece fechado;
+- sign-in, sessão e sign-out funcionam com identidade fictícia;
+- limiter distribuído aplica os limites ADR-010 e falha fechado;
+- toda a suíte PostgreSQL/RLS existente continua em PASS.
 
-Migrations canônicas do domínio:
+## Bootstrap fictício
 
-- `database/migrations/0001_core_foundation.sql` — schema + RLS default-deny;
-- `database/migrations/0002_trusted_identity_read_policies.sql` — helpers de identidade e policies SELECT;
-- `database/migrations/0003_team_member_directory.sql` — capability view do diretório.
+Existe bootstrap one-shot administrativo e não roteável para laboratório/preflight:
 
-O caminho confiável é:
+- precisa de modo explícito `FICTITIOUS_ONE_SHOT`;
+- aceita somente identidade `example.invalid`;
+- cria somente identidade Better Auth;
+- não concede autorização interna;
+- não deve permanecer habilitado após a operação.
+
+Nenhuma execução hospedada desse bootstrap ocorreu até o checkpoint atual.
+
+## F21 — preview persistente ON HOLD antes de secrets
+
+A F21 recuperou o estado real de GitHub, Vercel e Neon e revalidou a documentação oficial vigente.
+
+Foi confirmado que:
+
+- o Preview fictício F18 continua `READY` e atrás da barreira de autenticação Vercel;
+- a criação da branch F21 não disparou novo deployment automático;
+- não existe projeto Neon dedicado a Compras e nenhum recurso Neon foi criado para F21;
+- Vercel suporta Deployment Protection e sensitive Preview environment variables escopadas por branch.
+
+A execução parou fail-closed porque a superfície Vercel autenticada disponível na sessão não expõe o readback/CRUD necessário para os dois gates externos obrigatórios: estado completo da proteção/bypasses e environment variables sensíveis de Preview por branch.
+
+F21 fica `ON HOLD` até essa capacidade de control plane estar disponível; a proteção não será reduzida para contornar o blocker.
+
+## F22 — seed e smoke reproduzíveis
+
+A F22 materializou o pacote operacional fictício que a F21 precisará quando puder ser retomada.
+
+O seed `server-only`:
+
+- exige modo exato `FICTITIOUS_EPHEMERAL`;
+- usa somente UUIDs determinísticos, nomes sintéticos e email `example.invalid`;
+- cria duas equipes e duas contratações artificiais;
+- recebe o `subject` do bootstrap Better Auth e verifica a identidade persistida antes de criar autorização;
+- cria `app_user` e membership em etapa administrativa separada do Auth;
+- não concede membership à equipe adversarial;
+- executa postflight e retorna apenas status sanitizado.
+
+O harness PostgreSQL descartável prova:
+
+- Auth sem `app_user`/membership → zero dados;
+- usuário autorizado → somente própria equipe;
+- UUID conhecido da outra equipe → invisível;
+- claims ausentes/malformados ou issuer/subject errados → fail-closed;
+- signup normal continua fechado;
+- sign-in, sessão e sign-out permanecem funcionais;
+- Auth runtime e domínio runtime continuam separados e não privilegiados;
+- Auth não lê domínio e domínio não lê Auth.
+
+A composição do preflight aplica as migrations na ordem:
 
 ```text
-sessão Better Auth validada no servidor
--> issuer + subject
--> contexto LOCAL da transação
--> role PostgreSQL não privilegiada
--> RLS
--> somente linhas autorizadas
+domínio 0001
+-> domínio 0002
+-> Auth 0001
+-> Auth 0002
+-> Auth 0003
+-> domínio 0003
 ```
 
-Autenticação não cria `app_user`/membership automaticamente. Browser não escolhe identidade, team ou membership confiáveis. UUID conhecido nunca substitui autorização.
+Essa ordem preserva a ownership dedicada da view `team_member_directory`. Nenhuma migration canônica foi reescrita. Depois da view ser criada, um postflight exige que a role Auth continue sem `SELECT` sobre ela.
+
+## F23/F24 — controle distribuído do sign-in
+
+A ADR-010 define a fronteira para brute force/credential stuffing sem reabrir a API genérica do Better Auth.
+
+A F24 materializou a camada application-side:
+
+- PostgreSQL compartilhado como store autoritativo;
+- Vercel Firewall/WAF permanece defesa edge futura e separada;
+- `x-forwarded-for` só é aceito sob runtime Vercel hosted explícito e deve conter exatamente um IP válido;
+- IPv6 é canonicalizado antes de formar bucket;
+- email e IP nunca são persistidos em claro;
+- HMAC usa HKDF/domain separation a partir de `BETTER_AUTH_SECRET`;
+- policy versionada: `source` 120/15 min, `identifier` 20/15 min e `pair` 8/5 min;
+- os três buckets são consumidos atomicamente antes de `auth.api.signInEmail`;
+- limite excedido vira `rejected` sem chamar Better Auth;
+- falha de limiter/store/configuração vira `unavailable` sem chamar Better Auth;
+- não existe bucket global bloqueante;
+- purge oportunístico é limitado/indexado;
+- logs não recebem email, IP, HMAC individual, senha, cookie, token, connection string ou payload de sessão.
+
+A PR `#40` foi integrada em `main` por `8c4afd1b242781f7e0ef499ab7d879ce1adf635d`. A CI pós-merge `34479463372` e o F22 Private Preview Preflight `34479463381` passaram integralmente.
+
+O teste concorrente executa 32 chamadas sobre o mesmo `pair` e comprova exatamente 8 `allowed` e 24 `rejected`, sem lost update.
+
+F24 não provisionou Firewall, Redis/KV, banco, secret ou environment variable hosted.
 
 ## F25 — primeira mutação persistente desenhada
 
-ADR-011: `docs/decisions/ADR-011-first-persistent-next-action-mutation.md`.
+A ADR-011 escolhe uma primitive PostgreSQL específica `SECURITY DEFINER` para a primeira escrita de `contractings.next_action`.
 
-A primeira escrita operacional será exclusivamente `contractings.next_action`.
+A role runtime de domínio continuará sem DML direto. A capability terá owner técnico `NOLOGIN` não privilegiado, `search_path` fixo e grants mínimos; o runtime recebe somente `EXECUTE` na primitive.
 
-### Capability escolhida
+Identidade e escopo continuam derivados exclusivamente de sessão Better Auth validada + contexto LOCAL `iss/sub` + banco. Browser não fornece actor, `team_id`, membership, issuer ou subject confiáveis.
 
-A implementação F26 usará primitive PostgreSQL específica `SECURITY DEFINER`, com owner técnico `NOLOGIN` não privilegiado, `search_path` fixo e grants mínimos.
+Q-009 permanece aberta. A escrita é deliberadamente **pilot-only**: o usuário corrente precisa possuir a única membership `revoked_at IS NULL` da equipe alvo. Se houver segunda membership ativa, a primitive falha fechada e nenhuma permissão multiusuário é inferida.
 
-A role runtime de domínio continuará sem `UPDATE`/`INSERT` direto nas tabelas protegidas e receberá somente `EXECUTE` na primitive de `next_action`.
+Uma mudança real deve, atomicamente:
 
-O browser não poderá fornecer como confiáveis:
+- atualizar `next_action` e `updated_at`;
+- inserir exatamente um `contracting_events` com `event_type = 'next_action_changed'`, `field_key = 'next_action'`, valores anterior/novo e actor/team/contracting derivados do banco;
+- usar o mesmo instante de banco para estado e evento.
 
-- actor;
-- `team_id`;
-- membership;
-- issuer/subject.
+Falha do evento reverte o update. No-op não altera timestamp e não cria evento. `contracting_events` permanece append-only.
 
-Esses valores são derivados da sessão validada e do banco.
+Concorrência usa lock de linha (`FOR UPDATE`) + precondição otimista null-safe do valor anterior de `next_action`. Duas chamadas com o mesmo expected antigo produzem no máximo um vencedor; a outra retorna conflito sem update/evento. Nenhuma coluna de versão prematura foi adicionada na decisão.
 
-### Q-009 permanece aberta
+Inexistente, cross-team, identidade desconhecida/desabilitada, membership ausente/revogada, segundo membro ativo e contratação arquivada/cancelada falham fechados sem side channel de existência antes da autorização.
 
-A escrita é **pilot-only**.
-
-Para mutar uma contratação, a identidade atual precisa possuir uma membership não revogada na equipe alvo e essa precisa ser a única membership `revoked_at IS NULL` da equipe.
-
-Se existir segunda membership ativa, a primitive falha fechada. Isso evita transformar o piloto individual em permissão multiusuário por inferência. Q-009 só será resolvida por decisão futura explícita.
-
-### Estado + evento atômicos
-
-Uma mudança real deverá:
-
-- atualizar `contractings.next_action`;
-- atualizar `contractings.updated_at`;
-- inserir exatamente um `contracting_events` com actor/team/contracting derivados do banco;
-- usar `event_type = 'next_action_changed'` e `field_key = 'next_action'`;
-- usar old/new value auditáveis;
-- usar o mesmo timestamp de banco para update/evento.
-
-Falha do evento reverte o estado. `contracting_events` continua append-only.
-
-No-op com valor idêntico não altera `updated_at` e não cria evento.
-
-### Concorrência
-
-A ADR combina:
-
-- `SELECT ... FOR UPDATE` na contratação;
-- precondição otimista null-safe do valor anterior de `next_action`.
-
-Duas chamadas concorrentes com o mesmo expected antigo produzem no máximo um vencedor. A segunda detecta stale state e retorna conflito sem update/evento. Não foi criada coluna de versão prematura.
-
-### Fail-closed
-
-Inexistente, cross-team, identidade desconhecida/desabilitada, membership ausente/revogada, segundo membro ativo ou contratação arquivada/cancelada não podem produzir escrita nem side channel de existência antes da autorização.
-
-Falha de configuração/banco/contexto retorna indisponibilidade e não cai para demo.
-
-## F21 — permanece ON HOLD
-
-F21 continua bloqueada até existir superfície Vercel autenticada que permita, sem expor valores:
-
-1. readback completo de Deployment Protection/Vercel Authentication e bypasses relevantes;
-2. CRUD/readback de sensitive Preview environment variables escopadas à branch;
-3. prova operacional protegida sem ampliar exposição.
-
-Nenhum secret ou recurso hosted é criado como workaround.
+F25 é design-only: nenhuma migration, Server Action ou UI de escrita foi implementada nesta work unit.
 
 ## Próxima frente
 
-A única `NEXT_ACTION` canônica está em `docs/ai/NEXT_ACTION.md`:
+A única `NEXT_ACTION` está em `docs/ai/NEXT_ACTION.md`:
 
 `F26-FIRST-PERSISTENT-NEXT-ACTION-MUTATION-IMPLEMENT-01 — Implementar primeira mutação persistente de próxima ação`.
 
-F26 deve materializar ADR-011 em PostgreSQL 17 descartável/CI, com capability owner segura, adapter server-side de escrita, grants mínimos, guard pilot-only, atomicidade estado+evento, concorrência adversarial e regressão integral. Nenhum provider hosted write.
+F26 deve materializar ADR-011 em migration/código/testes usando PostgreSQL 17 efêmero, mantendo runtime sem DML amplo, Q-009 aberta e nenhum provider hosted write.
 
 ## Modos da aplicação
 
 ### Demo
 
-Padrão quando `COMPRAS_PERSISTENT_READ_ENABLED` está ausente/false:
+É o padrão quando `COMPRAS_PERSISTENT_READ_ENABLED` está ausente ou `false`.
 
 - somente fixtures fictícias;
 - nenhuma consulta operacional ao banco;
-- banner explícito de protótipo.
+- banner explícito `Protótipo com dados fictícios`;
+- permitido na faixa F18.
 
 ### Persistente
 
-Só pode existir quando os gates de Auth, banco, secrets e autorização estiverem satisfeitos. Falha protegida nunca cai silenciosamente para demo.
+Só existe quando `COMPRAS_PERSISTENT_READ_ENABLED=true` e todos os gates de Auth, banco, secrets e autorização estiverem satisfeitos.
 
-## Fonte de verdade e startup
+Fluxo de confiança:
 
-GitHub é canônico; chat é descartável.
+```text
+sessão Better Auth validada no servidor
+-> issuer + subject
+-> contexto transacional LOCAL
+-> PostgreSQL com role de domínio não privilegiada
+-> RLS
+-> somente registros autorizados
+```
 
-Ordem mínima de retomada:
+Falha de Auth/banco/configuração não pode cair silenciosamente para demo.
+
+## Banco canônico
+
+Migrations imutáveis do domínio:
+
+- `database/migrations/0001_core_foundation.sql` — schema + default-deny/`FORCE RLS`;
+- `database/migrations/0002_trusted_identity_read_policies.sql` — helpers de identidade e primeiras policies de leitura;
+- `database/migrations/0003_team_member_directory.sql` — capability view mínima do diretório da equipe.
+
+Migrations Auth/custom guard ficam separadas em `database/auth/migrations/` e não reescrevem a trilha do domínio.
+
+Assets F22 de preflight ficam em `src/server/preflight/` e não são migrations de produção.
+
+## Fonte de verdade
+
+GitHub é canônico. Chat é descartável.
+
+Ordem mínima para uma nova sessão:
 
 1. `AGENTS.md`;
-2. este arquivo;
+2. `docs/00-START-HERE.md`;
 3. `docs/ai/CURRENT_STATE.md`;
 4. `docs/ai/NEXT_ACTION.md`;
 5. `docs/ai/WORK_PROTOCOL.md`;
@@ -174,25 +246,53 @@ Ordem mínima de retomada:
 
 ## Documentos principais
 
-Produto: `PROJECT_DESIGN.md`, `DOMAIN_MODEL.md`, `BUSINESS_WORKFLOW.md`, `OPEN_QUESTIONS.md`.
+### Produto
 
-Arquitetura/segurança: `ARCHITECTURE.md`, `SECURITY.md`, `DATABASE.md`, ADR-002–ADR-011 conforme aplicáveis.
+- `docs/product/PROJECT_DESIGN.md`;
+- `docs/product/DOMAIN_MODEL.md`;
+- `docs/product/BUSINESS_WORKFLOW.md`;
+- `docs/product/OPEN_QUESTIONS.md`.
 
-Operação por IA: `SOURCE_OF_TRUTH.md`, `WORK_PROTOCOL.md`, `CONTEXT_MANIFEST.md`, `CURRENT_STATE.md`, `NEXT_ACTION.md`.
+### Arquitetura e segurança
 
-Qualidade: `docs/qa/DEFINITION_OF_DONE.md`.
+- `docs/architecture/ARCHITECTURE.md`;
+- `docs/architecture/SECURITY.md`;
+- `docs/architecture/DATABASE.md`;
+- `docs/decisions/ADR-002-persistence-foundation.md`;
+- `docs/decisions/ADR-003-trusted-identity-rls-boundary.md`;
+- `docs/decisions/ADR-004-team-directory-rls-capability-view.md`;
+- `docs/decisions/ADR-005-directory-capability-role-lifecycle.md`;
+- `docs/decisions/ADR-006-hosted-preview-boundary.md`;
+- `docs/decisions/ADR-007-private-auth-admission.md`;
+- `docs/decisions/ADR-008-public-demo-hosted-lane.md`;
+- `docs/decisions/ADR-009-self-hosted-better-auth.md`;
+- `docs/decisions/ADR-010-private-signin-abuse-control.md`;
+- `docs/decisions/ADR-011-first-persistent-next-action-mutation.md`.
+
+### Operação por IA
+
+- `docs/ai/SOURCE_OF_TRUTH.md`;
+- `docs/ai/WORK_PROTOCOL.md`;
+- `docs/ai/CONTEXT_MANIFEST.md`;
+- `docs/ai/CURRENT_STATE.md`;
+- `docs/ai/NEXT_ACTION.md`.
+
+### Qualidade
+
+- `docs/qa/DEFINITION_OF_DONE.md`.
 
 ## Princípios permanentes
 
-- segurança nunca é reduzida para fazer passar;
+- segurança nunca é reduzida para “fazer passar”;
 - autenticação não é autorização;
-- autorização crítica vive no servidor/banco; RLS permanece autoritativa;
+- autorização crítica vive no servidor/banco e RLS permanece autoritativa;
 - IDs do cliente nunca definem identidade/escopo;
 - signup público não é aceito por conveniência;
-- dado real/interno/pré-publicação não entra no repositório público/demo;
+- dado real/interno/pré-publicação não entra no repositório público nem na faixa demo;
 - role privilegiada nunca é runtime normal;
 - secrets nunca vão para Git, chat, URL, log, summary ou artifact público;
-- blocker externo objetivo entra `ON HOLD` e não paralisa trabalho independente;
-- falha protegida não vira sucesso demonstrativo;
+- documentação de provider não substitui prova/readback quando o controle é crítico;
+- blocker externo objetivo entra `ON HOLD`; não deve paralisar trabalho independente;
+- falha protegida não vira sucesso demonstrativo silenciosamente;
 - toda mudança arquitetural relevante recebe ADR;
 - construir por slices pequenas, verificáveis e reversíveis.

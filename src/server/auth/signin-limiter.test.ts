@@ -30,7 +30,7 @@ describe("private sign-in limiter core", () => {
     ).toBe("203.0.113.25");
     expect(
       resolveTrustedVercelSource(
-        new Headers({ "x-forwarded-for": "2001:DB8::25" }),
+        new Headers({ "x-forwarded-for": "2001:0DB8:0:0:0:0:0:25" }),
         hosted,
       ),
     ).toBe("2001:db8::25");
@@ -102,6 +102,21 @@ describe("private sign-in limiter core", () => {
     expect(serialized).not.toContain("203.0.113.45");
     expect(serialized).not.toContain("existing@example.invalid");
     expect(serialized).not.toContain(TEST_SECRET);
+  });
+
+  it("canonicalizes equivalent IPv6 source forms into the same defensive buckets", () => {
+    const expanded = deriveSignInLimiterDigests({
+      source: "2001:0DB8:0:0:0:0:0:99",
+      email: "existing@example.invalid",
+      secret: TEST_SECRET,
+    });
+    const compressed = deriveSignInLimiterDigests({
+      source: "2001:db8::99",
+      email: "existing@example.invalid",
+      secret: TEST_SECRET,
+    });
+
+    expect(expanded).toEqual(compressed);
   });
 
   it("changes digests when the source or secret changes and rejects unsafe derivation input", () => {

@@ -44,6 +44,30 @@ function isHostedVercelEnvironment(
   );
 }
 
+function canonicalizeIp(value: string): string | null {
+  const version = isIP(value);
+
+  if (version === 4) {
+    return value;
+  }
+
+  if (version !== 6) {
+    return null;
+  }
+
+  try {
+    const hostname = new URL(`http://[${value}]/`).hostname;
+
+    if (!hostname.startsWith("[") || !hostname.endsWith("]")) {
+      return null;
+    }
+
+    return hostname.slice(1, -1).toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Resolves the only hosted source signal accepted by ADR-010. Alternate client
  * headers are intentionally ignored rather than used as fallback identity.
@@ -62,13 +86,12 @@ export function resolveTrustedVercelSource(
     !raw ||
     raw.trim() !== raw ||
     raw.includes(",") ||
-    /\s/.test(raw) ||
-    isIP(raw) === 0
+    /\s/.test(raw)
   ) {
     return null;
   }
 
-  return raw.toLowerCase();
+  return canonicalizeIp(raw);
 }
 
 export function normalizeSignInLimiterIdentifier(email: string): string | null {
@@ -119,10 +142,10 @@ export function deriveSignInLimiterDigests(input: Readonly<{
   secret: string;
 }>): SignInLimiterDigests | null {
   const normalizedIdentifier = normalizeSignInLimiterIdentifier(input.email);
-  const source = input.source.toLowerCase();
+  const source = canonicalizeIp(input.source);
   const key = deriveLimiterHmacKey(input.secret);
 
-  if (!normalizedIdentifier || isIP(source) === 0 || !key) {
+  if (!normalizedIdentifier || !source || !key) {
     return null;
   }
 

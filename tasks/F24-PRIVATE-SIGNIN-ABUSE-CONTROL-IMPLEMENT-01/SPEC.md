@@ -1,7 +1,7 @@
 # F24-PRIVATE-SIGNIN-ABUSE-CONTROL-IMPLEMENT-01 — Implementar limiter distribuído do sign-in privado
 
 **Classe:** T1 — feature de suporte, com impacto T2 — segurança  
-**Estado:** PLANNED / NEXT  
+**Estado:** VERIFIED / READY TO MERGE  
 **Dependências:** F20, F22, F23, ADR-007, ADR-009 e ADR-010  
 **Classificação permitida:** PUBLIC / FICTITIOUS ONLY
 
@@ -250,3 +250,41 @@ Rejeitar PASS se:
 ## Critério de encerramento
 
 F24 fecha quando o limiter application-side distribuído estiver implementado, concorrência/fail-closed/privacidade estiverem provados em PostgreSQL descartável/CI e o sign-in existente continuar funcional dentro da policy, sem nenhum provider hosted alterado.
+
+## Resultado executado
+
+Implementação materializada em:
+
+- `database/auth/migrations/0003_signin_abuse_limiter.sql`;
+- `src/server/auth/signin-limiter.ts`;
+- `src/server/auth/signin-limiter.test.ts`;
+- `src/server/auth/signin-limiter.postgres.test.ts`;
+- integração em `src/server/auth/private-admission.ts` e testes;
+- integração no harness Auth/F22 e CI.
+
+O red-team corrigiu duas fragilidades antes do checkpoint:
+
+1. um teste assumia que whitespace original de header sobreviveria ao objeto `Headers`; a prova foi ajustada para entradas semanticamente observáveis;
+2. representações IPv6 textualmente distintas poderiam cair em buckets diferentes; a implementação passou a canonicalizar IPv6 e ganhou teste de equivalência.
+
+Head funcional verificado: `3291a62f57b350edf8b882ec08cc2655ed54d99d`.
+
+Verificação real:
+
+- CI `34476876653`: PASS (`verify`, `database`, `auth-database`);
+- F22 Private Preview Preflight `34476876664`: PASS;
+- lint/typecheck/test/build: PASS;
+- PostgreSQL 17: PASS;
+- thresholds exatos: PASS;
+- concorrência real 32 chamadas no mesmo `pair`: 8 `allowed`, 24 `rejected`, contador 32;
+- runtime Auth sem DML direto/ownership/`BYPASSRLS`: PASS;
+- domínio runtime sem acesso ao limiter/Auth: PASS;
+- Auth runtime sem acesso ao domínio: PASS;
+- limiter `rejected`/`unavailable` sem chamada Better Auth: PASS;
+- login/session/signout fictícios dentro do limite: PASS;
+- signup/catch-all permanecem fechados: PASS;
+- provider hosted write: NÃO;
+- dado real: NÃO;
+- `REAL_DATA_ALLOWED = NO`.
+
+F21 continua `ON HOLD` sob o mesmo `resume_when` externo. A próxima unidade independente foi definida como `F25-FIRST-PERSISTENT-MUTATION-DESIGN-01`.

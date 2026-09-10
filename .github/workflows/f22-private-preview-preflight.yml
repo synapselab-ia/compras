@@ -92,8 +92,9 @@ jobs:
           # revokes privileges on every public relation it can see. The later
           # view is owned by its dedicated NOLOGIN capability, so applying Auth
           # 0002 after domain 0003 would correctly fail for lack of owner
-          # authority. A postflight below proves the later view receives no
-          # Auth runtime SELECT privilege.
+          # authority. Auth 0003 adds only the isolated auth_guard namespace.
+          # A postflight below proves the later view receives no Auth runtime
+          # SELECT privilege.
           PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
             psql -v ON_ERROR_STOP=1 -f database/migrations/0001_core_foundation.sql
           PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
@@ -102,6 +103,8 @@ jobs:
             psql -v ON_ERROR_STOP=1 -f database/auth/migrations/0001_better_auth_1_6_23.sql
           PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
             psql -v ON_ERROR_STOP=1 -f database/auth/migrations/0002_auth_runtime_boundary.sql
+          PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
+            psql -v ON_ERROR_STOP=1 -f database/auth/migrations/0003_signin_abuse_limiter.sql
           PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
             psql -v ON_ERROR_STOP=1 -f database/migrations/0003_team_member_directory.sql
 

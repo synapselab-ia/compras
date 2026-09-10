@@ -5,6 +5,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { bootstrapFictitiousIdentity } from "./bootstrap";
+import {
+  consumeSignInLimiterDigests,
+  deriveSignInLimiterDigests,
+} from "./signin-limiter";
 
 const integrationEnabled = process.env.F20_AUTH_POSTGRES_TEST === "1";
 const describePostgres = integrationEnabled ? describe : describe.skip;
@@ -97,6 +101,18 @@ describePostgres("F20 Better Auth PostgreSQL boundary", () => {
         },
       }),
     ).rejects.toThrow(/sign.?up|signup/i);
+
+    const limiterDigests = deriveSignInLimiterDigests({
+      source: "203.0.113.80",
+      email: TEST_EMAIL,
+      secret: TEST_SECRET,
+    });
+    expect(limiterDigests).not.toBeNull();
+    if (!limiterDigests) return;
+
+    await expect(
+      consumeSignInLimiterDigests(authPool, limiterDigests),
+    ).resolves.toBe("allowed");
 
     const signedIn = await guardedAuth.api.signInEmail({
       body: { email: TEST_EMAIL, password: TEST_PASSWORD },

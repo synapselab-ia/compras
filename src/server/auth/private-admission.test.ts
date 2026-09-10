@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => {
     signInEmail,
     getSession,
     signOut,
+    consumePrivateSignInAttempt: vi.fn(),
     cookieSet: vi.fn(),
     cookies: vi.fn(),
     headers: vi.fn(),
@@ -28,6 +29,9 @@ vi.mock("next/headers", () => ({
 vi.mock("./runtime", () => ({
   getConfiguredPrivateAuth: mocks.getConfiguredPrivateAuth,
   isAuthProviderUnavailableError: mocks.isAuthProviderUnavailableError,
+}));
+vi.mock("./signin-limiter", () => ({
+  consumePrivateSignInAttempt: mocks.consumePrivateSignInAttempt,
 }));
 
 import {
@@ -49,6 +53,7 @@ const INVALIDATED_SESSION_COOKIE =
 describe("private Better Auth admission", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.consumePrivateSignInAttempt.mockResolvedValue("allowed");
     mocks.getConfiguredPrivateAuth.mockReturnValue({
       issuer: "urn:compras:better-auth:self-hosted:v1",
       auth: {
@@ -66,7 +71,52 @@ describe("private Better Auth admission", () => {
     );
   });
 
-  it("signs in an existing identity only after server session readback and cookie persistence", async () => {
+  it("rejects malformed credentials before limiter or provider work", async () => {
+    await expect(
+      signInExistingIdentity({ email: "   ", password: "fictitious-password" }),
+    ).resolves.toBe("rejected");
+
+    expect(mocks.consumePrivateSignInAttempt).not.toHaveBeenCalled();
+    expect(mocks.signInEmail).not.toHaveBeenCalled();
+  });
+
+  it("never calls Better Auth when the limiter rejects or is unavailable", async () => {
+    mocks.consumePrivateSignInAttempt.mockResolvedValueOnce("rejected");
+    await expect(
+      signInExistingIdentity({
+        email: "existing@example.invalid",
+        password: "fictitious-password",
+      }),
+    ).resolves.toBe("rejected");
+
+    expect(mocks.signInEmail).not.toHaveBeenCalled();
+
+    mocks.consumePrivateSignInAttempt.mockResolvedValueOnce("unavailable");
+    await expect(
+      signInExistingIdentity({
+        email: "existing@example.invalid",
+        password: "fictitious-password",
+      }),
+    ).resolves.toBe("unavailable");
+
+    expect(mocks.signInEmail).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when request headers cannot be read for limiter enforcement", async () => {
+    mocks.headers.mockRejectedValueOnce(new Error("request context unavailable"));
+
+    await expect(
+      signInExistingIdentity({
+        email: "existing@example.invalid",
+        password: "fictitious-password",
+      }),
+    ).resolves.toBe("unavailable");
+
+    expect(mocks.consumePrivateSignInAttempt).not.toHaveBeenCalled();
+    expect(mocks.signInEmail).not.toHaveBeenCalled();
+  });
+
+  it("signs in an existing identity only after limiter allow, server session readback, and cookie persistence", async () => {
     mocks.signInEmail.mockResolvedValue({
       response: { user: { id: "subject-1" } },
       headers: setCookieHeaders(ACTIVE_SESSION_COOKIE),
@@ -83,6 +133,10 @@ describe("private Better Auth admission", () => {
       }),
     ).resolves.toBe("signed-in");
 
+    expect(mocks.consumePrivateSignInAttempt).toHaveBeenCalledWith({
+      email: "existing@example.invalid",
+      requestHeaders: expect.any(Headers),
+    });
     expect(mocks.signInEmail).toHaveBeenCalledWith({
       body: {
         email: "existing@example.invalid",
@@ -129,7 +183,7 @@ describe("private Better Auth admission", () => {
     expect(mocks.cookieSet).not.toHaveBeenCalled();
   });
 
-  it("maps rejected credentials separately from provider failure", async () => {
+  it("maps rejected credentials separately from provider failure after limiter allow", async () => {
     mocks.signInEmail.mockRejectedValueOnce({ statusCode: 401 });
     await expect(
       signInExistingIdentity({ email: "existing@example.invalid", password: "wrong" }),
@@ -169,12 +223,12 @@ describe("private Better Auth admission", () => {
     await expect(signOutCurrentIdentity()).resolves.toBe("unavailable");
 
     mocks.signOut.mockResolvedValueOnce({
-      response: { success: true },
+      response: { user: { id: "subject-1" } },
       headers: setCookieHeaders(INVALIDATED_SESSION_COOKIE),
     });
     mocks.getSession.mockResolvedValueOnce({
-      user: { id: "still-active" },
-      session: { id: "session" },
+      user: { id: "subject-1" },
+      session: { id: "session-1" },
     });
     await expect(signOutCurrentIdentity()).resolves.toBe("unavailable");
   });

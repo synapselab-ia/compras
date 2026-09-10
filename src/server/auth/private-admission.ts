@@ -6,6 +6,7 @@ import {
   getConfiguredPrivateAuth,
   isAuthProviderUnavailableError,
 } from "./runtime";
+import { consumePrivateSignInAttempt } from "./signin-limiter";
 
 export type ExistingIdentityCredentials = Readonly<{
   email: string;
@@ -197,9 +198,9 @@ function readUserId(value: unknown): string | null {
 }
 
 /**
- * Signs in only an identity that already exists. Better Auth stays closed to
- * signup and this Server Action path explicitly persists only cookies emitted
- * by a session that can be read back server-side.
+ * Signs in only an identity that already exists. Every syntactically valid
+ * attempt must first pass the distributed limiter; Better Auth stays closed to
+ * signup and is never called when limiter enforcement blocks or is unavailable.
  */
 export async function signInExistingIdentity(
   credentials: ExistingIdentityCredentials,
@@ -208,6 +209,25 @@ export async function signInExistingIdentity(
 
   if (!normalized) {
     return "rejected";
+  }
+
+  let limiterDecision: Awaited<ReturnType<typeof consumePrivateSignInAttempt>>;
+
+  try {
+    limiterDecision = await consumePrivateSignInAttempt({
+      email: normalized.email,
+      requestHeaders: await headers(),
+    });
+  } catch {
+    return "unavailable";
+  }
+
+  if (limiterDecision === "rejected") {
+    return "rejected";
+  }
+
+  if (limiterDecision !== "allowed") {
+    return "unavailable";
   }
 
   const configured = getConfiguredPrivateAuth();

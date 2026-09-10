@@ -1,52 +1,48 @@
 # Next Action — Compras
 
-## F25-FIRST-PERSISTENT-MUTATION-DESIGN-01 — Definir a primeira mutação persistente rastreável
+## F26-FIRST-PERSISTENT-NEXT-ACTION-MUTATION-IMPLEMENT-01 — Implementar primeira mutação persistente de próxima ação
 
-**Classe:** `T5 — decisão arquitetural pequena` com impacto `T2 — banco/segurança`  
+**Classe:** `T1 — feature normal` com impacto `T2 — banco/segurança`  
 **Estado:** READY  
-**Objetivo:** fechar uma ADR pequena e executável para a primeira escrita persistente de `contractings.next_action`, preservando autorização pilot-only, atomicidade estado+evento, concorrência e fail-closed sem resolver Q-009 por inferência.
+**Objetivo:** implementar a ADR-011 como capability PostgreSQL estreita para alterar somente `contractings.next_action`, com autorização pilot-only, estado+evento atômicos, proteção contra lost update e runtime sem DML direto.
 
 Esta é a única `NEXT_ACTION` canônica.
 
 ## Por que esta ação agora
 
-A F24 implementou e provou a camada application-side distribuída de proteção do sign-in privado definida pela ADR-010:
+A F25 fechou o desenho da primeira escrita persistente em ADR-011:
 
-- limiter PostgreSQL compartilhado em namespace isolado `auth_guard`;
-- `compras_auth_runtime` somente com `USAGE/EXECUTE` no primitive estreito, sem DML direto/ownership/BYPASSRLS;
-- buckets `source` 120/15 min, `identifier` 20/15 min e `pair` 8/5 min;
-- consumo atômico usando relógio PostgreSQL;
-- HMAC/HKDF com domain separation sem persistir email/IP em claro;
-- origem hosted restrita a `x-forwarded-for` Vercel único e IP válido;
-- limiter bloqueado -> `rejected`; limiter/config/store indisponível -> `unavailable`;
-- Better Auth não é chamado quando o limiter bloqueia ou falha;
-- concorrência real em PostgreSQL 17 comprovada sem `allow` acima do limite;
-- signup/catch-all/Auth/RLS existentes permaneceram fechados e em PASS.
+- `next_action` é o único campo de escrita desta primeira slice;
+- a role runtime de domínio continuará sem `UPDATE`/`INSERT` direto;
+- a escrita passa por primitive PostgreSQL específica `SECURITY DEFINER`, com owner técnico `NOLOGIN` não privilegiado e `search_path` fixo;
+- identidade, actor, membership e team são derivados da sessão confiável + banco, nunca do browser;
+- autorização é estritamente pilot-only: a identidade corrente precisa possuir a única membership não revogada da equipe alvo;
+- uma segunda membership ativa bloqueia a escrita, preservando Q-009 aberta;
+- update de `next_action`/`updated_at` e inserção de `contracting_events` são uma única unidade transacional;
+- concorrência usa lock de linha + precondição otimista do valor anterior, evitando lost update;
+- no-op não cria evento nem altera timestamp;
+- UUID cross-team/inexistente não deve revelar existência de modo distinto.
 
-O head funcional F24 `3291a62f57b350edf8b882ec08cc2655ed54d99d` passou:
-
-- CI `34476876653`: PASS (`verify`, `database`, `auth-database`);
-- F22 Private Preview Preflight `34476876664`: PASS.
-
-F21 continua `ON HOLD` porque seu `resume_when` externo ainda não foi satisfeito. A próxima frente independente útil é preparar a primeira mutação persistente do núcleo, sem depender de provider hosted.
+F21 continua `ON HOLD` sob seu `resume_when` externo e não é dependência da F26.
 
 ## Execução obrigatória
 
-1. recuperar estado/contexto e confirmar F24 integrada antes de editar;
-2. ler diretamente `SECURITY.md`, `DATABASE.md`, ADR-003, ADR-005, ADR-009, migrations e testes de identidade/RLS;
-3. confirmar no schema atual `contractings.next_action` e `contracting_events`;
-4. revisar Q-009 e não inferir permissão multiusuário a partir de membership;
-5. usar `next_action` como primeiro caso concreto de escrita, sem ampliar para etapa/status/responsável;
-6. comparar transação server-side versus primitive PostgreSQL estreita;
-7. definir como identidade/session -> app_user -> membership autorizada sem parâmetros confiáveis do browser;
-8. avaliar guard de piloto individual que falhe fechado se houver segundo membro ativo no escopo;
-9. definir atomicidade de update de estado + evento append-only;
-10. definir estratégia explícita contra lost update/concorrência;
-11. definir semântica mínima do evento sem criar taxonomia ampla;
-12. definir grants/roles mínimos e rollback;
-13. definir matriz de testes adversariais para a implementação seguinte;
-14. produzir ADR versionada, red-team e CI;
-15. revisar diff e deixar exatamente uma nova `NEXT_ACTION`.
+1. recuperar estado/contexto e confirmar ADR-011/F25 integradas;
+2. ler diretamente SECURITY, DATABASE, ADR-003/005/009/011, migrations, trusted-context e testes RLS;
+3. criar migration nova do domínio, sem reescrever `0001..0003`;
+4. criar/seal owner técnico da capability conforme ADR-005;
+5. criar primitive específica de `next_action` com grants/policies mínimos sob RLS;
+6. manter runtime sem DML direto e conceder somente `EXECUTE` na primitive;
+7. implementar guard pilot-only de única membership ativa;
+8. implementar lock + expected antigo null-safe e estado `conflict`;
+9. atualizar `next_action` + `updated_at` e inserir evento atômico com actor/team derivados;
+10. tratar no-op sem evento/timestamp novo;
+11. criar adapter server-side de mutação que reutilize a fronteira segura de `trusted-context` e use `BEGIN` normal + contexto LOCAL `iss/sub`;
+12. gerar `event_id` somente no servidor confiável;
+13. não aceitar team/actor/membership do browser;
+14. executar matriz PostgreSQL adversarial, incluindo concorrência real e rollback forçado do evento;
+15. executar lint, typecheck, testes completos, build e preflight F22/F24;
+16. revisar diff integral, promover somente após CI verde e deixar exatamente uma nova `NEXT_ACTION`.
 
 ## Invariantes
 
@@ -54,20 +50,22 @@ F21 continua `ON HOLD` porque seu `resume_when` externo ainda não foi satisfeit
 - somente dados/identidades fictícios;
 - nenhum provider hosted write;
 - F21 permanece `ON HOLD` até seu `resume_when` objetivo;
+- Q-009 permanece aberta;
 - autenticação não é autorização;
-- browser não escolhe `team_id`, `membership_id` ou actor confiável;
-- membership por si só não resolve Q-009;
-- estado rastreável e evento devem ser atômicos;
-- `contracting_events` permanece append-only;
-- sem CRUD amplo como atalho;
-- runtime normal sem superuser/BYPASSRLS/ownership/CREATEROLE;
-- migrations aplicadas não são reescritas;
-- stage/status/taxonomias abertas não são congeladas nesta work unit.
+- browser não fornece identidade, actor ou escopo confiáveis;
+- RLS permanece autoritativa;
+- runtime normal sem ownership/superuser/`BYPASSRLS`/`CREATEROLE`;
+- runtime sem DML direto para a mutação;
+- estado rastreável + evento são atômicos;
+- `contracting_events` continua append-only;
+- sem escrita de stage/status/responsável/aguardando nesta slice;
+- migrations aplicadas permanecem imutáveis;
+- falha protegida nunca vira demo fallback.
 
 ## Fonte da tarefa
 
-Executar `tasks/F25-FIRST-PERSISTENT-MUTATION-DESIGN-01/SPEC.md` seguindo `PROJECT_DESIGN.md`, `DOMAIN_MODEL.md`, `BUSINESS_WORKFLOW.md`, `OPEN_QUESTIONS.md`, `SECURITY.md`, `DATABASE.md` e as ADRs já aceitas.
+Executar `tasks/F26-FIRST-PERSISTENT-NEXT-ACTION-MUTATION-IMPLEMENT-01/SPEC.md` seguindo ADR-011, ADR-003, ADR-005, ADR-009, `docs/architecture/SECURITY.md` e `docs/architecture/DATABASE.md`.
 
 ## Critério de encerramento
 
-F25 fecha quando existir uma ADR aceita e suficiente para implementar depois a primeira mutação persistente de `next_action`, com autorização pilot-only sem inferir Q-009, atomicidade estado+evento, concorrência explicitamente tratada, plano de testes adversariais e toda CI em PASS. Ao final deve existir exatamente uma nova `NEXT_ACTION` executável.
+F26 fecha quando a primeira mutação persistente de `next_action` estiver implementada e provada em PostgreSQL 17 descartável contra autorização, atomicidade, rollback e concorrência, mantendo runtime sem DML amplo, todas as regressões em PASS, nenhum hosted write e exatamente uma nova `NEXT_ACTION` canônica.

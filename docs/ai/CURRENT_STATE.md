@@ -1,11 +1,11 @@
 # Current State — Compras
 
-**PROJECT_STATUS:** F24_VERIFIED_PR40_CHECKPOINTING_F25_READY  
-**CURRENT_PHASE:** F24 implementada e verificada na PR `#40`; checkpoint/merge em andamento; F25 READY; F21 ON HOLD; F17 ON HOLD histórico  
+**PROJECT_STATUS:** F24_INTEGRATED_F25_READY  
+**CURRENT_PHASE:** F24 integrada em `main`; F25 READY; F21 ON HOLD; F17 ON HOLD histórico  
 **REPO_VISIBILITY:** PUBLIC  
 **APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_IMPLEMENTED_DISTRIBUTED_SIGNIN_LIMITER_IMPLEMENTED_PERSISTENT_PREVIEW_BLOCKED_PRE_SECRETS  
 **DATABASE_STATUS:** PROTECTED_DOMAIN_READ_MODEL_VALIDATED_AUTH_AND_AUTH_GUARD_EPHEMERAL_PASS  
-**AUTH_STATUS:** SELF_HOSTED_BETTER_AUTH_IMPLEMENTED_SIGNIN_LIMITER_APPLICATION_SIDE_VERIFIED  
+**AUTH_STATUS:** SELF_HOSTED_BETTER_AUTH_IMPLEMENTED_SIGNIN_LIMITER_APPLICATION_SIDE_INTEGRATED  
 **DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_NO_F24_HOSTED_WRITES  
 **REAL_DATA_ALLOWED:** NO  
 **CONTEXT_STATUS:** VALID  
@@ -14,135 +14,112 @@
 **F21_FINAL_CHECKPOINT_COMMIT:** `73cd3ec1ef524c526c91124d40efae1eff2061ce`  
 **F22_MERGE_COMMIT:** `1ea7b1abb47e81af318872ee5e4c683607b3e2a3`  
 **F23_MERGE_COMMIT:** `52f398901de0360d7e6b31b880f08d02e999c97b`  
-**F24_PR:** `#40` — OPEN / VERIFIED, checkpointing  
-**F24_FUNCTIONAL_HEAD:** `3291a62f57b350edf8b882ec08cc2655ed54d99d`  
-**F24_FUNCTIONAL_CI_RUN:** `34476876653` — PASS  
-**F24_FUNCTIONAL_PREFLIGHT_RUN:** `34476876664` — PASS  
-**LAST_GOOD_COMMIT:** `52f398901de0360d7e6b31b880f08d02e999c97b`  
-**LAST_GOOD_CI_RUN:** `33908077415`  
+**F24_PR:** `#40` — MERGED  
+**F24_FINAL_PR_HEAD:** `fbd5be5bec0d0b916c4b16a0a9bf8988c18ced02`  
+**F24_PR_CI_RUN:** `34479092121` — PASS  
+**F24_PR_PREFLIGHT_RUN:** `34479092184` — PASS  
+**F24_MERGE_COMMIT:** `8c4afd1b242781f7e0ef499ab7d879ce1adf635d`  
+**F24_MAIN_CI_RUN:** `34479463372` — PASS  
+**F24_MAIN_PREFLIGHT_RUN:** `34479463381` — PASS  
+**LAST_GOOD_COMMIT:** `8c4afd1b242781f7e0ef499ab7d879ce1adf635d`  
+**LAST_GOOD_CI_RUN:** `34479463372`  
 **F21_STATE:** `ON HOLD / BLOCKED` — Vercel control-plane surface unavailable for required protection/env readback+CRUD  
 **F21_RESUME_WHEN:** sessão Vercel autenticada permitir readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch, sem exposição de valores  
 **ON_HOLD:** `F17-B2` histórico + `F21` conforme resume_when acima
 
-## Recuperação desta sessão
+## Recuperação e contexto
 
-A `main` foi recuperada em `79bd5564d423ff84cf64998a2d61591a3398cf4f`. A PR `#40` permaneceu aberta e mergeable, com branch ativa `f24-private-signin-abuse-control-implement` e head funcional `3291a62f57b350edf8b882ec08cc2655ed54d99d`.
+A sessão recuperou a `main` em `79bd5564d423ff84cf64998a2d61591a3398cf4f` e localizou a frente ativa na PR `#40`, branch `f24-private-signin-abuse-control-implement`, em vez de abrir trabalho paralelo.
 
-A única `NEXT_ACTION` canônica recuperada ainda era F24, portanto a sessão retomou a frente em construção em vez de abrir nova implementação paralela.
+O `CONTEXT_MANIFEST` foi revalidado contra `main` antes dos writes. Todos os 10 inputs estáveis coincidiram exatamente com os blobs esperados; `CONTEXT_STATUS = VALID`.
 
-## Contexto
+A única `NEXT_ACTION` recuperada era F24. A work unit foi concluída, red-teamed, verificada e promovida.
 
-`CONTEXT_MANIFEST` foi revalidado contra a mesma `main` antes de novos writes.
+## F24 — limiter distribuído integrado
 
-Todos os 10 inputs estáveis coincidiram exatamente com os blobs esperados:
+A F24 materializou a camada application-side da ADR-010 sem provider hosted write.
 
-- `PROJECT_DESIGN.md` → `9f28a371e04ecdce8f2689a6c06b00beeaa25859`;
-- `DOMAIN_MODEL.md` → `13d7352cffb68273a26d142bee1165557d7eb864`;
-- `BUSINESS_WORKFLOW.md` → `f8fc35aaf8cdd5334591c2402921e6776afd2f4b`;
-- `OPEN_QUESTIONS.md` → `145ef9fe301d5c35ad9455d04be5740dbba36a13`;
-- `ARCHITECTURE.md` → `a7544848c1eefcc54ec4537d3951e6b3559619d7`;
-- `SECURITY.md` → `4c601c35585db74d62d1a8ae83cd3c996ae71630`;
-- `DATABASE.md` → `8ab1478030152d58932577e1566fd34ff3a33b6a`;
-- `DEFINITION_OF_DONE.md` → `cd0e3d1f01333c418d4fb622940f908df2b87a57`;
-- `SOURCE_OF_TRUTH.md` → `61aac1f38a93e2bd50ba60adc699e78826b9f8fa`;
-- `WORK_PROTOCOL.md` → `d76159c1687110607338d49767594d4fdfcc1aba`.
+### Enforcement PostgreSQL
 
-`CONTEXT_STATUS = VALID`.
+A migration `database/auth/migrations/0003_signin_abuse_limiter.sql` cria o namespace isolado `auth_guard`, tabela de buckets pseudônimos, índice de expiração e primitive `SECURITY DEFINER` com `search_path` fixo.
 
-## F24 — implementação verificada
+A role `compras_auth_runtime` permanece `LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION`, sem ownership ou DML direto na tabela do limiter. Ela recebe somente `USAGE` no schema e `EXECUTE` no primitive.
 
-A ADR-010 foi materializada na camada application-side, sem provider hosted write.
-
-### Banco / enforcement
-
-Nova migration versionada:
-
-- `database/auth/migrations/0003_signin_abuse_limiter.sql`.
-
-Ela cria namespace isolado `auth_guard`, tabela de buckets pseudônimos, índice de expiração e primitive `SECURITY DEFINER` com `search_path` fixo.
-
-A role `compras_auth_runtime` recebe somente `USAGE` no schema e `EXECUTE` no primitive. O runtime continua sem ownership, superuser, `BYPASSRLS`, `CREATEDB`, `CREATEROLE`, replication ou DML direto na tabela do limiter.
-
-Policy fixa/versionada:
+Policy versionada:
 
 - `source`: 120 tentativas / 15 min;
 - `identifier`: 20 / 15 min;
 - `pair`: 8 / 5 min.
 
-Os três buckets são consumidos na mesma chamada transacional com relógio PostgreSQL. O purge oportunístico remove no máximo 16 expirados por chamada usando índice e `SKIP LOCKED`.
+Os três buckets são consumidos atomicamente com relógio PostgreSQL. O purge oportunístico é limitado a 16 expirados por chamada e usa índice + `SKIP LOCKED`.
 
 ### Aplicação
 
 `src/server/auth/signin-limiter.ts`:
 
-- valida runtime Vercel hosted;
-- aceita somente `x-forwarded-for` com um único IP válido;
-- canonicaliza IPv6 para impedir buckets diferentes para endereços equivalentes;
-- normaliza email apenas para bucket defensivo;
-- deriva HMACs com HKDF/domain separation a partir de `BETTER_AUTH_SECRET`;
-- nunca retorna/loga email/IP em claro;
-- converte falhas de configuração/store em `unavailable`.
+- aceita origem hosted somente com runtime Vercel explícito;
+- usa apenas `x-forwarded-for` com exatamente um IP válido;
+- rejeita chain, hostname, tokens múltiplos e ambiente não hosted;
+- canonicaliza IPv6 para evitar evasão por representação textual equivalente;
+- deriva buckets opacos via HKDF/HMAC com domain separation a partir de `BETTER_AUTH_SECRET`;
+- não persiste/loga email ou IP em claro;
+- converte falha de configuração/store em `unavailable`.
 
-`private-admission.ts` agora chama o limiter antes de `auth.api.signInEmail`:
+`private-admission.ts` chama o limiter antes de `auth.api.signInEmail`:
 
-- limite excedido → `rejected`;
-- limiter/config/store indisponível → `unavailable`;
-- Better Auth não é chamado nesses dois caminhos;
-- cookie/session readback existente permanece inalterado após `allowed`.
+- limite excedido → `rejected` sem Better Auth;
+- limiter/config/store indisponível → `unavailable` sem Better Auth;
+- `allowed` → segue o fluxo já validado de sign-in, cookie e readback da sessão.
 
-Signup normal e `/api/auth/[...path]` continuam fechados.
+Signup normal e `/api/auth/[...path]` continuam fechados. Autenticação continua separada de autorização de domínio/RLS.
 
 ## Red-team F24
 
-A revisão integral da PR rejeitou/validou deliberadamente:
+Foram verificados e rejeitados:
 
-- limiter process-local/in-memory;
-- header alternativo como origem confiável;
+- limiter somente process-local/in-memory;
+- header alternativo/browser-supplied como origem confiável;
 - forwarded chain/hostname/origem não hosted;
 - persistência de email/IP em claro;
-- mesma representação IPv6 produzindo buckets distintos — corrigido por canonicalização;
-- limite controlável por caller/env permissiva;
-- runtime com `BYPASSRLS` — migration falha fechada e CI prova;
-- DML direto do runtime na tabela do limiter;
-- acesso do runtime de domínio ao limiter;
-- acesso Auth ao domínio;
-- race/lost update em burst concorrente;
-- Better Auth chamado após limiter `rejected`/`unavailable`;
-- signup/catch-all reabertos;
-- alteração de migration aplicada;
+- buckets distintos para IPv6 equivalente — corrigido com canonicalização;
+- limites fornecidos pelo caller/env permissiva;
+- runtime com ownership, DML amplo ou `BYPASSRLS`;
+- acesso do domínio ao limiter/Auth ou do Auth ao domínio;
+- lost update/race acima do limite;
+- Better Auth executado após `rejected`/`unavailable`;
+- reabertura de signup/catch-all;
+- reescrita de migration aplicada;
 - provider hosted write;
-- dado/identidade real.
+- dado ou identidade real.
 
-Um teste inicial que esperava detectar whitespace já normalizado pelo objeto `Headers` foi corrigido para testar entradas semanticamente observáveis sem fingir uma garantia inexistente.
+Também foi corrigido um teste que assumia preservar whitespace original já normalizado pelo objeto `Headers`; a prova final testa somente condições semanticamente observáveis.
 
-## Verificação F24
+## Verificação e promoção
 
-Head funcional `3291a62f57b350edf8b882ec08cc2655ed54d99d`:
+Head funcional `3291a62f57b350edf8b882ec08cc2655ed54d99d` passou CI `34476876653` e F22 Private Preview Preflight `34476876664`.
 
-- CI `34476876653`: PASS;
-  - `verify`: lint, typecheck, testes completos e build — PASS;
-  - `database`: fundação/RLS/diretório/detalhe persistente — PASS;
-  - `auth-database`: red-team de roles, Better Auth e limiter PostgreSQL — PASS;
-- F22 Private Preview Preflight `34476876664`: PASS.
+Checkpoint final da PR em `fbd5be5bec0d0b916c4b16a0a9bf8988c18ced02` passou:
 
-A suíte PostgreSQL F24 prova:
+- CI `34479092121`: PASS — `verify`, `database`, `auth-database`;
+- F22 Private Preview Preflight `34479092184`: PASS.
 
-- thresholds exatos 120/20/8;
-- janela nova volta a permitir;
-- buckets independentes não se contaminam;
-- burst concorrente de 32 tentativas no mesmo `pair` produz exatamente 8 `allowed` e 24 `rejected`, com contador 32;
-- purge de expirados preserva bucket ativo;
-- falta de `EXECUTE`/input inválido vira `unavailable`;
-- runtime Auth e domínio continuam isolados.
+A PR `#40` foi integrada por merge em `8c4afd1b242781f7e0ef499ab7d879ce1adf635d`.
 
-A integração Better Auth prova limiter `allowed` antes de sign-in real fictício, sessão e sign-out.
+Pós-merge em `main`:
+
+- CI `34479463372`: PASS — `verify`, `database`, `auth-database`;
+- F22 Private Preview Preflight `34479463381`: PASS.
+
+O teste concorrente F24 executa 32 chamadas sobre o mesmo `pair` e prova exatamente 8 `allowed`, 24 `rejected` e contador persistido 32, sem lost update.
+
+Nenhum recurso Vercel/Neon/Redis/KV, secret ou environment variable hosted foi criado ou alterado. `REAL_DATA_ALLOWED = NO`.
 
 ## F21 permanece ON HOLD
 
-Nenhuma condição de `resume_when` foi fabricada ou relaxada. F24 não criou nem alterou recurso Vercel, Neon, Redis/KV, secret ou environment variable hosted.
+Nenhuma condição do `resume_when` foi fabricada ou relaxada. F21 continua fora da frente ativa até existir superfície Vercel autenticada com readback completo de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch sem exposição dos valores.
 
 ## Próxima ação
 
-Executar somente `F25-FIRST-PERSISTENT-MUTATION-DESIGN-01` conforme `docs/ai/NEXT_ACTION.md` e `tasks/F25-FIRST-PERSISTENT-MUTATION-DESIGN-01/SPEC.md` depois da promoção final da F24.
+Existe exatamente uma `NEXT_ACTION` canônica: `F25-FIRST-PERSISTENT-MUTATION-DESIGN-01 — Definir a primeira mutação persistente rastreável`.
 
-F25 é design-only e deve fechar a fronteira da primeira escrita persistente de `next_action` sem resolver Q-009 por inferência.
+F25 é design-only. Deve definir por ADR a primeira escrita persistente de `contractings.next_action`, preservando autorização pilot-only sem inferir Q-009, atomicidade estado + `contracting_events`, concorrência e fail-closed.

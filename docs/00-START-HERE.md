@@ -21,9 +21,9 @@ F15/F16 prepararam a fronteira do primeiro preview privado. F17 provou o control
 
 A F18 mantém uma faixa independente de demonstração hospedada, protegida por Vercel Authentication, usando somente fixtures fictícias, sem banco/Auth interno/secrets e sem `COMPRAS_PERSISTENT_READ_ENABLED`.
 
-A F19 adotou Better Auth self-hosted pela ADR-009.
+A F19 adotou Better Auth self-hosted pela ADR-009. A F20 implementou essa decisão. A F22 acrescentou assets reproduzíveis de bootstrap/seed/smoke. A F23 fechou a arquitetura de controle distribuído de abuso pela ADR-010. A F24 implementou e provou a camada application-side do limiter em PostgreSQL 17 efêmero; sua promoção final ocorre pela PR `#40`.
 
-A F20 transformou essa decisão em implementação. A F22 acrescentou assets reproduzíveis de bootstrap/seed/smoke para o futuro preview persistente. A F23 fechou a arquitetura de controle distribuído de abuso do sign-in pela ADR-010. Tudo continua exclusivamente fictício; nenhuma dessas frentes autorizou dados reais.
+Tudo continua exclusivamente fictício. Nenhuma dessas frentes autorizou dados reais.
 
 ## F20 — Better Auth self-hosted implementado
 
@@ -43,22 +43,26 @@ O runtime privado usa Better Auth self-hosted com PostgreSQL:
 
 Sign-in e sign-out continuam exclusivamente por Server Actions estreitas. O transporte de cookies é explícito e o código somente declara sucesso depois de provar readback da sessão ou revogação real.
 
-## Banco Auth
+## Banco Auth e proteção do sign-in
 
 Há uma trilha separada de migrations:
 
 - `database/auth/migrations/0001_better_auth_1_6_23.sql`;
-- `database/auth/migrations/0002_auth_runtime_boundary.sql`.
+- `database/auth/migrations/0002_auth_runtime_boundary.sql`;
+- `database/auth/migrations/0003_signin_abuse_limiter.sql`.
 
 A role `compras_auth_runtime` deve ser login não privilegiado, sem ownership, superuser, `BYPASSRLS`, `CREATEDB`, `CREATEROLE` ou replication.
 
-A CI provou:
+A migration F24 cria namespace isolado `auth_guard`. O runtime Auth recebe somente `USAGE` no schema e `EXECUTE` no primitive estreito do limiter, sem DML direto na tabela de buckets.
+
+A CI prova:
 
 - Auth runtime não lê tabelas do domínio;
-- role de domínio não lê tabelas Auth;
+- role de domínio não lê tabelas Auth nem o limiter;
 - autenticação não cria `app_users` nem membership automaticamente;
 - signup permanece fechado;
 - sign-in, sessão e sign-out funcionam com identidade fictícia;
+- limiter distribuído aplica os limites ADR-010 e falha fechado;
 - toda a suíte PostgreSQL/RLS existente continua em PASS.
 
 ## Bootstrap fictício
@@ -86,7 +90,7 @@ Foi confirmado que:
 
 A execução parou fail-closed porque a superfície Vercel autenticada disponível na sessão não expõe o readback/CRUD necessário para os dois gates externos obrigatórios: estado completo da proteção/bypasses e environment variables sensíveis de Preview por branch.
 
-A recuperação F23 confirmou que essa superfície continua sem os comandos necessários para encerrar esses gates. Nenhum secret ou recurso hosted novo foi criado. F21 fica `ON HOLD` até essa capacidade de control plane estar disponível; a proteção não será reduzida para contornar o blocker.
+F21 fica `ON HOLD` até essa capacidade de control plane estar disponível; a proteção não será reduzida para contornar o blocker.
 
 ## F22 — seed e smoke reproduzíveis
 
@@ -120,41 +124,45 @@ domínio 0001
 -> domínio 0002
 -> Auth 0001
 -> Auth 0002
+-> Auth 0003
 -> domínio 0003
 ```
 
 Essa ordem preserva a ownership dedicada da view `team_member_directory`. Nenhuma migration canônica foi reescrita. Depois da view ser criada, um postflight exige que a role Auth continue sem `SELECT` sobre ela.
 
-A F22 foi integrada pela PR `#38`; a CI de `main` `33880974626` e o preflight F22 `33880974672` passaram integralmente.
-
-## F23 — controle de abuso do sign-in decidido
+## F23/F24 — controle distribuído do sign-in
 
 A ADR-010 define a fronteira para brute force/credential stuffing sem reabrir a API genérica do Better Auth.
 
-Decisão:
+A F24 materializou a camada application-side:
 
-- limiter apenas em memória é insuficiente;
-- Better Auth `auth.api` server-side continua sem herdar o rate limiter embutido;
-- o limiter autoritativo application-side usará PostgreSQL compartilhado;
-- Vercel Firewall/WAF será uma barreira edge adicional para reduzir volume antes da Function;
-- o runtime hosted só aceitará `x-forwarded-for` sob fronteira Vercel explícita, com exatamente um IP válido e sem forwarded chain;
-- email e IP nunca serão persistidos em claro; buckets usam HMAC com domain separation;
-- policy inicial versionada: `source` 120/15 min, `identifier` 20/15 min e `pair` 8/5 min;
+- PostgreSQL compartilhado como store autoritativo;
+- Vercel Firewall/WAF permanece defesa edge futura e separada;
+- `x-forwarded-for` só é aceito sob runtime Vercel hosted explícito e deve conter exatamente um IP válido;
+- IPv6 é canonicalizado antes de formar bucket;
+- email e IP nunca são persistidos em claro;
+- HMAC usa HKDF/domain separation a partir de `BETTER_AUTH_SECRET`;
+- policy versionada: `source` 120/15 min, `identifier` 20/15 min e `pair` 8/5 min;
 - os três buckets são consumidos atomicamente antes de `auth.api.signInEmail`;
-- limite excedido vira o mesmo estado externo `rejected` de credencial inválida;
-- falha de limiter/store/configuração vira `unavailable` e não chama Better Auth;
+- limite excedido vira `rejected` sem chamar Better Auth;
+- falha de limiter/store/configuração vira `unavailable` sem chamar Better Auth;
 - não existe bucket global bloqueante;
+- purge oportunístico é limitado/indexado;
 - logs não recebem email, IP, HMAC individual, senha, cookie, token, connection string ou payload de sessão.
 
-F23 não provisionou Firewall, Redis/KV, banco ou environment variable hosted.
+O head funcional F24 `3291a62f57b350edf8b882ec08cc2655ed54d99d` passou CI `34476876653` e F22 Private Preview Preflight `34476876664`.
+
+O teste concorrente executa 32 chamadas sobre o mesmo `pair` e comprova exatamente 8 `allowed` e 24 `rejected`, sem lost update.
+
+F24 não provisionou Firewall, Redis/KV, banco, secret ou environment variable hosted.
 
 ## Próxima frente
 
 A única `NEXT_ACTION` está em `docs/ai/NEXT_ACTION.md`:
 
-`F24-PRIVATE-SIGNIN-ABUSE-CONTROL-IMPLEMENT-01 — Implementar limiter distribuído do sign-in privado`.
+`F25-FIRST-PERSISTENT-MUTATION-DESIGN-01 — Definir a primeira mutação persistente rastreável`.
 
-A F24 deve materializar somente a camada application-side da ADR-010 em migration/código/testes, usando PostgreSQL 17 efêmero e dados fictícios, sem provider writes. A regra WAF hosted fica para a work unit de provider adequada quando o control plane puder ser aplicado/read-back com segurança.
+F25 é design-only. Deve fechar uma ADR pequena para a primeira escrita de `contractings.next_action`, preservando atualização de estado + `contracting_events` na mesma transação, autorização pilot-only e proteção contra lost update sem resolver Q-009 por inferência.
 
 ## Modos da aplicação
 
@@ -192,7 +200,7 @@ Migrations imutáveis do domínio:
 - `database/migrations/0002_trusted_identity_read_policies.sql` — helpers de identidade e primeiras policies de leitura;
 - `database/migrations/0003_team_member_directory.sql` — capability view mínima do diretório da equipe.
 
-Migrations Auth ficam separadas em `database/auth/migrations/` e não reescrevem a trilha do domínio.
+Migrations Auth/custom guard ficam separadas em `database/auth/migrations/` e não reescrevem a trilha do domínio.
 
 Assets F22 de preflight ficam em `src/server/preflight/` e não são migrations de produção.
 

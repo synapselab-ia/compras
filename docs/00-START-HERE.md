@@ -23,6 +23,8 @@ A F18 mantém uma faixa independente de demonstração hospedada, protegida por 
 
 A F19 adotou Better Auth self-hosted pela ADR-009. A F20 implementou essa decisão. A F22 acrescentou assets reproduzíveis de bootstrap/seed/smoke. A F23 fechou a arquitetura de controle distribuído de abuso pela ADR-010. A F24 implementou e provou a camada application-side do limiter em PostgreSQL 17 efêmero e foi integrada pela PR `#40`.
 
+A F25 definiu pela ADR-011 a fronteira da primeira mutação persistente rastreável de `contractings.next_action`. A implementação fica para F26.
+
 Tudo continua exclusivamente fictício. Nenhuma dessas frentes autorizou dados reais.
 
 ## F20 — Better Auth self-hosted implementado
@@ -156,13 +158,37 @@ O teste concorrente executa 32 chamadas sobre o mesmo `pair` e comprova exatamen
 
 F24 não provisionou Firewall, Redis/KV, banco, secret ou environment variable hosted.
 
+## F25 — primeira mutação persistente desenhada
+
+A ADR-011 escolhe uma primitive PostgreSQL específica `SECURITY DEFINER` para a primeira escrita de `contractings.next_action`.
+
+A role runtime de domínio continuará sem DML direto. A capability terá owner técnico `NOLOGIN` não privilegiado, `search_path` fixo e grants mínimos; o runtime recebe somente `EXECUTE` na primitive.
+
+Identidade e escopo continuam derivados exclusivamente de sessão Better Auth validada + contexto LOCAL `iss/sub` + banco. Browser não fornece actor, `team_id`, membership, issuer ou subject confiáveis.
+
+Q-009 permanece aberta. A escrita é deliberadamente **pilot-only**: o usuário corrente precisa possuir a única membership `revoked_at IS NULL` da equipe alvo. Se houver segunda membership ativa, a primitive falha fechada e nenhuma permissão multiusuário é inferida.
+
+Uma mudança real deve, atomicamente:
+
+- atualizar `next_action` e `updated_at`;
+- inserir exatamente um `contracting_events` com `event_type = 'next_action_changed'`, `field_key = 'next_action'`, valores anterior/novo e actor/team/contracting derivados do banco;
+- usar o mesmo instante de banco para estado e evento.
+
+Falha do evento reverte o update. No-op não altera timestamp e não cria evento. `contracting_events` permanece append-only.
+
+Concorrência usa lock de linha (`FOR UPDATE`) + precondição otimista null-safe do valor anterior de `next_action`. Duas chamadas com o mesmo expected antigo produzem no máximo um vencedor; a outra retorna conflito sem update/evento. Nenhuma coluna de versão prematura foi adicionada na decisão.
+
+Inexistente, cross-team, identidade desconhecida/desabilitada, membership ausente/revogada, segundo membro ativo e contratação arquivada/cancelada falham fechados sem side channel de existência antes da autorização.
+
+F25 é design-only: nenhuma migration, Server Action ou UI de escrita foi implementada nesta work unit.
+
 ## Próxima frente
 
 A única `NEXT_ACTION` está em `docs/ai/NEXT_ACTION.md`:
 
-`F25-FIRST-PERSISTENT-MUTATION-DESIGN-01 — Definir a primeira mutação persistente rastreável`.
+`F26-FIRST-PERSISTENT-NEXT-ACTION-MUTATION-IMPLEMENT-01 — Implementar primeira mutação persistente de próxima ação`.
 
-F25 é design-only. Deve fechar uma ADR pequena para a primeira escrita de `contractings.next_action`, preservando atualização de estado + `contracting_events` na mesma transação, autorização pilot-only e proteção contra lost update sem resolver Q-009 por inferência.
+F26 deve materializar ADR-011 em migration/código/testes usando PostgreSQL 17 efêmero, mantendo runtime sem DML amplo, Q-009 aberta e nenhum provider hosted write.
 
 ## Modos da aplicação
 
@@ -240,7 +266,8 @@ Ordem mínima para uma nova sessão:
 - `docs/decisions/ADR-007-private-auth-admission.md`;
 - `docs/decisions/ADR-008-public-demo-hosted-lane.md`;
 - `docs/decisions/ADR-009-self-hosted-better-auth.md`;
-- `docs/decisions/ADR-010-private-signin-abuse-control.md`.
+- `docs/decisions/ADR-010-private-signin-abuse-control.md`;
+- `docs/decisions/ADR-011-first-persistent-next-action-mutation.md`.
 
 ### Operação por IA
 

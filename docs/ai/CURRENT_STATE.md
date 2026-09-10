@@ -1,125 +1,160 @@
 # Current State — Compras
 
-**PROJECT_STATUS:** F24_INTEGRATED_F25_READY  
-**CURRENT_PHASE:** F24 integrada em `main`; F25 READY; F21 ON HOLD; F17 ON HOLD histórico  
+**PROJECT_STATUS:** F25_VERIFIED_CHECKPOINTING_F26_READY  
+**CURRENT_PHASE:** F25 design concluído na branch; PR/CI de promoção pendentes; F26 READY; F21 ON HOLD; F17 ON HOLD histórico  
 **REPO_VISIBILITY:** PUBLIC  
-**APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_IMPLEMENTED_DISTRIBUTED_SIGNIN_LIMITER_IMPLEMENTED_PERSISTENT_PREVIEW_BLOCKED_PRE_SECRETS  
-**DATABASE_STATUS:** PROTECTED_DOMAIN_READ_MODEL_VALIDATED_AUTH_AND_AUTH_GUARD_EPHEMERAL_PASS  
-**AUTH_STATUS:** SELF_HOSTED_BETTER_AUTH_IMPLEMENTED_SIGNIN_LIMITER_APPLICATION_SIDE_INTEGRATED  
-**DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_NO_F24_HOSTED_WRITES  
+**APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_IMPLEMENTED_DISTRIBUTED_SIGNIN_LIMITER_INTEGRATED_DOMAIN_WRITE_DESIGN_ACCEPTED  
+**DATABASE_STATUS:** PROTECTED_READ_MODEL_VALIDATED_FIRST_MUTATION_DESIGNED_NOT_IMPLEMENTED  
+**AUTH_STATUS:** SELF_HOSTED_BETTER_AUTH_AND_SIGNIN_LIMITER_INTEGRATED  
+**DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_NO_F25_HOSTED_WRITES  
 **REAL_DATA_ALLOWED:** NO  
 **CONTEXT_STATUS:** VALID  
 **FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`  
-**F20_FINAL_CHECKPOINT_COMMIT:** `a1037b38269c2e67e0ec249ed597eb5171eb31d2`  
 **F21_FINAL_CHECKPOINT_COMMIT:** `73cd3ec1ef524c526c91124d40efae1eff2061ce`  
 **F22_MERGE_COMMIT:** `1ea7b1abb47e81af318872ee5e4c683607b3e2a3`  
 **F23_MERGE_COMMIT:** `52f398901de0360d7e6b31b880f08d02e999c97b`  
-**F24_PR:** `#40` — MERGED  
-**F24_FINAL_PR_HEAD:** `fbd5be5bec0d0b916c4b16a0a9bf8988c18ced02`  
-**F24_PR_CI_RUN:** `34479092121` — PASS  
-**F24_PR_PREFLIGHT_RUN:** `34479092184` — PASS  
 **F24_MERGE_COMMIT:** `8c4afd1b242781f7e0ef499ab7d879ce1adf635d`  
 **F24_MAIN_CI_RUN:** `34479463372` — PASS  
 **F24_MAIN_PREFLIGHT_RUN:** `34479463381` — PASS  
-**LAST_GOOD_COMMIT:** `8c4afd1b242781f7e0ef499ab7d879ce1adf635d`  
-**LAST_GOOD_CI_RUN:** `34479463372`  
+**LAST_GOOD_COMMIT:** `c60d6d50f3494e1b2ac557992f6f4057f5e8bcf3`  
+**LAST_GOOD_CI_RUN:** `34479895944`  
 **F21_STATE:** `ON HOLD / BLOCKED` — Vercel control-plane surface unavailable for required protection/env readback+CRUD  
 **F21_RESUME_WHEN:** sessão Vercel autenticada permitir readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch, sem exposição de valores  
 **ON_HOLD:** `F17-B2` histórico + `F21` conforme resume_when acima
 
-## Recuperação e contexto
+## Recuperação desta sessão
 
-A sessão recuperou a `main` em `79bd5564d423ff84cf64998a2d61591a3398cf4f` e localizou a frente ativa na PR `#40`, branch `f24-private-signin-abuse-control-implement`, em vez de abrir trabalho paralelo.
+A `main` foi recuperada em `c60d6d50f3494e1b2ac557992f6f4057f5e8bcf3`.
 
-O `CONTEXT_MANIFEST` foi revalidado contra `main` antes dos writes. Todos os 10 inputs estáveis coincidiram exatamente com os blobs esperados; `CONTEXT_STATUS = VALID`.
+Não havia PR F25 aberta nem branch F25 existente. A única `NEXT_ACTION` canônica era `F25-FIRST-PERSISTENT-MUTATION-DESIGN-01`; por isso foi criada a branch `f25-first-persistent-mutation-design` a partir do head real de `main`.
 
-A única `NEXT_ACTION` recuperada era F24. A work unit foi concluída, red-teamed, verificada e promovida.
+F24 já estava integrada. Os gates finais do checkpoint anterior em `main` estavam verdes:
 
-## F24 — limiter distribuído integrado
+- CI `34479895944`: PASS;
+- F22 Private Preview Preflight `34479895945`: PASS.
 
-A F24 materializou a camada application-side da ADR-010 sem provider hosted write.
+## Contexto
 
-### Enforcement PostgreSQL
+O `CONTEXT_MANIFEST` foi revalidado antes de qualquer write.
 
-A migration `database/auth/migrations/0003_signin_abuse_limiter.sql` cria o namespace isolado `auth_guard`, tabela de buckets pseudônimos, índice de expiração e primitive `SECURITY DEFINER` com `search_path` fixo.
+Todos os 10 inputs estáveis coincidiram exatamente com os blobs esperados de produto, arquitetura, qualidade e protocolo. `CONTEXT_STATUS = VALID`.
 
-A role `compras_auth_runtime` permanece `LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION`, sem ownership ou DML direto na tabela do limiter. Ela recebe somente `USAGE` no schema e `EXECUTE` no primitive.
+A inspeção T5/T2 incluiu diretamente:
 
-Policy versionada:
+- `docs/architecture/SECURITY.md`;
+- `docs/architecture/DATABASE.md`;
+- `docs/product/OPEN_QUESTIONS.md`, especialmente Q-009;
+- ADR-003, ADR-005 e ADR-009;
+- migrations do domínio `0001..0003`;
+- `src/server/database/trusted-context.ts` e testes;
+- leitura persistente de detalhe e provas PostgreSQL/RLS existentes.
 
-- `source`: 120 tentativas / 15 min;
-- `identifier`: 20 / 15 min;
-- `pair`: 8 / 5 min.
+Foi confirmado no schema executável que `contractings.next_action`, `contractings.updated_at` e `contracting_events` já existem e que não há policy/grant normal de escrita.
 
-Os três buckets são consumidos atomicamente com relógio PostgreSQL. O purge oportunístico é limitado a 16 expirados por chamada e usa índice + `SKIP LOCKED`.
+## F25 — ADR-011 aceita
 
-### Aplicação
+Criada `docs/decisions/ADR-011-first-persistent-next-action-mutation.md`.
 
-`src/server/auth/signin-limiter.ts`:
+### Decisão principal
 
-- aceita origem hosted somente com runtime Vercel explícito;
-- usa apenas `x-forwarded-for` com exatamente um IP válido;
-- rejeita chain, hostname, tokens múltiplos e ambiente não hosted;
-- canonicaliza IPv6 para evitar evasão por representação textual equivalente;
-- deriva buckets opacos via HKDF/HMAC com domain separation a partir de `BETTER_AUTH_SECRET`;
-- não persiste/loga email ou IP em claro;
-- converte falha de configuração/store em `unavailable`.
+A primeira escrita persistente será exclusivamente `contractings.next_action` e usará uma **primitive PostgreSQL estreita `SECURITY DEFINER`**, em vez de DML direto pela role runtime.
 
-`private-admission.ts` chama o limiter antes de `auth.api.signInEmail`:
+A implementação F26 deverá manter a role runtime sem `UPDATE`/`INSERT` direto e conceder apenas `EXECUTE` na capability específica.
 
-- limite excedido → `rejected` sem Better Auth;
-- limiter/config/store indisponível → `unavailable` sem Better Auth;
-- `allowed` → segue o fluxo já validado de sign-in, cookie e readback da sessão.
+A função terá owner técnico `NOLOGIN`, não privilegiado, com lifecycle/selagem equivalente à propriedade de segurança da ADR-005, `search_path` fixo e grants mínimos.
 
-Signup normal e `/api/auth/[...path]` continuam fechados. Autenticação continua separada de autorização de domínio/RLS.
+### Identidade e autorização
 
-## Red-team F24
+A cadeia continua:
 
-Foram verificados e rejeitados:
+```text
+sessão Better Auth validada no servidor
+-> issuer + subject
+-> contexto LOCAL da transação
+-> app_user
+-> membership ativa
+-> capability de next_action
+```
 
-- limiter somente process-local/in-memory;
-- header alternativo/browser-supplied como origem confiável;
-- forwarded chain/hostname/origem não hosted;
-- persistência de email/IP em claro;
-- buckets distintos para IPv6 equivalente — corrigido com canonicalização;
-- limites fornecidos pelo caller/env permissiva;
-- runtime com ownership, DML amplo ou `BYPASSRLS`;
-- acesso do domínio ao limiter/Auth ou do Auth ao domínio;
-- lost update/race acima do limite;
-- Better Auth executado após `rejected`/`unavailable`;
-- reabertura de signup/catch-all;
+Browser não escolhe actor, `team_id`, membership, issuer ou subject confiáveis.
+
+Q-009 continua aberta. A autorização da primeira escrita é deliberadamente **pilot-only**:
+
+- o usuário corrente precisa possuir membership não revogada na equipe alvo;
+- essa deve ser a única membership `revoked_at IS NULL` da equipe;
+- se houver segunda membership ativa, a mutação falha fechada.
+
+Uma membership não revogada conta para esse guard mesmo se seu usuário estiver desabilitado; isso evita liberar escrita com base em estado de membership inconsistente.
+
+### Atomicidade e histórico
+
+Mudança real deve, em uma única transação:
+
+- atualizar `next_action`;
+- atualizar `updated_at`;
+- inserir exatamente um `contracting_events` com `event_type = 'next_action_changed'`, `field_key = 'next_action'`, valores old/new e actor/team/contracting derivados do banco;
+- usar o mesmo instante de banco para `updated_at`, `occurred_at` e `created_at`.
+
+Falha do evento reverte o update. Eventos continuam sem UPDATE/DELETE para runtime/capability.
+
+No-op com valor idêntico não altera timestamp e não cria evento.
+
+### Concorrência
+
+A ADR escolheu:
+
+- lock pessimista da contratação (`FOR UPDATE`);
+- precondição otimista null-safe sobre o valor anterior de `next_action`.
+
+Duas chamadas com o mesmo valor esperado não podem executar last-write-wins silencioso: a primeira vence e cria evento; a segunda observa precondição stale e retorna conflito sem update/evento.
+
+Nenhuma coluna de versão é criada apenas para esta slice.
+
+### Fail-closed / side channels
+
+Inexistente, cross-team, identidade desconhecida/desabilitada, membership ausente/revogada, segundo membro ativo e contratação arquivada/cancelada não podem revelar existência por resultados distintos antes da autorização.
+
+Falha de configuração/banco/contexto vira indisponibilidade; não existe fallback de escrita nem fallback para demo.
+
+## Red-team F25
+
+A decisão rejeitou explicitamente:
+
+- actor/team/membership fornecidos pelo browser;
+- membership como permissão multiusuário implícita;
+- segundo membro ativo recebendo escrita por inferência;
+- DML direto amplo para runtime;
+- owner/superuser/`BYPASSRLS` como runtime normal;
+- capability com ownership de tabelas-base ou membership utilizável privilegiada;
+- `SECURITY DEFINER` com `search_path` controlável;
+- estado sem evento ou evento sem estado;
+- last-write-wins silencioso;
+- no-op com evento falso;
+- side channel de UUID cross-team;
 - reescrita de migration aplicada;
-- provider hosted write;
-- dado ou identidade real.
+- alteração de stage/status/responsável/aguardando;
+- resolução global de Q-009;
+- dependência de provider hosted;
+- dado real.
 
-Também foi corrigido um teste que assumia preservar whitespace original já normalizado pelo objeto `Headers`; a prova final testa somente condições semanticamente observáveis.
+## Artefatos F25
 
-## Verificação e promoção
+Criados:
 
-Head funcional `3291a62f57b350edf8b882ec08cc2655ed54d99d` passou CI `34476876653` e F22 Private Preview Preflight `34476876664`.
+- `docs/decisions/ADR-011-first-persistent-next-action-mutation.md`;
+- `tasks/F26-FIRST-PERSISTENT-NEXT-ACTION-MUTATION-IMPLEMENT-01/SPEC.md`.
 
-Checkpoint final da PR em `fbd5be5bec0d0b916c4b16a0a9bf8988c18ced02` passou:
+Atualizados:
 
-- CI `34479092121`: PASS — `verify`, `database`, `auth-database`;
-- F22 Private Preview Preflight `34479092184`: PASS.
+- `tasks/F25-FIRST-PERSISTENT-MUTATION-DESIGN-01/SPEC.md`;
+- `docs/ai/NEXT_ACTION.md`;
+- este checkpoint;
+- `docs/00-START-HERE.md` no fechamento da branch.
 
-A PR `#40` foi integrada por merge em `8c4afd1b242781f7e0ef499ab7d879ce1adf635d`.
-
-Pós-merge em `main`:
-
-- CI `34479463372`: PASS — `verify`, `database`, `auth-database`;
-- F22 Private Preview Preflight `34479463381`: PASS.
-
-O teste concorrente F24 executa 32 chamadas sobre o mesmo `pair` e prova exatamente 8 `allowed`, 24 `rejected` e contador persistido 32, sem lost update.
-
-Nenhum recurso Vercel/Neon/Redis/KV, secret ou environment variable hosted foi criado ou alterado. `REAL_DATA_ALLOWED = NO`.
-
-## F21 permanece ON HOLD
-
-Nenhuma condição do `resume_when` foi fabricada ou relaxada. F21 continua fora da frente ativa até existir superfície Vercel autenticada com readback completo de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch sem exposição dos valores.
+Nenhuma migration, Server Action, UI de escrita, secret, environment variable ou recurso hosted foi criado/alterado em F25. `REAL_DATA_ALLOWED = NO`.
 
 ## Próxima ação
 
-Existe exatamente uma `NEXT_ACTION` canônica: `F25-FIRST-PERSISTENT-MUTATION-DESIGN-01 — Definir a primeira mutação persistente rastreável`.
+Existe exatamente uma nova `NEXT_ACTION`: `F26-FIRST-PERSISTENT-NEXT-ACTION-MUTATION-IMPLEMENT-01 — Implementar primeira mutação persistente de próxima ação`.
 
-F25 é design-only. Deve definir por ADR a primeira escrita persistente de `contractings.next_action`, preservando autorização pilot-only sem inferir Q-009, atomicidade estado + `contracting_events`, concorrência e fail-closed.
+F26 deve implementar ADR-011 em PostgreSQL 17 descartável/CI, incluindo capability owner segura, grants mínimos, adapter de escrita, atomicidade estado+evento, conflito concorrente e red-team completo, sem provider hosted write.

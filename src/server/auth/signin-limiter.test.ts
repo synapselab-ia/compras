@@ -53,7 +53,7 @@ describe("private sign-in limiter core", () => {
     ).toBeNull();
     expect(
       resolveTrustedVercelSource(
-        new Headers({ "x-forwarded-for": " 203.0.113.1" }),
+        new Headers({ "x-forwarded-for": "203.0.113.1 198.51.100.2" }),
         hosted,
       ),
     ).toBeNull();

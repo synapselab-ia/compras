@@ -210,6 +210,19 @@ jobs:
           dropdb compras_auth_redteam_ci
           psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_auth_runtime;"
 
+      - name: Red-team unsafe F24 limiter runtime role
+        run: |
+          createdb compras_limiter_redteam_ci
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_auth_runtime LOGIN NOINHERIT BYPASSRLS;"
+
+          if PGDATABASE=compras_limiter_redteam_ci psql -v ON_ERROR_STOP=1 -f database/auth/migrations/0003_signin_abuse_limiter.sql; then
+            echo "unsafe BYPASSRLS limiter runtime role was accepted" >&2
+            exit 1
+          fi
+
+          dropdb compras_limiter_redteam_ci
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_auth_runtime;"
+
       - name: Provision ephemeral separated Auth roles
         run: |
           psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_auth_migrator_ci LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD 'F20-AUTH-MIGRATOR-FICTITIOUS';"
@@ -220,6 +233,7 @@ jobs:
           PGUSER=compras_auth_migrator_ci PGPASSWORD='F20-AUTH-MIGRATOR-FICTITIOUS' PGDATABASE=compras_auth_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0001_core_foundation.sql
           PGUSER=compras_auth_migrator_ci PGPASSWORD='F20-AUTH-MIGRATOR-FICTITIOUS' PGDATABASE=compras_auth_ci psql -v ON_ERROR_STOP=1 -f database/auth/migrations/0001_better_auth_1_6_23.sql
           PGUSER=compras_auth_migrator_ci PGPASSWORD='F20-AUTH-MIGRATOR-FICTITIOUS' PGDATABASE=compras_auth_ci psql -v ON_ERROR_STOP=1 -f database/auth/migrations/0002_auth_runtime_boundary.sql
+          PGUSER=compras_auth_migrator_ci PGPASSWORD='F20-AUTH-MIGRATOR-FICTITIOUS' PGDATABASE=compras_auth_ci psql -v ON_ERROR_STOP=1 -f database/auth/migrations/0003_signin_abuse_limiter.sql
 
       - name: Verify Better Auth PostgreSQL boundary
         env:
@@ -228,3 +242,11 @@ jobs:
           AUTH_INTEGRATION_DOMAIN_DATABASE_URL: postgresql://compras_domain_runtime_ci:F20-DOMAIN-RUNTIME-FICTITIOUS@localhost:5432/compras_auth_ci
           AUTH_INTEGRATION_SUPERUSER_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/compras_auth_ci
         run: npx vitest run src/server/auth/postgres-integration.test.ts
+
+      - name: Verify F24 sign-in limiter boundary
+        env:
+          F24_SIGNIN_LIMITER_POSTGRES_TEST: "1"
+          AUTH_INTEGRATION_DATABASE_URL: postgresql://compras_auth_runtime:F20-AUTH-RUNTIME-FICTITIOUS@localhost:5432/compras_auth_ci
+          AUTH_INTEGRATION_DOMAIN_DATABASE_URL: postgresql://compras_domain_runtime_ci:F20-DOMAIN-RUNTIME-FICTITIOUS@localhost:5432/compras_auth_ci
+          AUTH_INTEGRATION_SUPERUSER_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/compras_auth_ci
+        run: npx vitest run src/server/auth/signin-limiter.postgres.test.ts

@@ -21,7 +21,7 @@ F15/F16 prepararam a fronteira do primeiro preview privado. F17 provou o control
 
 A F18 mantém uma faixa independente de demonstração hospedada, protegida por Vercel Authentication, usando somente fixtures fictícias, sem banco/Auth interno/secrets e sem `COMPRAS_PERSISTENT_READ_ENABLED`.
 
-A F19 adotou Better Auth self-hosted pela ADR-009. A F20 implementou essa decisão. A F22 acrescentou assets reproduzíveis de bootstrap/seed/smoke. A F23 fechou a arquitetura de controle distribuído de abuso pela ADR-010. A F24 implementou e provou a camada application-side do limiter em PostgreSQL 17 efêmero; sua promoção final ocorre pela PR `#40`.
+A F19 adotou Better Auth self-hosted pela ADR-009. A F20 implementou essa decisão. A F22 acrescentou assets reproduzíveis de bootstrap/seed/smoke. A F23 fechou a arquitetura de controle distribuído de abuso pela ADR-010. A F24 implementou e provou a camada application-side do limiter em PostgreSQL 17 efêmero e foi integrada pela PR `#40`.
 
 Tudo continua exclusivamente fictício. Nenhuma dessas frentes autorizou dados reais.
 
@@ -150,7 +150,7 @@ A F24 materializou a camada application-side:
 - purge oportunístico é limitado/indexado;
 - logs não recebem email, IP, HMAC individual, senha, cookie, token, connection string ou payload de sessão.
 
-O head funcional F24 `3291a62f57b350edf8b882ec08cc2655ed54d99d` passou CI `34476876653` e F22 Private Preview Preflight `34476876664`.
+A PR `#40` foi integrada em `main` por `8c4afd1b242781f7e0ef499ab7d879ce1adf635d`. A CI pós-merge `34479463372` e o F22 Private Preview Preflight `34479463381` passaram integralmente.
 
 O teste concorrente executa 32 chamadas sobre o mesmo `pair` e comprova exatamente 8 `allowed` e 24 `rejected`, sem lost update.
 

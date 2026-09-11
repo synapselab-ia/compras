@@ -92,7 +92,8 @@ $$;
 GRANT USAGE ON SCHEMA test_support_f26 TO compras_domain_runtime_f26_ci;
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA test_support_f26 TO compras_domain_runtime_f26_ci;
 
--- Synthetic teams.
+-- Synthetic teams and identities. Team C deliberately has two non-revoked
+-- memberships so the unresolved Q-009 pilot guard can be proven fail-closed.
 INSERT INTO public.teams (id, name, created_at) VALUES
   ('26010000-0000-4000-8000-000000000001', 'DEMO-F26-Team-A-Single', '2026-01-01T00:00:00Z'),
   ('26010000-0000-4000-8000-000000000002', 'DEMO-F26-Team-B-Cross', '2026-01-01T00:00:00Z'),
@@ -140,6 +141,7 @@ DO $structure$
 DECLARE
   capability_oid oid;
   migrator_oid oid;
+  forced_rls_count bigint;
 BEGIN
   SELECT oid INTO capability_oid
   FROM pg_catalog.pg_roles
@@ -211,13 +213,10 @@ BEGIN
   IF has_table_privilege('compras_domain_runtime_f26_ci', 'public.contractings', 'UPDATE')
      OR has_table_privilege('compras_domain_runtime_f26_ci', 'public.contracting_events', 'INSERT')
      OR has_table_privilege('compras_domain_runtime_f26_ci', 'public.contracting_events', 'UPDATE')
-     OR has_table_privilege('compras_domain_runtime_f26_ci', 'public.contracting_events', 'DELETE') THEN
-    RAISE EXCEPTION 'F26 runtime received direct write privileges';
-  END IF;
-
-  IF has_column_privilege('compras_domain_runtime_f26_ci', 'public.contractings', 'next_action', 'UPDATE')
+     OR has_table_privilege('compras_domain_runtime_f26_ci', 'public.contracting_events', 'DELETE')
+     OR has_column_privilege('compras_domain_runtime_f26_ci', 'public.contractings', 'next_action', 'UPDATE')
      OR has_column_privilege('compras_domain_runtime_f26_ci', 'public.contractings', 'updated_at', 'UPDATE') THEN
-    RAISE EXCEPTION 'F26 runtime received direct column UPDATE privileges';
+    RAISE EXCEPTION 'F26 runtime received direct write privileges';
   END IF;
 
   IF NOT has_function_privilege(
@@ -234,24 +233,23 @@ BEGIN
      OR has_column_privilege('compras_next_action_mutation_owner', 'public.contractings', 'waiting_type', 'UPDATE')
      OR has_column_privilege('compras_next_action_mutation_owner', 'public.contractings', 'waiting_reference', 'UPDATE')
      OR has_column_privilege('compras_next_action_mutation_owner', 'public.contractings', 'waiting_since', 'UPDATE')
-     OR has_column_privilege('compras_next_action_mutation_owner', 'public.contractings', 'waiting_reason', 'UPDATE') THEN
-    RAISE EXCEPTION 'F26 capability can update unrelated operational columns';
-  END IF;
-
-  IF has_table_privilege('compras_next_action_mutation_owner', 'public.contracting_events', 'UPDATE')
+     OR has_column_privilege('compras_next_action_mutation_owner', 'public.contractings', 'waiting_reason', 'UPDATE')
+     OR has_table_privilege('compras_next_action_mutation_owner', 'public.contracting_events', 'UPDATE')
      OR has_table_privilege('compras_next_action_mutation_owner', 'public.contracting_events', 'DELETE') THEN
-    RAISE EXCEPTION 'F26 capability can rewrite/delete events';
+    RAISE EXCEPTION 'F26 capability can mutate outside the narrow boundary';
   END IF;
 
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_catalog.pg_class AS relation
-    WHERE relation.oid IN ('public.contractings'::regclass, 'public.contracting_events'::regclass)
-      AND relation.relrowsecurity
-      AND relation.relforcerowsecurity
-    GROUP BY true
-    HAVING count(*) = 2
-  ) THEN
+  SELECT count(*)
+  INTO forced_rls_count
+  FROM pg_catalog.pg_class AS relation
+  WHERE relation.oid IN (
+    'public.contractings'::regclass,
+    'public.contracting_events'::regclass
+  )
+    AND relation.relrowsecurity
+    AND relation.relforcerowsecurity;
+
+  IF forced_rls_count <> 2 THEN
     RAISE EXCEPTION 'F26 protected tables lost enabled/forced RLS';
   END IF;
 END;
@@ -259,7 +257,7 @@ $structure$;
 
 SET SESSION AUTHORIZATION compras_domain_runtime_f26_ci;
 
--- Missing or malformed context fails closed.
+-- Missing or malformed trusted context fails closed.
 BEGIN;
 SELECT set_config('request.jwt.claims', '', true);
 SELECT test_support_f26.assert_text(
@@ -286,7 +284,7 @@ SELECT test_support_f26.assert_text(
 );
 ROLLBACK;
 
--- Unknown/disabled/no-membership/revoked identities all deny without mutation.
+-- Unknown, disabled, no-membership, revoked and multi-membership identities deny.
 BEGIN;
 SELECT set_config(
   'request.jwt.claims',
@@ -355,8 +353,6 @@ SELECT test_support_f26.assert_text(
 );
 ROLLBACK;
 
--- Team C has a second non-revoked membership whose app_user is disabled. The
--- conservative pilot guard must still deny.
 BEGIN;
 SELECT set_config(
   'request.jwt.claims',
@@ -370,12 +366,12 @@ SELECT test_support_f26.assert_text(
       '26050000-0000-4000-8000-000000000007'::uuid
     )$$,
   'denied',
-  'second active membership deny'
+  'second non-revoked membership deny'
 );
 ROLLBACK;
 
--- Authorized A: cross-team and nonexistent UUIDs are deliberately identical;
--- archived/cancelled targets are also denied before conflict/no-op semantics.
+-- Authorized A: cross-team and nonexistent UUIDs collapse to the same result;
+-- archived and cancelled rows are also unavailable before conflict semantics.
 BEGIN;
 SELECT set_config(
   'request.jwt.claims',
@@ -420,7 +416,7 @@ SELECT test_support_f26.assert_text(
 );
 COMMIT;
 
--- Real mutation: state + exactly one event, actor/team derived from the DB,
+-- Real mutation: state + exactly one immutable event, actor/team derived by DB,
 -- and one database instant shared by state/event timestamps.
 BEGIN;
 SELECT set_config(
@@ -438,8 +434,7 @@ SELECT test_support_f26.assert_text(
   'authorized single-member update'
 );
 SELECT test_support_f26.assert_text(
-  $$SELECT next_action
-    FROM public.contractings
+  $$SELECT next_action FROM public.contractings
     WHERE id = '26040000-0000-4000-8000-000000000001'::uuid$$,
   'DEMO new',
   'state updated'
@@ -476,7 +471,7 @@ SELECT test_support_f26.assert_count(
 );
 COMMIT;
 
--- No-op preserves timestamp/event; stale expected returns conflict with no write.
+-- No-op preserves timestamp/event; stale expected conflicts without a write.
 BEGIN;
 SELECT set_config(
   'request.jwt.claims',
@@ -531,7 +526,7 @@ SELECT test_support_f26.assert_count(
 );
 COMMIT;
 
--- NULL remains a supported scalar because the canonical column is nullable.
+-- The canonical next_action column is nullable; both transitions remain audited.
 BEGIN;
 SELECT set_config(
   'request.jwt.claims',
@@ -571,8 +566,7 @@ SELECT test_support_f26.assert_count(
 );
 COMMIT;
 
--- Force the event insert to fail with a duplicate event UUID. The nested
--- exception block proves the preceding state UPDATE is rolled back with it.
+-- A failed event INSERT must roll back the state UPDATE atomically.
 BEGIN;
 SELECT set_config(
   'request.jwt.claims',
@@ -591,8 +585,7 @@ COMMIT;
 
 RESET SESSION AUTHORIZATION;
 
--- Final admin-level proof that all denied paths left their synthetic targets
--- unchanged and did not create stray events.
+-- Final admin proof that denied paths created neither state changes nor events.
 DO $final$
 BEGIN
   IF EXISTS (

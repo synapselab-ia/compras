@@ -23,6 +23,12 @@ export type ContractingActivityPresentation = {
 };
 
 export type ContractingDetailPresentation = SectorCentralRecord & {
+  /**
+   * Raw nullable value from the protected read model. `nextAction` remains the
+   * human presentation string, while this field preserves NULL versus the
+   * literal empty string for ADR-011 optimistic concurrency.
+   */
+  nextActionValue: string | null;
   waitingSince: string;
   waitingReason: string;
   createdAt: string;

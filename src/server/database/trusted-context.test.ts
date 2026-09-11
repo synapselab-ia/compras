@@ -25,6 +25,9 @@ const SAFE_ROLE = {
   rolname: "compras_app",
   rolsuper: false,
   rolbypassrls: false,
+  rolcreatedb: false,
+  rolcreaterole: false,
+  rolreplication: false,
   owns_protected_tables: false,
 };
 
@@ -145,9 +148,13 @@ describe("withTrustedDatabaseContext", () => {
     for (const unsafeRole of [
       { ...SAFE_ROLE, rolsuper: true },
       { ...SAFE_ROLE, rolbypassrls: true },
+      { ...SAFE_ROLE, rolcreatedb: true },
+      { ...SAFE_ROLE, rolcreaterole: true },
+      { ...SAFE_ROLE, rolreplication: true },
       { ...SAFE_ROLE, owns_protected_tables: true },
       { ...SAFE_ROLE, rolname: "neondb_owner" },
       { ...SAFE_ROLE, rolname: "compras_team_directory_view_owner" },
+      { ...SAFE_ROLE, rolname: "compras_next_action_mutation_owner" },
     ]) {
       databaseMocks.Pool.mockReset();
       identityMocks.getVerifiedExternalIdentity.mockClear();

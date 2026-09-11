@@ -1,7 +1,7 @@
 \if :{?runtime_role}
 \else
 \echo 'runtime_role psql variable is required'
-\quit
+\quit 3
 \endif
 
 BEGIN;

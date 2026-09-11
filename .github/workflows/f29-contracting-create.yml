@@ -1,0 +1,157 @@
+name: F29 Contracting Create
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  contracting-create:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Use Node.js 24 LTS
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24.x"
+          cache: npm
+
+      - name: Install dependencies from lockfile
+        run: npm ci
+
+      - name: Red-team F29 create capability preflight
+        run: |
+          set -euo pipefail
+
+          createdb compras_f29_preflight_ci
+          PGDATABASE=compras_f29_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0001_core_foundation.sql
+          PGDATABASE=compras_f29_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0002_trusted_identity_read_policies.sql
+          PGDATABASE=compras_f29_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0003_team_member_directory.sql
+          PGDATABASE=compras_f29_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0004_next_action_mutation.sql
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_contracting_create_owner LOGIN;"
+          if PGDATABASE=compras_f29_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0005_contracting_create.sql; then
+            echo "unsafe LOGIN create capability was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_create_owner;"
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_contracting_create_owner NOLOGIN BYPASSRLS;"
+          if PGDATABASE=compras_f29_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0005_contracting_create.sql; then
+            echo "unsafe BYPASSRLS create capability was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_create_owner;"
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_contracting_create_owner NOLOGIN NOINHERIT NOBYPASSRLS;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_f29_preflight_member NOLOGIN;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "GRANT compras_contracting_create_owner TO compras_f29_preflight_member WITH INHERIT FALSE, SET TRUE;"
+          if PGDATABASE=compras_f29_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0005_contracting_create.sql; then
+            echo "SET-capable create capability membership was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "REVOKE compras_contracting_create_owner FROM compras_f29_preflight_member;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_f29_preflight_member;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_create_owner;"
+
+          dropdb compras_f29_preflight_ci
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_next_action_mutation_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_team_directory_view_owner;"
+
+      - name: Verify F29 minimal contracting create boundary
+        run: |
+          set -euo pipefail
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_f29_migrator_ci LOGIN CREATEROLE NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOREPLICATION PASSWORD 'DEMO-F29-MIGRATOR-PASSWORD';"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_domain_runtime_f29_ci LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD 'DEMO-F29-DOMAIN-RUNTIME-PASSWORD';"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_auth_runtime_f29_ci LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD 'DEMO-F29-AUTH-RUNTIME-PASSWORD';"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_readonly_runtime_f29_ci LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD 'DEMO-F29-READONLY-RUNTIME-PASSWORD';"
+          createdb -O compras_f29_migrator_ci compras_create_ci
+
+          PGUSER=compras_f29_migrator_ci PGPASSWORD='DEMO-F29-MIGRATOR-PASSWORD' PGDATABASE=compras_create_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0001_core_foundation.sql
+          PGUSER=compras_f29_migrator_ci PGPASSWORD='DEMO-F29-MIGRATOR-PASSWORD' PGDATABASE=compras_create_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0002_trusted_identity_read_policies.sql
+          PGUSER=compras_f29_migrator_ci PGPASSWORD='DEMO-F29-MIGRATOR-PASSWORD' PGDATABASE=compras_create_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0003_team_member_directory.sql
+          PGUSER=compras_f29_migrator_ci PGPASSWORD='DEMO-F29-MIGRATOR-PASSWORD' PGDATABASE=compras_create_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0004_next_action_mutation.sql
+          PGUSER=compras_f29_migrator_ci PGPASSWORD='DEMO-F29-MIGRATOR-PASSWORD' PGDATABASE=compras_create_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0005_contracting_create.sql
+
+          PRE_GRANT_EXECUTE="$(PGDATABASE=compras_create_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_domain_runtime_f29_ci', 'public.create_contracting_minimal(uuid,text,uuid)', 'EXECUTE')")"
+          AUTH_EXECUTE="$(PGDATABASE=compras_create_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_auth_runtime_f29_ci', 'public.create_contracting_minimal(uuid,text,uuid)', 'EXECUTE')")"
+          READONLY_EXECUTE="$(PGDATABASE=compras_create_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_readonly_runtime_f29_ci', 'public.create_contracting_minimal(uuid,text,uuid)', 'EXECUTE')")"
+          if [[ "$PRE_GRANT_EXECUTE" != "f" || "$AUTH_EXECUTE" != "f" || "$READONLY_EXECUTE" != "f" ]]; then
+            echo "F29 create EXECUTE leaked before explicit runtime provisioning" >&2
+            exit 1
+          fi
+
+          PGUSER=compras_f29_migrator_ci PGPASSWORD='DEMO-F29-MIGRATOR-PASSWORD' PGDATABASE=compras_create_ci \
+            psql -v ON_ERROR_STOP=1 -v runtime_role='compras_domain_runtime_f29_ci' \
+              -f database/provisioning/grant_contracting_create_runtime.sql
+
+          POST_GRANT_EXECUTE="$(PGDATABASE=compras_create_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_domain_runtime_f29_ci', 'public.create_contracting_minimal(uuid,text,uuid)', 'EXECUTE')")"
+          AUTH_EXECUTE="$(PGDATABASE=compras_create_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_auth_runtime_f29_ci', 'public.create_contracting_minimal(uuid,text,uuid)', 'EXECUTE')")"
+          READONLY_EXECUTE="$(PGDATABASE=compras_create_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_readonly_runtime_f29_ci', 'public.create_contracting_minimal(uuid,text,uuid)', 'EXECUTE')")"
+          if [[ "$POST_GRANT_EXECUTE" != "t" || "$AUTH_EXECUTE" != "f" || "$READONLY_EXECUTE" != "f" ]]; then
+            echo "F29 runtime provisioning did not remain isolated" >&2
+            exit 1
+          fi
+
+          PGUSER=compras_f29_migrator_ci PGPASSWORD='DEMO-F29-MIGRATOR-PASSWORD' PGDATABASE=compras_create_ci psql -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT USAGE ON SCHEMA public TO compras_domain_runtime_f29_ci;
+          GRANT SELECT ON TABLE
+            public.app_users,
+            public.memberships,
+            public.teams,
+            public.contractings,
+            public.related_identifiers,
+            public.contracting_items,
+            public.contracting_events
+            TO compras_domain_runtime_f29_ci;
+          GRANT EXECUTE ON FUNCTION public.current_auth_issuer() TO compras_domain_runtime_f29_ci;
+          GRANT EXECUTE ON FUNCTION public.current_auth_subject() TO compras_domain_runtime_f29_ci;
+          GRANT EXECUTE ON FUNCTION public.current_app_user_id() TO compras_domain_runtime_f29_ci;
+          SQL
+
+          PGDATABASE=compras_create_ci psql -v ON_ERROR_STOP=1 -f database/tests/contracting_create.sql
+
+          F29_CONTRACTING_CREATE_POSTGRES_TEST=1 \
+          F29_DOMAIN_RUNTIME_DATABASE_URL='postgresql://compras_domain_runtime_f29_ci:DEMO-F29-DOMAIN-RUNTIME-PASSWORD@localhost:5432/compras_create_ci' \
+          F29_ADMIN_DATABASE_URL='postgresql://postgres:postgres@localhost:5432/compras_create_ci' \
+            npx vitest run src/features/contracting-create/persistent-create.postgres.test.ts
+
+          dropdb compras_create_ci
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_create_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_next_action_mutation_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_team_directory_view_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_domain_runtime_f29_ci;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_auth_runtime_f29_ci;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_readonly_runtime_f29_ci;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_f29_migrator_ci;"

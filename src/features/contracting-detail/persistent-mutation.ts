@@ -6,7 +6,8 @@ import {
   withTrustedDatabaseMutationContext,
   type ScopedMutationDatabaseClient,
 } from "@/server/database/trusted-mutation-context";
-import { isPersistentContractingId } from "./persistent-read";
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type PersistentNextActionMutationInput = Readonly<{
   contractingId: string;
@@ -36,6 +37,10 @@ const MUTATION_SQL = `
 
 function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === "string";
+}
+
+function isCandidateContractingId(value: unknown): value is string {
+  return typeof value === "string" && UUID_PATTERN.test(value);
 }
 
 async function executeNextActionMutation(
@@ -77,7 +82,7 @@ export async function mutatePersistentContractingNextAction(
   if (
     !input ||
     typeof input !== "object" ||
-    !isPersistentContractingId(input.contractingId)
+    !isCandidateContractingId(input.contractingId)
   ) {
     return "not-available";
   }

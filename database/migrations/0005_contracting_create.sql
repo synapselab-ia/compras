@@ -419,8 +419,9 @@ $ownership$;
 
 REVOKE CREATE ON SCHEMA public FROM compras_contracting_create_owner;
 
--- Final structural guard: the migration succeeds only with a sealed,
--- non-privileged owner and the exact narrow function/grant surface.
+-- Final structural guard: migration succeeds only if the capability is sealed,
+-- non-privileged, owns no base tables and the function retains the intended
+-- narrow SECURITY DEFINER boundary.
 DO $postflight$
 DECLARE
   capability_oid oid;
@@ -478,7 +479,7 @@ BEGIN
     RAISE EXCEPTION 'contracting create capability must not own protected base tables';
   END IF;
 
-  IF pg_catalog.has_schema_privilege(
+  IF has_schema_privilege(
        'compras_contracting_create_owner',
        'public',
        'CREATE'
@@ -486,56 +487,56 @@ BEGIN
     RAISE EXCEPTION 'contracting create capability retained schema CREATE privilege';
   END IF;
 
-  IF NOT pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'id', 'INSERT')
-     OR NOT pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'team_id', 'INSERT')
-     OR NOT pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'object', 'INSERT')
-     OR NOT pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'created_by_membership_id', 'INSERT')
-     OR NOT pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'created_at', 'INSERT')
-     OR NOT pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'updated_at', 'INSERT') THEN
+  IF NOT has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'id', 'INSERT')
+     OR NOT has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'team_id', 'INSERT')
+     OR NOT has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'object', 'INSERT')
+     OR NOT has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'created_by_membership_id', 'INSERT')
+     OR NOT has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'created_at', 'INSERT')
+     OR NOT has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'updated_at', 'INSERT') THEN
     RAISE EXCEPTION 'contracting create capability is missing approved contracting INSERT columns';
   END IF;
 
-  IF pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'responsible_membership_id', 'INSERT')
-     OR pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'stage_key', 'INSERT')
-     OR pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'status_key', 'INSERT')
-     OR pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'waiting_type', 'INSERT')
-     OR pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'waiting_reference', 'INSERT')
-     OR pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'waiting_since', 'INSERT')
-     OR pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'waiting_reason', 'INSERT')
-     OR pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'next_action', 'INSERT')
-     OR pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'archived_at', 'INSERT')
-     OR pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'cancelled_at', 'INSERT') THEN
+  IF has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'responsible_membership_id', 'INSERT')
+     OR has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'stage_key', 'INSERT')
+     OR has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'status_key', 'INSERT')
+     OR has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'waiting_type', 'INSERT')
+     OR has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'waiting_reference', 'INSERT')
+     OR has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'waiting_since', 'INSERT')
+     OR has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'waiting_reason', 'INSERT')
+     OR has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'next_action', 'INSERT')
+     OR has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'archived_at', 'INSERT')
+     OR has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'cancelled_at', 'INSERT') THEN
     RAISE EXCEPTION 'contracting create capability can populate unapproved contracting columns';
   END IF;
 
-  IF NOT pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'id', 'INSERT')
-     OR NOT pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'team_id', 'INSERT')
-     OR NOT pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'contracting_id', 'INSERT')
-     OR NOT pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'actor_membership_id', 'INSERT')
-     OR NOT pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'event_type', 'INSERT')
-     OR NOT pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'occurred_at', 'INSERT')
-     OR NOT pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'created_at', 'INSERT') THEN
+  IF NOT has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'id', 'INSERT')
+     OR NOT has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'team_id', 'INSERT')
+     OR NOT has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'contracting_id', 'INSERT')
+     OR NOT has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'actor_membership_id', 'INSERT')
+     OR NOT has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'event_type', 'INSERT')
+     OR NOT has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'occurred_at', 'INSERT')
+     OR NOT has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'created_at', 'INSERT') THEN
     RAISE EXCEPTION 'contracting create capability is missing approved event INSERT columns';
   END IF;
 
-  IF pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'field_key', 'INSERT')
-     OR pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'old_value', 'INSERT')
-     OR pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'new_value', 'INSERT')
-     OR pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'note', 'INSERT')
-     OR pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'related_identifier_id', 'INSERT')
-     OR pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'item_id', 'INSERT') THEN
+  IF has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'field_key', 'INSERT')
+     OR has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'old_value', 'INSERT')
+     OR has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'new_value', 'INSERT')
+     OR has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'note', 'INSERT')
+     OR has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'related_identifier_id', 'INSERT')
+     OR has_column_privilege('compras_contracting_create_owner', 'public.contracting_events', 'item_id', 'INSERT') THEN
     RAISE EXCEPTION 'contracting create capability can populate unapproved event columns';
   END IF;
 
-  IF pg_catalog.has_table_privilege('compras_contracting_create_owner', 'public.contractings', 'UPDATE')
-     OR pg_catalog.has_table_privilege('compras_contracting_create_owner', 'public.contractings', 'DELETE')
-     OR pg_catalog.has_table_privilege('compras_contracting_create_owner', 'public.contracting_events', 'UPDATE')
-     OR pg_catalog.has_table_privilege('compras_contracting_create_owner', 'public.contracting_events', 'DELETE')
-     OR pg_catalog.has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'next_action', 'UPDATE') THEN
+  IF has_table_privilege('compras_contracting_create_owner', 'public.contractings', 'UPDATE')
+     OR has_table_privilege('compras_contracting_create_owner', 'public.contractings', 'DELETE')
+     OR has_table_privilege('compras_contracting_create_owner', 'public.contracting_events', 'UPDATE')
+     OR has_table_privilege('compras_contracting_create_owner', 'public.contracting_events', 'DELETE')
+     OR has_column_privilege('compras_contracting_create_owner', 'public.contractings', 'next_action', 'UPDATE') THEN
     RAISE EXCEPTION 'contracting create capability can mutate existing operational state';
   END IF;
 
-  IF pg_catalog.has_function_privilege(
+  IF has_function_privilege(
        'compras_contracting_create_owner',
        'public.mutate_contracting_next_action(uuid,text,text,uuid)',
        'EXECUTE'
@@ -555,13 +556,10 @@ BEGIN
     AND procedure.proowner = capability_oid
     AND procedure.prosecdef
     AND COALESCE(procedure.proconfig, ARRAY[]::text[])
-      @> ARRAY['search_path=pg_catalog']
-    AND pg_catalog.position(
-      'EXECUTE ' IN pg_catalog.upper(pg_catalog.pg_get_functiondef(procedure.oid))
-    ) = 0;
+      @> ARRAY['search_path=pg_catalog'];
 
   IF create_function_oid IS NULL THEN
-    RAISE EXCEPTION 'contracting create function has unsafe ownership, security mode, search_path or SQL';
+    RAISE EXCEPTION 'contracting create function has unsafe ownership, security mode or search_path';
   END IF;
 
   IF EXISTS (

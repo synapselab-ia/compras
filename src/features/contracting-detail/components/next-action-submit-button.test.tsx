@@ -25,7 +25,8 @@ describe("NextActionSubmitButton", () => {
 
     expect(html).toContain('type="submit"');
     expect(html).toContain("Salvar próxima ação");
-    expect(html).not.toContain("disabled");
+    expect(html).not.toContain(" disabled=");
+    expect(html).toContain('aria-disabled="false"');
   });
 
   it("disables repeated submission and exposes pending text while the form is pending", () => {

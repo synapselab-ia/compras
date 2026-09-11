@@ -1,16 +1,33 @@
 import Link from "next/link";
+
+import { updatePersistentNextActionAction } from "../actions";
+import {
+  getNextActionMutationFeedback,
+  type NextActionMutationUiState,
+} from "../next-action-feedback";
 import type {
   ContractingDetailPresentation,
   ContractingDetailSource,
 } from "../types";
+import { NextActionSubmitButton } from "./next-action-submit-button";
 
 type ContractingDetailProps = Readonly<{
   detail: ContractingDetailPresentation;
   source: ContractingDetailSource;
+  mutationState?: NextActionMutationUiState | null;
 }>;
 
-export function ContractingDetail({ detail, source }: ContractingDetailProps) {
+export function ContractingDetail({
+  detail,
+  source,
+  mutationState = null,
+}: ContractingDetailProps) {
   const isDemo = source === "demo";
+  const feedback = isDemo ? null : getNextActionMutationFeedback(mutationState);
+  const editorId = `next-action-${detail.id}`;
+  const editorHelpId = `${editorId}-help`;
+  const feedbackId = `${editorId}-feedback`;
+  const describedBy = feedback ? `${editorHelpId} ${feedbackId}` : editorHelpId;
 
   return (
     <main className="detail-shell">
@@ -22,8 +39,8 @@ export function ContractingDetail({ detail, source }: ContractingDetailProps) {
           </>
         ) : (
           <>
-            <strong>Leitura persistente autorizada, somente leitura.</strong>
-            <span>O detalhe usa a sessão server-side e as policies do banco; nenhuma ação nesta tela grava dados.</span>
+            <strong>Dados persistentes autorizados.</strong>
+            <span>Somente “Próxima ação” possui edição nesta etapa; autorização e histórico permanecem no servidor e no banco.</span>
           </>
         )}
       </section>
@@ -36,7 +53,7 @@ export function ContractingDetail({ detail, source }: ContractingDetailProps) {
 
       <header className="detail-header">
         <div className="detail-heading-main">
-          <p className="eyebrow">Contratação · {isDemo ? "demonstração" : "leitura server-side"}</p>
+          <p className="eyebrow">Contratação · {isDemo ? "demonstração" : "dados persistentes"}</p>
           <p className="detail-id">{detail.id}</p>
           <h1>{detail.object}</h1>
           <p className="lead">
@@ -90,6 +107,70 @@ export function ContractingDetail({ detail, source }: ContractingDetailProps) {
           </div>
         </dl>
       </section>
+
+      {!isDemo ? (
+        <section className="detail-panel next-action-editor" aria-labelledby={`${editorId}-title`}>
+          <div className="detail-section-heading compact-heading">
+            <div>
+              <p className="section-kicker">Edição restrita</p>
+              <h2 id={`${editorId}-title`}>Próxima ação</h2>
+            </div>
+          </div>
+
+          <p className="next-action-current">
+            <strong>Valor atual:</strong> {detail.nextAction}
+          </p>
+
+          {feedback ? (
+            <p
+              id={feedbackId}
+              className={`next-action-feedback next-action-feedback-${feedback.state}`}
+              role={feedback.role}
+              aria-live="polite"
+            >
+              {feedback.message}
+            </p>
+          ) : null}
+
+          <form action={updatePersistentNextActionAction} className="next-action-form">
+            <input type="hidden" name="contractingId" value={detail.id} />
+            {detail.nextActionValue !== null ? (
+              <input type="hidden" name="expectedNextAction" value={detail.nextActionValue} />
+            ) : null}
+
+            <label htmlFor={editorId}>Próxima ação</label>
+            <textarea
+              id={editorId}
+              name="newNextAction"
+              rows={4}
+              defaultValue={detail.nextActionValue ?? ""}
+              aria-describedby={describedBy}
+            />
+            <p id={editorHelpId} className="next-action-help">
+              O texto é preservado como informado. Para remover o valor, use “Limpar próxima ação”.
+            </p>
+
+            <div className="next-action-actions">
+              <NextActionSubmitButton
+                label="Salvar próxima ação"
+                pendingLabel="Salvando…"
+              />
+            </div>
+          </form>
+
+          <form action={updatePersistentNextActionAction} className="next-action-clear-form">
+            <input type="hidden" name="contractingId" value={detail.id} />
+            {detail.nextActionValue !== null ? (
+              <input type="hidden" name="expectedNextAction" value={detail.nextActionValue} />
+            ) : null}
+            <NextActionSubmitButton
+              label="Limpar próxima ação"
+              pendingLabel="Limpando…"
+              variant="secondary"
+            />
+          </form>
+        </section>
+      ) : null}
 
       <div className="detail-content-grid">
         <section className="detail-panel" aria-labelledby="related-identifiers-title">

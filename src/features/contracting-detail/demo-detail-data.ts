@@ -86,6 +86,7 @@ export function getDemoContractingDetail(id: string): DemoContractingDetail | un
 
   return {
     ...centralRecord,
+    nextActionValue: centralRecord.nextAction,
     waitingSince: "Não informado",
     waitingReason: "Não informado",
     createdAt: "Momento demo de criação",

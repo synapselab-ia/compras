@@ -33,7 +33,7 @@ describe("readPersistentContractingDetail", () => {
     expect(query).not.toHaveBeenCalled();
   });
 
-  it("uses the route UUID only as a bind parameter and reads teammates through the directory", async () => {
+  it("uses the route UUID only as a bind parameter and preserves the raw next action", async () => {
     const id = "00000000-0000-4000-8000-000000000901";
     query
       .mockResolvedValueOnce({
@@ -86,6 +86,8 @@ describe("readPersistentContractingDetail", () => {
     await expect(readPersistentContractingDetail(id)).resolves.toMatchObject({
       id,
       responsible: "Pessoa Demo Colega",
+      nextAction: "Validar registro fictício",
+      nextActionValue: "Validar registro fictício",
       lastMovement: "2026-09-01T12:30:00.000Z",
       relatedIdentifiers: [{ value: "REF-DEMO-901" }],
       items: [{ label: "1. Item fictício" }],
@@ -118,7 +120,7 @@ describe("readPersistentContractingDetail", () => {
     expect(query).toHaveBeenCalledTimes(1);
   });
 
-  it("ignores forged scope arguments and preserves generic responsible fallbacks", async () => {
+  it("keeps SQL NULL distinct from the human fallback and ignores forged scope arguments", async () => {
     query
       .mockResolvedValueOnce({
         rows: [{
@@ -152,6 +154,8 @@ describe("readPersistentContractingDetail", () => {
     });
 
     expect(result?.responsible).toBe("Responsável não disponível");
+    expect(result?.nextAction).toBe("Não informada");
+    expect(result?.nextActionValue).toBeNull();
     expect(query.mock.calls.every(([, values]) => values.length === 1)).toBe(true);
   });
 });

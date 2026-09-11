@@ -2,16 +2,21 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { ContractingDetail } from "@/features/contracting-detail/components/contracting-detail";
+import { readNextActionMutationUiState } from "@/features/contracting-detail/next-action-feedback";
 import { loadContractingDetailViewData } from "@/features/contracting-detail/view-data";
 
 type ContractingDetailPageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ mutation?: string | string[] }>;
 };
 
 export const dynamic = "force-dynamic";
 
-export default async function ContractingDetailPage({ params }: ContractingDetailPageProps) {
-  const { id } = await params;
+export default async function ContractingDetailPage({
+  params,
+  searchParams,
+}: ContractingDetailPageProps) {
+  const [{ id }, query] = await Promise.all([params, searchParams]);
   const viewData = await loadContractingDetailViewData(id);
 
   if (viewData.kind === "sign-in-required") {
@@ -41,5 +46,11 @@ export default async function ContractingDetailPage({ params }: ContractingDetai
     );
   }
 
-  return <ContractingDetail detail={viewData.detail} source={viewData.kind} />;
+  return (
+    <ContractingDetail
+      detail={viewData.detail}
+      source={viewData.kind}
+      mutationState={readNextActionMutationUiState(query.mutation)}
+    />
+  );
 }

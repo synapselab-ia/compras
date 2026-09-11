@@ -88,13 +88,12 @@ jobs:
 
           createdb -O compras_f22_migrator compras_f22_preflight
 
-          # Auth boundary is applied before the capability view. Auth 0002
-          # revokes privileges on every public relation it can see. The later
-          # view is owned by its dedicated NOLOGIN capability, so applying Auth
-          # 0002 after domain 0003 would correctly fail for lack of owner
-          # authority. Auth 0003 adds only the isolated auth_guard namespace.
-          # A postflight below proves the later view receives no Auth runtime
-          # SELECT privilege.
+          # Auth boundary is applied before capability-owned domain objects.
+          # Auth 0002 revokes privileges on every public relation it can see;
+          # applying it after domain capability ownership transfers would fail
+          # correctly for lack of owner authority. Domain 0003/0004 therefore
+          # follow Auth 0001..0003. Postflights prove neither Auth nor the F22
+          # read runtime inherits F26 mutation EXECUTE by accident.
           PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
             psql -v ON_ERROR_STOP=1 -f database/migrations/0001_core_foundation.sql
           PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
@@ -107,6 +106,8 @@ jobs:
             psql -v ON_ERROR_STOP=1 -f database/auth/migrations/0003_signin_abuse_limiter.sql
           PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
             psql -v ON_ERROR_STOP=1 -f database/migrations/0003_team_member_directory.sql
+          PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
+            psql -v ON_ERROR_STOP=1 -f database/migrations/0004_next_action_mutation.sql
 
           AUTH_DIRECTORY_SELECT="$(
             PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
@@ -115,6 +116,21 @@ jobs:
           )"
           if [[ "$AUTH_DIRECTORY_SELECT" != "f" ]]; then
             echo "Auth runtime unexpectedly received directory capability access" >&2
+            exit 1
+          fi
+
+          AUTH_MUTATION_EXECUTE="$(
+            PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
+              psql -v ON_ERROR_STOP=1 -Atqc \
+              "SELECT has_function_privilege('compras_auth_runtime', 'public.mutate_contracting_next_action(uuid,text,text,uuid)', 'EXECUTE')"
+          )"
+          DOMAIN_MUTATION_EXECUTE="$(
+            PGUSER=compras_f22_migrator PGPASSWORD="$MIGRATOR_PASSWORD" PGDATABASE=compras_f22_preflight \
+              psql -v ON_ERROR_STOP=1 -Atqc \
+              "SELECT has_function_privilege('compras_domain_runtime_f22', 'public.mutate_contracting_next_action(uuid,text,text,uuid)', 'EXECUTE')"
+          )"
+          if [[ "$AUTH_MUTATION_EXECUTE" != "f" || "$DOMAIN_MUTATION_EXECUTE" != "f" ]]; then
+            echo "F26 mutation EXECUTE leaked into an unrelated preflight runtime" >&2
             exit 1
           fi
 

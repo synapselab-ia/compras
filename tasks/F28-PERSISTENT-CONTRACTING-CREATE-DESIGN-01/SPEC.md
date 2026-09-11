@@ -133,17 +133,24 @@ Foram rejeitados no desenho:
 
 Q-001, Q-002, Q-006 e Q-009 permanecem abertas.
 
-## Verificação
+## Verificação final
 
-Head de design verificado antes do checkpoint canônico: `53145f2887b7ad14d7a3d404238b15a749ef1c02`.
+Head final da PR `#44`: `d58f811eda8b99dd8c4dc28d1adc7f2b7d0e91ca`.
 
-- CI `34616454186`: PASS;
+- CI PR `34616939065`: PASS;
   - verify: PASS — lint, typecheck, testes e build;
   - database: PASS — foundation/RLS/F26;
   - auth-database: PASS — Better Auth/F24;
-- F22 Private Preview Preflight `34616454064`: PASS.
+- F22 Private Preview Preflight PR `34616938983`: PASS.
 
-Como os commits de checkpoint documental posteriores alteram o head da PR, os mesmos gates devem permanecer verdes no head final antes do merge.
+PR `#44`: MERGED em `04b3e063314180e683e76adbe7c9c5affd53e14f`.
+
+Pós-merge:
+
+- CI `34617114461`: PASS — verify, database e auth-database;
+- F22 Private Preview Preflight `34617114500`: PASS.
+
+O diff final F28 continha somente documentação/SPEC. A revisão não encontrou connection strings, hostnames de provider, secrets, dados reais, migration reescrita, runtime alterado ou provider hosted write.
 
 ## Invariantes preservadas
 
@@ -164,4 +171,4 @@ A única próxima ação é `F29-PERSISTENT-CONTRACTING-CREATE-IMPLEMENT-01`, qu
 
 ## Critério de encerramento
 
-F28 está encerrada em conteúdo e verificação funcional porque ADR-012 define payload, escopo/ator, capability, evento e idempotência de forma executável e a SPEC F29 materializa a implementação seguinte. O merge só ocorre após os gates finais do head documental permanecerem verdes.
+F28 está encerrada porque ADR-012 define payload, escopo/ator, capability, evento e idempotência de forma executável, a SPEC F29 materializa a implementação seguinte e todos os gates de PR e pós-merge permaneceram verdes.

@@ -147,6 +147,7 @@ describe("withTrustedDatabaseMutationContext", () => {
       { ...SAFE_ROLE, rolname: "neondb_owner" },
       { ...SAFE_ROLE, rolname: "compras_team_directory_view_owner" },
       { ...SAFE_ROLE, rolname: "compras_next_action_mutation_owner" },
+      { ...SAFE_ROLE, rolname: "compras_contracting_create_owner" },
     ]) {
       databaseMocks.Pool.mockReset();
       identityMocks.getVerifiedExternalIdentity.mockClear();

@@ -3,87 +3,17 @@ import "server-only";
 import { Pool, type PoolClient } from "@neondatabase/serverless";
 
 import { getVerifiedExternalIdentity } from "@/server/auth/external-identity";
-
-const PROTECTED_TABLES = [
-  "app_users",
-  "memberships",
-  "teams",
-  "contractings",
-  "related_identifiers",
-  "contracting_items",
-  "contracting_events",
-] as const;
-
-const FORBIDDEN_OPERATIONAL_ROLES = new Set([
-  "neondb_owner",
-  "compras_team_directory_view_owner",
-]);
+import {
+  assertOperationalRoleSafety,
+  readDatabaseConnectionString,
+} from "./operational-safety";
 
 export type ScopedDatabaseClient = Pick<PoolClient, "query">;
-
-type RoleSafetyRow = {
-  rolname: string;
-  rolsuper: boolean;
-  rolbypassrls: boolean;
-  owns_protected_tables: boolean;
-};
 
 export class TrustedDatabaseContextError extends Error {
   constructor() {
     super("Trusted database context is unavailable.");
     this.name = "TrustedDatabaseContextError";
-  }
-}
-
-function readDatabaseConnectionString(): string | null {
-  const value = process.env.DATABASE_URL;
-
-  if (!value || value !== value.trim()) {
-    return null;
-  }
-
-  try {
-    const protocol = new URL(value).protocol;
-
-    if (protocol !== "postgres:" && protocol !== "postgresql:") {
-      return null;
-    }
-  } catch {
-    return null;
-  }
-
-  return value;
-}
-
-async function assertOperationalRole(client: PoolClient): Promise<void> {
-  const result = await client.query<RoleSafetyRow>(
-    `SELECT
-       r.rolname,
-       r.rolsuper,
-       r.rolbypassrls,
-       EXISTS (
-         SELECT 1
-         FROM pg_catalog.pg_class AS c
-         JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
-         WHERE n.nspname = 'public'
-           AND c.relname = ANY($1::text[])
-           AND c.relowner = r.oid
-       ) AS owns_protected_tables
-     FROM pg_catalog.pg_roles AS r
-     WHERE r.rolname = current_user`,
-    [[...PROTECTED_TABLES]],
-  );
-
-  const role = result.rows[0];
-
-  if (
-    !role ||
-    role.rolsuper ||
-    role.rolbypassrls ||
-    role.owns_protected_tables ||
-    FORBIDDEN_OPERATIONAL_ROLES.has(role.rolname)
-  ) {
-    throw new TrustedDatabaseContextError();
   }
 }
 
@@ -111,7 +41,7 @@ export async function withTrustedDatabaseContext<T>(
     await client.query("BEGIN READ ONLY");
     transactionOpen = true;
 
-    await assertOperationalRole(client);
+    await assertOperationalRoleSafety(client);
 
     const claims = JSON.stringify({
       iss: identity.issuer,

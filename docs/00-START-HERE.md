@@ -16,8 +16,10 @@ A fundação já possui:
 - leituras persistentes protegidas e diretório mínimo da equipe;
 - Better Auth self-hosted com signup normal fechado;
 - controle distribuído de abuso de sign-in;
-- primeira capability persistente de escrita limitada a `contractings.next_action`;
-- UI do detalhe persistente capaz de editar somente `Próxima ação` por Server Action estreita.
+- capability persistente de escrita limitada a `contractings.next_action`;
+- UI persistente do detalhe capaz de editar somente `Próxima ação` por Server Action estreita.
+
+F27 está integrada em `main`. F28 definiu pela ADR-012 a fronteira da primeira criação persistente mínima de contratação; a implementação fica para F29.
 
 F17 permanece `ON HOLD` histórico. F21 permanece `ON HOLD` antes de secrets até existir control plane Vercel capaz de readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch sem expor valores.
 
@@ -51,13 +53,13 @@ O preflight descartável prova:
 - separação Auth/domínio;
 - signup normal continua fechado.
 
-O preflight também verifica que runtimes Auth/read-only não herdam `EXECUTE` da capability de mutação F26.
+O preflight também verifica que runtimes Auth/read-only não herdam `EXECUTE` da capability F26.
 
-## F26 — primeira mutação persistente integrada
+## F26/F27 — primeira mutação persistente utilizável
 
-ADR-011 escolheu uma primitive PostgreSQL específica `SECURITY DEFINER` para alterar somente `contractings.next_action`.
+ADR-011 escolheu uma primitive PostgreSQL `SECURITY DEFINER` específica para alterar somente `contractings.next_action`.
 
-Objetos principais:
+Objetos principais F26:
 
 - `database/migrations/0004_next_action_mutation.sql`;
 - `database/provisioning/grant_next_action_runtime.sql`;
@@ -69,71 +71,98 @@ A capability owner `compras_next_action_mutation_owner` é `NOLOGIN`, `NOINHERIT
 
 O runtime normal permanece sem `UPDATE`/`INSERT` direto; recebe somente `EXECUTE` explícito da primitive.
 
-Q-009 permanece aberta. A escrita é pilot-only: a identidade corrente precisa possuir a única membership `revoked_at IS NULL` da equipe alvo. Segundo membro ativo bloqueia a mutação.
+Q-009 permanece aberta. A escrita é pilot-only: a identidade corrente precisa possuir a única membership `revoked_at IS NULL` da equipe alvo. Segundo membro não revogado bloqueia a mutação.
 
-Mudança real atualiza `next_action`/`updated_at` e cria exatamente um `next_action_changed` na mesma transação. No-op não cria evento; expected stale retorna `conflict`. O teste concorrente com oito writers prova exatamente um winner/evento.
+Mudança real atualiza `next_action`/`updated_at` e cria exatamente um `next_action_changed` na mesma transação. No-op não cria evento; expected stale retorna `conflict`. Teste concorrente prova um único winner/evento.
 
-F26 foi integrada pela PR `#42`, merge `1e9e03eddeac9584ee6044a2393fe6b1e9a31726`. Pós-merge:
+F27 tornou a capability utilizável no detalhe persistente:
 
-- CI `34611660963`: PASS;
-- F22 Private Preview Preflight `34611660927`: PASS.
+- somente `Próxima ação` é editável;
+- demo permanece estritamente read-only;
+- Server Action encaminha somente candidate ID + expected + novo valor;
+- browser não define actor/team/membership/issuer/subject/event UUID;
+- `NULL` e string vazia permanecem distintos;
+- conflito não sobrescreve silenciosamente;
+- feedback é sanitizado e falha protegida não cai para demo.
 
-## F27 — edição de Próxima ação no detalhe
+F27 foi integrada pela PR `#43`, merge `54b8fa88f06cdc0020333e16e4aa3ab31e8a6fcf`. Pós-merge:
 
-A PR `#43` implementa a jornada utilizável sobre a boundary F26.
+- CI `34615115211`: PASS;
+- F22 Private Preview Preflight `34615115289`: PASS.
 
-### Modo demo
+## F28 — criação persistente mínima desenhada
 
-- continua estritamente read-only;
-- nenhum form/textarea de write persistente é renderizado;
-- a Server Action também recusa execução quando o modo persistente não está exatamente habilitado;
-- query state forjado não produz feedback de write no detalhe demo.
+A ADR-012 define a primeira boundary de criação de `contractings` sem ainda implementá-la.
 
-### Modo persistente
+### Payload
 
-Somente `Próxima ação` é editável.
-
-O read model preserva `nextActionValue: string | null` separadamente do texto humano, mantendo SQL `NULL` distinto de string vazia e fornecendo a precondição correta para concorrência F26.
-
-A Server Action recebe/encaminha somente:
+A futura criação aceita semanticamente apenas:
 
 ```text
 contractingId
-expectedNextAction
-newNextAction
+object
 ```
 
-Actor, team, membership, issuer, subject, event UUID e redirect não vêm do browser como autoridade.
+`contractingId` é UUID preparado pelo servidor antes da submissão e também funciona como idempotency key da solicitação preparada. Não é segredo nem autorização.
 
-Ausência deliberada do campo representa `NULL`; string vazia permanece string vazia. Sucesso/conflito revalidam apenas a rota local do detalhe. Falha é sanitizada e nunca cai para demo.
+`object` é preservado exatamente, sem trim/tamanho/non-empty inventados além do `NOT NULL` físico.
 
-A UI possui valor atual visível, textarea, ação explícita de limpar para `NULL`, pending/disabled e feedback para `updated`, `unchanged`, `conflict`, `not-available`, `unavailable`. Não existem controles de edição de stage/status/responsável/waiting nesta slice.
+`next_action` permanece para F26/F27 após a linha existir. Stage, status, responsável, waiting, itens e identificadores ficam fora da criação inicial; campos nullable nascem `NULL`.
 
-Head funcional F27 `96eae1dfa3a6105e87f80b2b103c509b897c4db6`:
+### Escopo pilot-only
 
-- CI `34613166500`: PASS;
-- F22 Private Preview Preflight `34613166498`: PASS;
-- lint/typecheck/test/build: PASS;
-- F26 PostgreSQL/RLS/concorrência e Auth/F24: PASS.
+Team, actor e `created_by_membership_id` são derivados exclusivamente da sessão Better Auth validada e do banco.
 
-O head documental final da PR ainda deve receber os mesmos gates antes do merge.
+A criação exige:
+
+- usuário interno ativo;
+- exatamente uma membership não revogada do usuário em todo o banco;
+- team derivado não arquivado;
+- exatamente uma membership não revogada no team.
+
+Múltiplas memberships do usuário ou segundo membro não revogado no team bloqueiam. O segundo membro conta mesmo quando seu app_user está desabilitado. Q-009 continua aberta.
+
+### Capability própria
+
+Criação recebe owner técnico próprio equivalente a `compras_contracting_create_owner`; F26 não é ampliada.
+
+A futura primitive deve ser `SECURITY DEFINER`, com `search_path = pg_catalog`, SQL estático, `PUBLIC EXECUTE` revogado e grants coluna-a-coluna. Runtime normal continua sem DML direto e recebe apenas `EXECUTE` explícito.
+
+### Estado, evento e idempotência
+
+A row inicial persiste somente ID, team derivado, `object`, creator derivado e timestamps. Responsible/stage/status/waiting/next_action/archived/cancelled ficam `NULL`.
+
+Na mesma transação nasce exatamente um evento `contracting_created`; row/event compartilham o mesmo instante de banco e falha do evento reverte o cadastro.
+
+Replay do mesmo candidate UUID só vira `already-created` se, depois da autorização corrente, houver correspondência exata de team derivado + creator derivado + `object`. Colisão diferente/cross-team vira negação genérica.
+
+Double-submit concorrente deve produzir uma única row e um único evento. Não existe deduplicação por texto de `object` nem infraestrutura externa de idempotência.
+
+F28 foi verificada inicialmente na PR `#44`:
+
+- CI `34616454186`: PASS;
+- F22 Private Preview Preflight `34616454064`: PASS.
+
+Os commits documentais finais da PR devem manter os mesmos gates verdes antes do merge.
 
 ## Próxima frente
 
 A única `NEXT_ACTION` canônica está em `docs/ai/NEXT_ACTION.md`:
 
-`F28-PERSISTENT-CONTRACTING-CREATE-DESIGN-01 — Desenhar criação persistente mínima de contratação`.
+`F29-PERSISTENT-CONTRACTING-CREATE-IMPLEMENT-01 — Implementar boundary de criação persistente mínima`.
 
-F28 é design-only. Deve produzir ADR para criação de `contractings` definindo:
+F29 deve materializar ADR-012 com:
 
-- payload mínimo sem inventar taxonomias abertas;
-- derivação pilot-only de team/actor/created_by;
-- capability/grants mínimos;
-- evento inicial atômico;
-- IDs e idempotência/double-submit;
-- matriz adversarial para a implementação posterior.
+- migration `0005_contracting_create.sql`;
+- capability/grants/policies mínimos;
+- primitive específica e provisionamento de `EXECUTE` separado;
+- interface server-only candidate UUID + `object`;
+- evento atômico;
+- replay e concorrência idempotentes;
+- matriz PostgreSQL adversarial;
+- regressões F22/F26/Auth.
 
-Q-001/Q-002/Q-006/Q-009 não devem ser resolvidas silenciosamente.
+Server Action/UI de cadastro continuam fora da F29.
 
 ## Modos da aplicação
 
@@ -162,7 +191,7 @@ Falha protegida nunca vira demo silenciosamente.
 
 ## Banco canônico
 
-Migrations imutáveis do domínio:
+Migrations imutáveis do domínio atualmente integradas:
 
 - `0001_core_foundation.sql`;
 - `0002_trusted_identity_read_policies.sql`;
@@ -189,7 +218,7 @@ Startup mínimo:
 
 Produto: `PROJECT_DESIGN.md`, `DOMAIN_MODEL.md`, `BUSINESS_WORKFLOW.md`, `OPEN_QUESTIONS.md`.
 
-Arquitetura: `ARCHITECTURE.md`, `SECURITY.md`, `DATABASE.md`, ADR-003, ADR-005, ADR-009, ADR-010, ADR-011.
+Arquitetura: `ARCHITECTURE.md`, `SECURITY.md`, `DATABASE.md`, ADR-003, ADR-005, ADR-009, ADR-010, ADR-011, ADR-012.
 
 Operação por IA: `SOURCE_OF_TRUTH.md`, `WORK_PROTOCOL.md`, `CONTEXT_MANIFEST.md`, `CURRENT_STATE.md`, `NEXT_ACTION.md`.
 
@@ -207,4 +236,5 @@ Qualidade: `docs/qa/DEFINITION_OF_DONE.md`.
 - secrets nunca vão para Git/chat/URL/log/artifact público;
 - blocker externo objetivo entra `ON HOLD` sem paralisar trabalho independente;
 - falha protegida nunca cai para demo;
+- migrations aplicadas são imutáveis;
 - construir por slices pequenas, verificáveis e reversíveis.

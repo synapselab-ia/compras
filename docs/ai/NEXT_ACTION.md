@@ -1,56 +1,59 @@
 # Next Action — Compras
 
-## F28-PERSISTENT-CONTRACTING-CREATE-DESIGN-01 — Desenhar criação persistente mínima de contratação
+## F29-PERSISTENT-CONTRACTING-CREATE-IMPLEMENT-01 — Implementar boundary de criação persistente mínima
 
-**Classe:** `T5 — decisão/arquitetura` com impacto `T2 — autorização/banco`  
+**Classe:** `T1 — feature normal` com impacto `T2 — autorização/banco`  
 **Estado:** READY  
-**Objetivo:** definir por ADR a fronteira mínima, pilot-only, auditável e idempotente para criar uma nova `contracting`, sem abrir CRUD genérico nem resolver silenciosamente Q-001/Q-002/Q-006/Q-009.
+**Objetivo:** materializar a ADR-012 em PostgreSQL 17 descartável e código server-only, implementando criação mínima, pilot-only, auditável e idempotente de `contractings` sem abrir CRUD amplo e sem Server Action/UI de cadastro nesta slice.
 
 Esta é a única `NEXT_ACTION` canônica.
 
 ## Por que esta ação agora
 
-F26/F27 fecharam a primeira escrita persistente útil: uma pessoa autorizada consegue alterar somente `Próxima ação` no detalhe, com estado+evento atômicos e runtime sem DML direto.
+F28 fechou por ADR a fronteira da primeira criação persistente: payload mínimo, derivação de team/actor/created_by, capability própria, evento inicial atômico e idempotência por UUID preparado server-side.
 
-O próximo gap do núcleo funcional descrito em `PROJECT_DESIGN.md` é o cadastro de contratação. Porém criação não possui uma linha pré-existente da qual derivar `team_id`, e taxonomias/permissões relevantes continuam abertas. Implementar diretamente criaria risco de inventar escopo, actor, evento ou regras de formulário.
+A decisão preserva Q-001/Q-002/Q-006/Q-009 abertas e mantém F26/F27 como únicas escritas executáveis integradas até a implementação da nova boundary.
 
-F28 deve fechar somente o desenho antes da implementação.
-
-F21 continua `ON HOLD` sob seu `resume_when` externo e não é dependência da F28.
+F21 continua `ON HOLD` sob seu `resume_when` externo e não é dependência da F29.
 
 ## Execução obrigatória
 
-1. recuperar `main`, confirmar F27 integrada/verde e revalidar `CONTEXT_MANIFEST`;
-2. inspecionar PROJECT_DESIGN, DOMAIN_MODEL, BUSINESS_WORKFLOW, OPEN_QUESTIONS, SECURITY, DATABASE, ADR-003/005/009/011, migrations `0001..0004` e boundary F26/F27;
-3. definir o payload mínimo de criação sem tornar stage/status/responsável/waiting obrigatórios por inferência;
-4. decidir explicitamente se `next_action` pode nascer na criação ou continua em mutação posterior;
-5. definir como team/actor/created_by são derivados exclusivamente da identidade confiável + banco;
-6. preservar Q-009 com regra pilot-only e falha fechada para escopo ambíguo/multi-member;
-7. decidir capability/grants mínimos mantendo runtime sem `INSERT` direto amplo;
-8. definir evento inicial atômico e rollback inseparável;
-9. definir geração de IDs e comportamento de idempotência/double-submit/retry;
-10. definir estados externos sanitizados e matriz PostgreSQL adversarial;
-11. registrar a decisão em nova ADR e criar a SPEC executável da implementação seguinte;
-12. fazer red-team documental, executar gates aplicáveis e deixar exatamente uma nova `NEXT_ACTION`.
+1. recuperar `main`, confirmar F28 integrada/verde e revalidar `CONTEXT_MANIFEST`;
+2. inspecionar ADR-012, ADR-003/005/009/011, SECURITY, DATABASE, migrations `0001..0004`, F26 e testes adversariais;
+3. criar `database/migrations/0005_contracting_create.sql` sem reescrever migrations aplicadas;
+4. criar capability técnica própria e selada para criação, mantendo runtime normal sem DML direto;
+5. implementar primitive específica com `SECURITY DEFINER`, `search_path = pg_catalog`, SQL estático e `PUBLIC EXECUTE` revogado;
+6. aceitar na boundary apenas candidate UUID + `object`; team/actor/membership/issuer/subject/created_by não são argumentos confiáveis;
+7. aplicar guard pilot-only: exatamente uma membership não revogada do usuário, team derivado não arquivado e exatamente uma membership não revogada no team;
+8. criar row mínima com campos não aprovados `NULL` e sem tornar o criador responsável automaticamente;
+9. criar exatamente um evento `contracting_created` na mesma transação e com o mesmo instante de banco;
+10. implementar replay idempotente e double-submit concorrente pelo candidate UUID, sem deduplicação por conteúdo;
+11. criar provisionamento separado que conceda somente `EXECUTE` à role runtime segura;
+12. criar interface server-only que gera event UUID, preserva `object` exatamente, sanitiza estados e não possui demo fallback;
+13. provar matriz adversarial em PostgreSQL 17, incluindo corrida de pelo menos 8 writers, rollback de evento, isolation de F26/Auth/read-only e absence de DML direto;
+14. executar lint, typecheck, testes, build, CI database/Auth e F22 Private Preview Preflight;
+15. revisar diff integral, fazer red-team e deixar exatamente uma nova `NEXT_ACTION`.
 
 ## Invariantes
 
 - `REAL_DATA_ALLOWED = NO`;
-- somente dados/exemplos fictícios;
+- somente dados/identidades fictícios;
 - nenhum provider hosted write;
 - F21 permanece `ON HOLD` até seu `resume_when` objetivo;
-- Q-001/Q-002/Q-006/Q-009 não são resolvidas silenciosamente;
+- Q-001/Q-002/Q-006/Q-009 continuam abertas;
 - autenticação não é autorização;
 - RLS permanece autoritativa;
 - runtime normal continua sem CRUD amplo;
+- F26 não recebe novos grants de criação;
+- capability de criação não recebe authority de update de `next_action` por conveniência;
 - migrations `0001..0004` permanecem imutáveis;
-- F26/F27 continuam sendo a única escrita executável integrada durante esta work unit;
+- Server Action/UI de cadastro ficam fora da F29;
 - falha protegida nunca vira demo fallback.
 
 ## Fonte da tarefa
 
-Executar `tasks/F28-PERSISTENT-CONTRACTING-CREATE-DESIGN-01/SPEC.md` seguindo as fontes canônicas e ADRs listadas na SPEC.
+Executar `tasks/F29-PERSISTENT-CONTRACTING-CREATE-IMPLEMENT-01/SPEC.md` seguindo `docs/decisions/ADR-012-minimal-persistent-contracting-creation.md` e as fontes de segurança/banco ali referenciadas.
 
 ## Critério de encerramento
 
-F28 fecha quando a criação persistente mínima tiver uma ADR suficientemente precisa para implementação e testes adversariais, incluindo payload, derivação de escopo/ator, capability, evento e idempotência, sem inventar regras de negócio abertas e com exatamente uma nova `NEXT_ACTION`.
+F29 fecha quando a boundary ADR-012 estiver implementada e provada em PostgreSQL 17 real contra autorização, least privilege, atomicidade, rollback e idempotência concorrente, com regressões F22/F26/Auth verdes e exatamente uma nova `NEXT_ACTION` para tornar o cadastro utilizável pela aplicação.

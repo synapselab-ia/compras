@@ -12,6 +12,7 @@ describe("demo contracting detail lookup", () => {
       stage: "Triagem demo",
       status: "Em andamento demo",
     });
+    expect(detail?.nextActionValue).toBe(detail?.nextAction);
     expect(detail?.relatedIdentifiers.length).toBeGreaterThan(0);
     expect(detail?.items.length).toBeGreaterThan(0);
     expect(detail?.activity.length).toBeGreaterThan(0);

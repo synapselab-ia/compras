@@ -19,7 +19,7 @@ A fundação já possui:
 - capability persistente de escrita limitada a `contractings.next_action`;
 - UI persistente do detalhe capaz de editar somente `Próxima ação` por Server Action estreita.
 
-F27 está integrada em `main`. F28 definiu pela ADR-012 a fronteira da primeira criação persistente mínima de contratação; a implementação fica para F29.
+F27 está integrada em `main`. F28 também está integrada e definiu pela ADR-012 a fronteira da primeira criação persistente mínima de contratação. A implementação da boundary fica para F29.
 
 F17 permanece `ON HOLD` histórico. F21 permanece `ON HOLD` antes de secrets até existir control plane Vercel capaz de readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch sem expor valores.
 
@@ -138,12 +138,17 @@ Replay do mesmo candidate UUID só vira `already-created` se, depois da autoriza
 
 Double-submit concorrente deve produzir uma única row e um único evento. Não existe deduplicação por texto de `object` nem infraestrutura externa de idempotência.
 
-F28 foi verificada inicialmente na PR `#44`:
+F28 foi integrada pela PR `#44`, merge `04b3e063314180e683e76adbe7c9c5affd53e14f`.
 
-- CI `34616454186`: PASS;
-- F22 Private Preview Preflight `34616454064`: PASS.
+Gates finais da PR:
 
-Os commits documentais finais da PR devem manter os mesmos gates verdes antes do merge.
+- CI `34616939065`: PASS;
+- F22 Private Preview Preflight `34616938983`: PASS.
+
+Pós-merge:
+
+- CI `34617114461`: PASS;
+- F22 Private Preview Preflight `34617114500`: PASS.
 
 ## Próxima frente
 

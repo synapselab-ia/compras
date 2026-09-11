@@ -1,40 +1,35 @@
 # F26-FIRST-PERSISTENT-NEXT-ACTION-MUTATION-IMPLEMENT-01 — Implementar primeira mutação persistente de próxima ação
 
 **Classe:** T1 — feature normal, com impacto T2 — banco/segurança  
-**Estado:** PLANNED / NEXT  
+**Estado:** COMPLETED / PASS  
 **Dependências:** F25, ADR-003, ADR-005, ADR-009 e ADR-011  
 **Classificação permitida:** PUBLIC / FICTITIOUS ONLY
 
 ## Problema
 
-A ADR-011 definiu a fronteira da primeira escrita operacional persistente. O sistema ainda é read-only no domínio normal e não existe capability executável para alterar `contractings.next_action` com histórico atômico.
+A ADR-011 definiu a fronteira da primeira escrita operacional persistente. F26 deveria implementar somente a alteração de `contractings.next_action`, mantendo Q-009 aberta, runtime sem DML direto e histórico atômico.
 
-F26 deve implementar somente essa mutação, mantendo Q-009 aberta e a autorização limitada ao piloto individual.
+## Resultado entregue
 
-## Resultado esperado
+F26 implementou a primeira mutação persistente do domínio por capability PostgreSQL estreita.
 
-Entregar uma implementação que:
+Entregas principais:
 
-1. cria migration nova e imutável para a capability de `next_action`;
-2. mantém a role runtime sem DML direto nas tabelas protegidas;
-3. autoriza somente a identidade corrente quando ela possui a única membership ativa da equipe alvo;
-4. falha fechada se existir segundo membro ativo;
-5. não aceita `team_id`, actor ou membership do browser como fonte confiável;
-6. atualiza `contractings.next_action` e `updated_at` junto com exatamente um `contracting_events` na mesma transação;
-7. impede lost update por lock + precondição otimista do valor anterior;
-8. trata no-op sem produzir evento/timestamp falso;
-9. mantém eventos append-only;
-10. preserva todas as fronteiras de Auth/RLS/leitura existentes.
+- `database/migrations/0004_next_action_mutation.sql`;
+- `database/provisioning/grant_next_action_runtime.sql`;
+- matriz adversarial `database/tests/next_action_mutation.sql`;
+- adapter `withTrustedDatabaseMutationContext`;
+- interface server-side `mutatePersistentContractingNextAction`;
+- testes unitários, de boundary, PostgreSQL 17 e concorrência real;
+- regressão F22 atualizada para provar que runtimes Auth/read-only não herdam `EXECUTE` da mutação.
 
-## Implementação obrigatória
+Nenhum provider hosted, secret, environment variable ou dado real foi criado/alterado.
 
-### 1. Migration nova
+## Boundary implementada
 
-Criar nova migration do domínio, sem alterar `0001`, `0002` ou `0003`.
+### Capability owner
 
-A migration deve criar uma role técnica equivalente a `compras_next_action_mutation_owner` e uma primitive específica de alteração de `next_action`.
-
-A role capability deve ser:
+A migration cria/valida `compras_next_action_mutation_owner` como role técnica:
 
 - `NOLOGIN`;
 - `NOINHERIT`;
@@ -44,31 +39,31 @@ A role capability deve ser:
 - `NOCREATEROLE`;
 - `NOREPLICATION`;
 - sem ownership de tabelas-base;
-- sem membership utilizável em role privilegiada.
+- sem membership utilizável.
 
-O lifecycle de criação/ownership deve aplicar a propriedade de segurança da ADR-005, inclusive em PostgreSQL 17 com principal de migration não-superuser/`CREATEROLE`.
+O lifecycle segue ADR-005 e tolera somente a aresta administrativa automática do PostgreSQL 17 ao principal de migration nas condições `ADMIN TRUE`, `SET FALSE`, `INHERIT FALSE`.
 
-### 2. Grants mínimos
+### Grants mínimos
 
-A capability pode receber somente o estritamente necessário para:
+A capability recebe somente o necessário para:
 
-- resolver identidade corrente;
-- verificar memberships do escopo;
-- localizar/lockar a contratação;
-- atualizar somente `contractings.next_action` e `contractings.updated_at`;
-- inserir somente as colunas necessárias em `contracting_events`;
-- executar os helpers de identidade necessários.
+- resolver a identidade atual;
+- verificar memberships;
+- localizar e bloquear a contratação;
+- atualizar apenas `contractings.next_action` e `updated_at`;
+- inserir apenas as colunas necessárias de `contracting_events`;
+- executar helpers de identidade.
 
-A role runtime de domínio recebe somente `EXECUTE` na primitive nova, além dos grants já existentes de leitura.
+A role runtime continua sem `UPDATE`/`INSERT` direto nas tabelas protegidas.
 
-Proibido dar à role runtime `UPDATE`/`INSERT` direto em `contractings` ou `contracting_events`.
+`EXECUTE` é concedido ao runtime por asset de provisionamento separado da migration. O provisionamento cria uma aresta `SET ROLE` apenas dentro da mesma transação, executa o grant como owner da função e revoga a aresta antes de `COMMIT`; qualquer falha reverte o estado inteiro. O script falha fechado quando `runtime_role` não é informado ou apresenta atributos/grants inseguros.
 
-### 3. Primitive específica
+### Primitive
 
-Implementar função equivalente a:
+A função implementada é:
 
 ```text
-mutate_contracting_next_action(
+public.mutate_contracting_next_action(
   p_contracting_id uuid,
   p_expected_next_action text,
   p_new_next_action text,
@@ -76,206 +71,159 @@ mutate_contracting_next_action(
 )
 ```
 
-Requisitos:
+Propriedades provadas:
 
 - `SECURITY DEFINER`;
-- `search_path` fixo e seguro;
-- SQL estático/parametrizado;
-- nenhum `team_id`, actor, membership, issuer ou subject como argumento;
-- `p_event_id` é fornecido somente pelo servidor confiável;
-- não criar regras de trim/tamanho/non-null que não existam no modelo atual;
-- `NULL` continua valor suportado para `next_action`.
+- `search_path = pg_catalog` fixo;
+- SQL estático;
+- `PUBLIC EXECUTE` revogado;
+- owner técnico selado;
+- nenhum `team_id`, actor, membership, issuer ou subject recebido como argumento;
+- `NULL` permanece suportado;
+- sem trim, limite de tamanho ou regra non-null inventada.
 
-### 4. Autorização pilot-only
+## Autorização pilot-only
 
-A primitive deve derivar `current_app_user_id()` do contexto de transação e autorizar somente quando:
+A primitive deriva `current_app_user_id()` do contexto LOCAL `iss/sub` e somente autoriza quando:
 
-- usuário interno existe e está ativo;
-- alvo existe e pertence a escopo autorizado;
-- alvo não está arquivado/cancelado;
-- usuário corrente possui membership não revogada na equipe;
-- existe exatamente uma membership `revoked_at IS NULL` na equipe alvo.
+- identidade interna existe e está ativa;
+- contratação existe no escopo autorizado;
+- contratação não está arquivada/cancelada;
+- usuário possui membership não revogada na equipe;
+- essa é a única membership `revoked_at IS NULL` da equipe.
 
-Uma segunda membership não revogada bloqueia a mutação, mesmo se o usuário dessa membership estiver desabilitado. Q-009 não é resolvida nem inferida.
+Uma segunda membership não revogada bloqueia a escrita mesmo se o usuário correspondente estiver desabilitado. Q-009 continua aberta.
 
-### 5. Concorrência
+Inexistente, cross-team, identidade desconhecida/desabilitada, sem membership, membership revogada, equipe multi-member, arquivado e cancelado resultam em negação genérica antes de semântica de conflito/no-op.
 
-A primitive deve:
+## Concorrência
 
-1. obter lock de linha em `contractings` com `FOR UPDATE` ou equivalente;
-2. comparar null-safe o valor atual de `next_action` com `p_expected_next_action`;
-3. retornar `conflict` sem update/evento quando a precondição estiver stale.
+A primitive combina:
 
-Não adicionar coluna de versão apenas para esta slice.
+1. `SELECT ... FOR UPDATE` sobre a contratação autorizada;
+2. comparação null-safe do valor persistido com `p_expected_next_action`.
 
-Sob duas chamadas concorrentes com o mesmo expected antigo, exatamente uma pode atualizar e criar evento.
+O teste PostgreSQL concorrente executa oito writers simultâneos com o mesmo expected antigo e prova exatamente:
 
-### 6. Atomicidade e evento
+- 1 resultado `updated`;
+- 7 resultados `conflict`;
+- 1 valor final;
+- 1 evento correspondente.
+
+Não foi criada coluna de versão prematura.
+
+## Atomicidade e histórico
 
 Em mudança real:
 
-- usar um único timestamp de banco para `updated_at`, `occurred_at` e `created_at`;
-- atualizar `next_action`;
-- criar exatamente um evento com:
-  - `event_type = 'next_action_changed'`;
-  - `field_key = 'next_action'`;
-  - `old_value` anterior;
-  - `new_value` novo;
-  - `actor_membership_id` derivado;
-  - `team_id` e `contracting_id` derivados da linha;
-  - `note`, `related_identifier_id`, `item_id` nulos;
-- qualquer falha do insert do evento deve reverter o update.
+- `next_action` é atualizado;
+- `updated_at` recebe o instante da operação;
+- exatamente um evento `next_action_changed` é inserido;
+- `field_key = 'next_action'`;
+- `old_value`/`new_value` refletem a transição;
+- actor/team/contracting são derivados do banco;
+- `updated_at`, `occurred_at` e `created_at` usam o mesmo instante;
+- `note`, `related_identifier_id` e `item_id` permanecem nulos.
 
-A capability não recebe `UPDATE`/`DELETE` de `contracting_events`.
+Falha forçada do `INSERT` do evento reverte o update. No-op retorna `unchanged`, não altera timestamp e não cria evento. Stale expected retorna `conflict`, sem update/evento. Eventos permanecem append-only para runtime/capability.
 
-### 7. No-op
+## Adapter server-side
 
-Se expected estiver atual e o novo valor for null-safe igual ao atual:
+`withTrustedDatabaseMutationContext` reutiliza a boundary segura do adapter de leitura:
 
-- retornar `unchanged`;
-- não alterar `updated_at`;
-- não inserir evento.
-
-### 8. Adapter de escrita server-side
-
-Criar adapter sibling de `withTrustedDatabaseContext`, equivalente a `withTrustedDatabaseMutationContext`.
-
-Requisitos:
-
-- reutilizar os mesmos safety checks de conexão/role sempre que possível;
-- validar identidade Better Auth antes de abrir operação protegida;
-- `BEGIN` normal, não read-only;
-- contexto `iss/sub` estabelecido com `set_config(..., true)`;
-- role runtime não privilegiada;
-- `COMMIT` apenas após operação completa;
+- valida identidade Better Auth antes da operação protegida;
+- valida `DATABASE_URL` server-only;
+- rejeita principal administrativo/capability inseguro;
+- abre `BEGIN` normal;
+- estabelece somente `iss/sub` via `set_config(..., true)`;
+- executa operação parametrizada;
+- `COMMIT` em sucesso;
 - `ROLLBACK` em falha;
-- conexão/pool incerto não é reutilizado;
-- falha externa é sanitizada e mapeada para indisponibilidade;
-- sem demo fallback.
+- destrói conexão/pool de estado incerto;
+- sanitiza falha externa.
 
-### 9. Camada de aplicação
+`mutatePersistentContractingNextAction` aceita somente:
 
-Criar a menor interface server-side necessária para chamar a primitive.
-
-O browser/form pode fornecer somente:
-
-- ID candidato da contratação;
-- expected `next_action` observado;
+- candidate contracting UUID;
+- expected `next_action`;
 - novo `next_action`.
 
-O event UUID deve ser criado no servidor confiável.
+O UUID do evento nasce no servidor por `randomUUID()`. Campos forjados de team/actor/membership/subject/event UUID não atravessam a chamada SQL.
 
-Não implementar mutações de stage/status/responsável/waiting nesta work unit.
+## Red-team executado
 
-Estados externos devem preservar a decisão ADR-011:
+Foram rejeitados/provados:
 
-- sucesso de alteração;
-- unchanged;
-- conflict somente após autorização;
-- recurso não disponível/sem autorização de forma genérica;
-- unavailable em falha técnica.
+- capability com `LOGIN`;
+- capability com `BYPASSRLS`;
+- capability com grantee capaz de `SET ROLE`/herdar;
+- runtime com DML direto;
+- capability alterando colunas operacionais fora de `next_action`/`updated_at`;
+- `UPDATE`/`DELETE` de eventos;
+- `PUBLIC EXECUTE` acidental;
+- `SECURITY DEFINER` com owner/search path incorretos ou SQL dinâmico;
+- claims ausentes/malformados;
+- identidade desconhecida/desabilitada;
+- membership ausente/revogada;
+- segundo membro ativo;
+- cross-team UUID e UUID inexistente;
+- arquivado/cancelado;
+- stale write;
+- no-op com evento falso;
+- falha de evento sem rollback do update;
+- race com mais de um winner/evento;
+- Auth/read-only runtime herdando mutation `EXECUTE`;
+- fallback protegido para demo;
+- dado real/provider hosted write.
 
-UUID de outra equipe e UUID inexistente não podem criar side channel de existência.
+O primeiro CI revelou dois defeitos de harness/provisionamento sem redução de segurança: o migrator já não podia conceder `EXECUTE` depois da transferência de ownership, e a matriz SQL usava `GROUP BY true` inválido em PostgreSQL 17. Ambos foram corrigidos preservando as fronteiras; a execução final ficou integralmente verde.
 
-## Testes obrigatórios
+## Verificação final da PR
 
-### Unitários / adapter
+Head funcional verificado antes do checkpoint documental: `ca670b05cdc2f0c80b520f0573c05032c4a73cc6`.
 
-- identidade ausente falha antes de banco;
-- configuração inválida falha fechada;
-- role owner/superuser/BYPASSRLS/capability como runtime é rejeitada;
-- transaction context contém apenas `iss/sub` e é LOCAL;
-- adapter de escrita usa `BEGIN`, não `BEGIN READ ONLY`;
-- falha executa rollback e não vaza erro/connection string;
-- event UUID nasce no servidor, não do input do browser;
-- team/actor/membership não são aceitos como parâmetros confiáveis.
+Gates executados:
 
-### PostgreSQL 17 efêmero
+- CI `34605291444`: PASS;
+  - `verify`: PASS — lint, typecheck, testes e build;
+  - `database`: PASS — migrations/RLS/F26 + teste concorrente PostgreSQL;
+  - `auth-database`: PASS — Auth/F24 boundaries;
+- F22 Private Preview Preflight `34605291428`: PASS.
 
-- migration nova aplica após `0001..0003`;
-- capability owner tem atributos seguros e nenhum membership utilizável;
-- capability não é owner de tabelas-base;
-- runtime não tem `UPDATE`/`INSERT` direto;
-- runtime consegue somente `EXECUTE` da primitive prevista;
-- único membro autorizado atualiza `next_action` e `updated_at`;
-- exatamente um evento correto é criado;
-- actor/team/contracting são derivados corretamente;
-- no-op não altera timestamp nem cria evento;
-- missing/malformed claims -> deny/no mutation;
-- unknown/disabled app_user -> deny/no mutation;
-- sem membership/revogada -> deny/no mutation;
-- cross-team UUID -> deny/no mutation;
-- UUID inexistente -> mesmo resultado externo de cross-team;
-- segundo membro ativo -> deny/no mutation;
-- archived/cancelled -> deny/no mutation;
-- stale expected -> conflict/no mutation/event;
-- concorrência real com mesmo expected -> exatamente um winner e um evento;
-- falha forçada no insert do evento -> update revertido;
-- capability não altera stage/status/responsible/waiting;
-- eventos não podem ser update/delete por runtime/capability;
-- RLS permanece ativo/forçado;
-- role Auth continua sem acesso ao domínio;
-- role de domínio continua sem acesso Auth/limiter além das fronteiras já aprovadas.
+Após os commits de checkpoint, os mesmos gates devem permanecer verdes antes do merge.
 
-### Regressão
-
-- lint;
-- typecheck;
-- testes completos;
-- build Next.js;
-- todas as suites `database/tests` existentes;
-- Auth/F24 PostgreSQL tests;
-- F22 private-preview preflight.
-
-## Red-team obrigatório
-
-Rejeitar PASS se:
-
-- browser puder escolher actor/team/membership confiável;
-- qualquer membership ativa virar permissão geral multiusuário;
-- segundo membro ativo não bloquear;
-- runtime receber DML direto amplo;
-- capability/runtime tiver ownership, superuser, `BYPASSRLS` ou `CREATEROLE` incompatível;
-- função `SECURITY DEFINER` tiver search path inseguro;
-- update puder ocorrer sem evento;
-- evento puder persistir sem update correspondente;
-- race produzir dois updates/eventos a partir do mesmo expected;
-- stale write for aceito silenciosamente;
-- no-op gerar evento;
-- UUID de outra equipe revelar existência de modo distinto do inexistente;
-- migration aplicada for reescrita;
-- outras colunas operacionais forem abertas para escrita;
-- dado real/interno for usado;
-- provider hosted for alterado.
-
-## Invariantes
+## Invariantes preservadas
 
 - `REAL_DATA_ALLOWED = NO`;
-- somente dados fictícios;
+- somente dados/identidades fictícios;
 - nenhum provider hosted write;
-- F21 permanece ON HOLD até seu `resume_when` objetivo;
+- F21 permanece `ON HOLD` até seu `resume_when` objetivo;
 - Q-009 permanece aberta;
 - autenticação não é autorização;
 - RLS permanece autoritativa;
 - estado e evento são atômicos;
 - eventos continuam append-only;
 - sem CRUD amplo;
-- migrations aplicadas são imutáveis;
+- `0001..0003` não foram reescritas;
 - runtime normal permanece não privilegiado.
 
-## Fora do escopo
+## Fora do escopo preservado
 
 - permitir segundo membro editar;
 - definir perfis/papéis multiusuário;
 - alterar stage/status/responsável/aguardando;
 - mutação de itens/identificadores;
 - criar contratação;
-- UI ampla de edição;
+- UI de edição;
 - provider hosted;
 - retomar F21;
 - dado real;
 - Data API pública.
 
+## Próxima ação
+
+A implementação de banco/aplicação está concluída, mas a tela de detalhe continua somente leitura. A única próxima ação é `F27-PERSISTENT-NEXT-ACTION-DETAIL-UI-01`, que deve tornar apenas esta mutação utilizável pela jornada persistente sem abrir nova autoridade.
+
 ## Critério de encerramento
 
-F26 fecha quando a primeira mutação persistente de `next_action` estiver implementada por capability estreita, provada em PostgreSQL 17 real contra autorização, atomicidade, rollback e concorrência adversarial, com todas as regressões em PASS e exatamente uma nova `NEXT_ACTION` canônica.
+F26 está encerrada porque a primeira mutação persistente de `next_action` foi implementada por capability estreita e provada em PostgreSQL 17 real contra autorização, atomicidade, rollback e concorrência adversarial, com regressões verdes e uma única nova `NEXT_ACTION` canônica.

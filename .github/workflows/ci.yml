@@ -215,6 +215,16 @@ jobs:
             exit 1
           fi
 
+          PGUSER=compras_f26_migrator_ci PGPASSWORD='DEMO-F26-MIGRATOR-PASSWORD' PGDATABASE=compras_mutation_ci \
+            psql -v ON_ERROR_STOP=1 -v runtime_role='compras_domain_runtime_f26_ci' \
+              -f database/provisioning/grant_next_action_runtime.sql
+
+          POST_GRANT_EXECUTE="$(PGDATABASE=compras_mutation_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_domain_runtime_f26_ci', 'public.mutate_contracting_next_action(uuid,text,text,uuid)', 'EXECUTE')")"
+          if [[ "$POST_GRANT_EXECUTE" != "t" ]]; then
+            echo "mutation runtime did not receive explicit EXECUTE" >&2
+            exit 1
+          fi
+
           PGUSER=compras_f26_migrator_ci PGPASSWORD='DEMO-F26-MIGRATOR-PASSWORD' PGDATABASE=compras_mutation_ci psql -v ON_ERROR_STOP=1 <<'SQL'
           GRANT USAGE ON SCHEMA public TO compras_domain_runtime_f26_ci;
           GRANT SELECT ON TABLE
@@ -229,8 +239,6 @@ jobs:
           GRANT EXECUTE ON FUNCTION public.current_auth_issuer() TO compras_domain_runtime_f26_ci;
           GRANT EXECUTE ON FUNCTION public.current_auth_subject() TO compras_domain_runtime_f26_ci;
           GRANT EXECUTE ON FUNCTION public.current_app_user_id() TO compras_domain_runtime_f26_ci;
-          GRANT EXECUTE ON FUNCTION public.mutate_contracting_next_action(uuid, text, text, uuid)
-            TO compras_domain_runtime_f26_ci;
           SQL
 
           PGDATABASE=compras_mutation_ci psql -v ON_ERROR_STOP=1 -f database/tests/next_action_mutation.sql

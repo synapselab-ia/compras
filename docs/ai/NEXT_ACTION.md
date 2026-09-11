@@ -1,48 +1,44 @@
 # Next Action — Compras
 
-## F26-FIRST-PERSISTENT-NEXT-ACTION-MUTATION-IMPLEMENT-01 — Implementar primeira mutação persistente de próxima ação
+## F27-PERSISTENT-NEXT-ACTION-DETAIL-UI-01 — Integrar edição persistente de próxima ação no detalhe
 
-**Classe:** `T1 — feature normal` com impacto `T2 — banco/segurança`  
+**Classe:** `T1 — feature normal` com impacto `T2 — autorização/escrita server-side`  
 **Estado:** READY  
-**Objetivo:** implementar a ADR-011 como capability PostgreSQL estreita para alterar somente `contractings.next_action`, com autorização pilot-only, estado+evento atômicos, proteção contra lost update e runtime sem DML direto.
+**Objetivo:** tornar utilizável pela aplicação a única escrita aprovada em F26, permitindo editar somente `contractings.next_action` no detalhe persistente por Server Action estreita, sem abrir CRUD adicional nem alterar a autorização pilot-only.
 
 Esta é a única `NEXT_ACTION` canônica.
 
 ## Por que esta ação agora
 
-A F25 fechou o desenho da primeira escrita persistente em ADR-011:
+F26 implementou e provou a fronteira de banco/aplicação da ADR-011, mas o detalhe persistente ainda é somente leitura. A Definition of Done exige uma jornada utilizável para a necessidade operacional prevista.
 
-- `next_action` é o único campo de escrita desta primeira slice;
-- a role runtime de domínio continuará sem `UPDATE`/`INSERT` direto;
-- a escrita passa por primitive PostgreSQL específica `SECURITY DEFINER`, com owner técnico `NOLOGIN` não privilegiado e `search_path` fixo;
-- identidade, actor, membership e team são derivados da sessão confiável + banco, nunca do browser;
-- autorização é estritamente pilot-only: a identidade corrente precisa possuir a única membership não revogada da equipe alvo;
-- uma segunda membership ativa bloqueia a escrita, preservando Q-009 aberta;
-- update de `next_action`/`updated_at` e inserção de `contracting_events` são uma única unidade transacional;
-- concorrência usa lock de linha + precondição otimista do valor anterior, evitando lost update;
-- no-op não cria evento nem altera timestamp;
-- UUID cross-team/inexistente não deve revelar existência de modo distinto.
+F27 deve ligar a interface já existente de detalhe à boundary F26 sem criar nova autoridade:
 
-F21 continua `ON HOLD` sob seu `resume_when` externo e não é dependência da F26.
+- modo demo continua sem write;
+- modo persistente edita apenas `Próxima ação`;
+- browser fornece somente ID candidato + expected observado + novo valor;
+- actor, team, membership, issuer, subject e event UUID continuam derivados/gerados no servidor/banco;
+- conflito não pode virar overwrite silencioso;
+- cross-team/inexistente permanecem indistinguíveis externamente;
+- falha protegida nunca cai para fixtures/demo.
+
+F21 continua `ON HOLD` sob seu `resume_when` externo e não é dependência da F27.
 
 ## Execução obrigatória
 
-1. recuperar estado/contexto e confirmar ADR-011/F25 integradas;
-2. ler diretamente SECURITY, DATABASE, ADR-003/005/009/011, migrations, trusted-context e testes RLS;
-3. criar migration nova do domínio, sem reescrever `0001..0003`;
-4. criar/seal owner técnico da capability conforme ADR-005;
-5. criar primitive específica de `next_action` com grants/policies mínimos sob RLS;
-6. manter runtime sem DML direto e conceder somente `EXECUTE` na primitive;
-7. implementar guard pilot-only de única membership ativa;
-8. implementar lock + expected antigo null-safe e estado `conflict`;
-9. atualizar `next_action` + `updated_at` e inserir evento atômico com actor/team derivados;
-10. tratar no-op sem evento/timestamp novo;
-11. criar adapter server-side de mutação que reutilize a fronteira segura de `trusted-context` e use `BEGIN` normal + contexto LOCAL `iss/sub`;
-12. gerar `event_id` somente no servidor confiável;
-13. não aceitar team/actor/membership do browser;
-14. executar matriz PostgreSQL adversarial, incluindo concorrência real e rollback forçado do evento;
-15. executar lint, typecheck, testes completos, build e preflight F22/F24;
-16. revisar diff integral, promover somente após CI verde e deixar exatamente uma nova `NEXT_ACTION`.
+1. recuperar o estado real de `main` e confirmar F26 integrada/verde;
+2. validar o `CONTEXT_MANIFEST` e inspecionar o detalhe, view-data, Server Actions existentes e boundary F26;
+3. criar Server Action dedicada somente a `next_action`;
+4. aceitar apenas `contractingId`, `expectedNextAction` e `newNextAction` do form;
+5. reutilizar `mutatePersistentContractingNextAction`; não emitir SQL/DML próprio na action;
+6. manter demo estritamente read-only;
+7. mapear `updated`, `unchanged`, `conflict`, `not-available` e `unavailable` para feedback sanitizado;
+8. revalidar/read-back o detalhe nos resultados apropriados;
+9. implementar pending/feedback/acessibilidade básica sem editor genérico;
+10. provar que campos forjados de actor/team/membership/event UUID não atravessam a boundary;
+11. provar que conflito não sobrescreve e que cross-team/inexistente não criam side channel;
+12. executar lint, typecheck, testes, build, CI PostgreSQL/Auth e F22 preflight;
+13. fazer red-team integral e deixar exatamente uma nova `NEXT_ACTION`.
 
 ## Invariantes
 
@@ -52,20 +48,17 @@ F21 continua `ON HOLD` sob seu `resume_when` externo e não é dependência da F
 - F21 permanece `ON HOLD` até seu `resume_when` objetivo;
 - Q-009 permanece aberta;
 - autenticação não é autorização;
-- browser não fornece identidade, actor ou escopo confiáveis;
 - RLS permanece autoritativa;
-- runtime normal sem ownership/superuser/`BYPASSRLS`/`CREATEROLE`;
-- runtime sem DML direto para a mutação;
-- estado rastreável + evento são atômicos;
-- `contracting_events` continua append-only;
-- sem escrita de stage/status/responsável/aguardando nesta slice;
-- migrations aplicadas permanecem imutáveis;
+- F26 continua sendo a única primitive de escrita;
+- runtime continua sem DML direto nas tabelas protegidas;
+- nenhuma escrita de stage/status/responsável/aguardando;
+- modo demo nunca executa write;
 - falha protegida nunca vira demo fallback.
 
 ## Fonte da tarefa
 
-Executar `tasks/F26-FIRST-PERSISTENT-NEXT-ACTION-MUTATION-IMPLEMENT-01/SPEC.md` seguindo ADR-011, ADR-003, ADR-005, ADR-009, `docs/architecture/SECURITY.md` e `docs/architecture/DATABASE.md`.
+Executar `tasks/F27-PERSISTENT-NEXT-ACTION-DETAIL-UI-01/SPEC.md` seguindo ADR-003, ADR-009, ADR-011, `docs/architecture/SECURITY.md`, `docs/architecture/DATABASE.md` e a boundary F26 integrada.
 
 ## Critério de encerramento
 
-F26 fecha quando a primeira mutação persistente de `next_action` estiver implementada e provada em PostgreSQL 17 descartável contra autorização, atomicidade, rollback e concorrência, mantendo runtime sem DML amplo, todas as regressões em PASS, nenhum hosted write e exatamente uma nova `NEXT_ACTION` canônica.
+F27 fecha quando uma pessoa autorizada consegue alterar somente `Próxima ação` pelo detalhe persistente, com semântica correta de sucesso/no-op/conflito/indisponibilidade, sem nova superfície de autoridade e com todos os gates de F26/RLS/Auth/F22 novamente em PASS.

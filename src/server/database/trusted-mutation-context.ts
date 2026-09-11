@@ -8,27 +8,28 @@ import {
   readDatabaseConnectionString,
 } from "./operational-safety";
 
-export type ScopedDatabaseClient = Pick<PoolClient, "query">;
+export type ScopedMutationDatabaseClient = Pick<PoolClient, "query">;
 
-export class TrustedDatabaseContextError extends Error {
+export class TrustedDatabaseMutationContextError extends Error {
   constructor() {
-    super("Trusted database context is unavailable.");
-    this.name = "TrustedDatabaseContextError";
+    super("Trusted database mutation context is unavailable.");
+    this.name = "TrustedDatabaseMutationContextError";
   }
 }
 
 /**
- * Runs one protected read operation inside the exact transaction that carries
- * the verified external identity. The caller cannot provide identity or scope.
+ * Runs one protected mutation inside a normal transaction carrying only the
+ * verified external issuer + subject. The caller cannot provide trusted scope,
+ * actor, membership or internal user identifiers.
  */
-export async function withTrustedDatabaseContext<T>(
-  operation: (db: ScopedDatabaseClient) => Promise<T>,
+export async function withTrustedDatabaseMutationContext<T>(
+  operation: (db: ScopedMutationDatabaseClient) => Promise<T>,
 ): Promise<T> {
   const identity = await getVerifiedExternalIdentity();
   const connectionString = readDatabaseConnectionString();
 
   if (!identity || !connectionString) {
-    throw new TrustedDatabaseContextError();
+    throw new TrustedDatabaseMutationContextError();
   }
 
   let pool: Pool | null = null;
@@ -38,7 +39,7 @@ export async function withTrustedDatabaseContext<T>(
   try {
     pool = new Pool({ connectionString });
     client = await pool.connect();
-    await client.query("BEGIN READ ONLY");
+    await client.query("BEGIN");
     transactionOpen = true;
 
     await assertOperationalRoleSafety(client);
@@ -68,7 +69,7 @@ export async function withTrustedDatabaseContext<T>(
       }
     }
 
-    throw new TrustedDatabaseContextError();
+    throw new TrustedDatabaseMutationContextError();
   } finally {
     if (client) {
       try {
@@ -82,7 +83,7 @@ export async function withTrustedDatabaseContext<T>(
       try {
         await pool.end();
       } catch {
-        // The adapter never reuses this pool after a protected operation.
+        // The adapter never reuses this pool after a protected mutation.
       }
     }
   }

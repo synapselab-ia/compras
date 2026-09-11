@@ -126,15 +126,10 @@ describePostgres("F26 PostgreSQL next_action concurrency boundary", () => {
              and event.new_value = contracting.next_action
              and event.actor_membership_id = $3::uuid
              and event.team_id = $4::uuid
-             and event.updated_at is null
          )::text as matching_event_count
        from public.contractings as contracting
-       left join (
-         select
-           id, contracting_id, team_id, actor_membership_id,
-           old_value, new_value, null::timestamptz as updated_at
-         from public.contracting_events
-       ) as event on event.contracting_id = contracting.id
+       left join public.contracting_events as event
+         on event.contracting_id = contracting.id
        where contracting.id = $1::uuid
        group by contracting.next_action`,
       [TARGET_ID, INITIAL_NEXT_ACTION, MEMBERSHIP_ID, TEAM_ID],

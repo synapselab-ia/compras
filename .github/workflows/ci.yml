@@ -41,7 +41,7 @@ jobs:
 
   database:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     services:
       postgres:
@@ -68,6 +68,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      - name: Use Node.js 24 LTS
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24.x"
+          cache: npm
+
+      - name: Install dependencies from lockfile
+        run: npm ci
 
       - name: Verify 0001 default-deny foundation
         run: |
@@ -156,6 +165,87 @@ jobs:
           dropdb compras_detail_ci
           psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_team_directory_view_owner;"
           psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_f12_migrator_ci;"
+
+      - name: Red-team F26 mutation capability preflight
+        run: |
+          createdb compras_f26_preflight_ci
+          PGDATABASE=compras_f26_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0001_core_foundation.sql
+          PGDATABASE=compras_f26_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0002_trusted_identity_read_policies.sql
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_next_action_mutation_owner LOGIN;"
+          if PGDATABASE=compras_f26_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0004_next_action_mutation.sql; then
+            echo "unsafe LOGIN mutation capability was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_next_action_mutation_owner;"
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_next_action_mutation_owner NOLOGIN BYPASSRLS;"
+          if PGDATABASE=compras_f26_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0004_next_action_mutation.sql; then
+            echo "unsafe BYPASSRLS mutation capability was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_next_action_mutation_owner;"
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_next_action_mutation_owner NOLOGIN NOINHERIT NOBYPASSRLS;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_f26_preflight_member NOLOGIN;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "GRANT compras_next_action_mutation_owner TO compras_f26_preflight_member WITH INHERIT FALSE, SET TRUE;"
+          if PGDATABASE=compras_f26_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0004_next_action_mutation.sql; then
+            echo "SET-capable mutation capability membership was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "REVOKE compras_next_action_mutation_owner FROM compras_f26_preflight_member;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_f26_preflight_member;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_next_action_mutation_owner;"
+          dropdb compras_f26_preflight_ci
+
+      - name: Verify F26 next-action mutation capability
+        run: |
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_f26_migrator_ci LOGIN CREATEROLE NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOREPLICATION PASSWORD 'DEMO-F26-MIGRATOR-PASSWORD';"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_domain_runtime_f26_ci LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD 'DEMO-F26-DOMAIN-RUNTIME-PASSWORD';"
+          createdb -O compras_f26_migrator_ci compras_mutation_ci
+
+          PGUSER=compras_f26_migrator_ci PGPASSWORD='DEMO-F26-MIGRATOR-PASSWORD' PGDATABASE=compras_mutation_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0001_core_foundation.sql
+          PGUSER=compras_f26_migrator_ci PGPASSWORD='DEMO-F26-MIGRATOR-PASSWORD' PGDATABASE=compras_mutation_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0002_trusted_identity_read_policies.sql
+          PGUSER=compras_f26_migrator_ci PGPASSWORD='DEMO-F26-MIGRATOR-PASSWORD' PGDATABASE=compras_mutation_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0003_team_member_directory.sql
+          PGUSER=compras_f26_migrator_ci PGPASSWORD='DEMO-F26-MIGRATOR-PASSWORD' PGDATABASE=compras_mutation_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0004_next_action_mutation.sql
+
+          PRE_GRANT_EXECUTE="$(PGDATABASE=compras_mutation_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_domain_runtime_f26_ci', 'public.mutate_contracting_next_action(uuid,text,text,uuid)', 'EXECUTE')")"
+          if [[ "$PRE_GRANT_EXECUTE" != "f" ]]; then
+            echo "mutation primitive leaked EXECUTE before explicit runtime grant" >&2
+            exit 1
+          fi
+
+          PGUSER=compras_f26_migrator_ci PGPASSWORD='DEMO-F26-MIGRATOR-PASSWORD' PGDATABASE=compras_mutation_ci psql -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT USAGE ON SCHEMA public TO compras_domain_runtime_f26_ci;
+          GRANT SELECT ON TABLE
+            public.app_users,
+            public.memberships,
+            public.teams,
+            public.contractings,
+            public.related_identifiers,
+            public.contracting_items,
+            public.contracting_events
+            TO compras_domain_runtime_f26_ci;
+          GRANT SELECT ON public.team_member_directory TO compras_domain_runtime_f26_ci;
+          GRANT EXECUTE ON FUNCTION public.current_auth_issuer() TO compras_domain_runtime_f26_ci;
+          GRANT EXECUTE ON FUNCTION public.current_auth_subject() TO compras_domain_runtime_f26_ci;
+          GRANT EXECUTE ON FUNCTION public.current_app_user_id() TO compras_domain_runtime_f26_ci;
+          GRANT EXECUTE ON FUNCTION public.mutate_contracting_next_action(uuid, text, text, uuid)
+            TO compras_domain_runtime_f26_ci;
+          SQL
+
+          PGDATABASE=compras_mutation_ci psql -v ON_ERROR_STOP=1 -f database/tests/next_action_mutation.sql
+
+          F26_NEXT_ACTION_POSTGRES_TEST=1 \
+          F26_DOMAIN_RUNTIME_DATABASE_URL='postgresql://compras_domain_runtime_f26_ci:DEMO-F26-DOMAIN-RUNTIME-PASSWORD@localhost:5432/compras_mutation_ci' \
+          F26_ADMIN_DATABASE_URL='postgresql://postgres:postgres@localhost:5432/compras_mutation_ci' \
+            npx vitest run src/features/contracting-detail/persistent-mutation.postgres.test.ts
+
+          dropdb compras_mutation_ci
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_next_action_mutation_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_team_directory_view_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_domain_runtime_f26_ci;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_f26_migrator_ci;"
 
   auth-database:
     runs-on: ubuntu-latest

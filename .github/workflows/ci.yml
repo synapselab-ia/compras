@@ -226,7 +226,6 @@ jobs:
             public.contracting_items,
             public.contracting_events
             TO compras_domain_runtime_f26_ci;
-          GRANT SELECT ON public.team_member_directory TO compras_domain_runtime_f26_ci;
           GRANT EXECUTE ON FUNCTION public.current_auth_issuer() TO compras_domain_runtime_f26_ci;
           GRANT EXECUTE ON FUNCTION public.current_auth_subject() TO compras_domain_runtime_f26_ci;
           GRANT EXECUTE ON FUNCTION public.current_app_user_id() TO compras_domain_runtime_f26_ci;

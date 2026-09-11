@@ -1,82 +1,78 @@
 # F29-PERSISTENT-CONTRACTING-CREATE-IMPLEMENT-01 — Implementar boundary de criação persistente mínima
 
 **Classe:** T1 — feature normal, com impacto T2 — autorização/banco  
-**Estado:** PLANNED / NEXT  
+**Estado:** COMPLETED / PASS  
 **Dependências:** F28, ADR-003, ADR-005, ADR-009, ADR-011 e ADR-012  
 **Classificação permitida:** PUBLIC / FICTITIOUS ONLY
 
-## Problema
+## Resultado
 
-A ADR-012 fechou o desenho da primeira criação persistente de `contractings`, mas nenhuma migration, primitive ou interface server-side de criação existe ainda.
+F29 materializou a ADR-012 sem adicionar Server Action/UI de cadastro.
 
-A próxima slice deve materializar somente essa boundary, provar sua segurança/idempotência em PostgreSQL 17 descartável e manter Server Action/UI de cadastro fora do escopo.
+Foram implementados:
 
-## Objetivo
+- `database/migrations/0005_contracting_create.sql`;
+- `database/provisioning/grant_contracting_create_runtime.sql`;
+- `database/tests/contracting_create.sql`;
+- `src/features/contracting-create/persistent-create.ts`;
+- testes unitários e PostgreSQL de concorrência;
+- workflow dedicado `.github/workflows/f29-contracting-create.yml`.
 
-Implementar a capability pilot-only `create contracting` definida na ADR-012, mantendo:
+`0001..0004` permaneceram imutáveis. Nenhum provider hosted foi escrito e nenhum dado/identidade real foi usado.
 
-- runtime normal sem DML direto;
-- team/actor/created_by derivados exclusivamente da identidade confiável + banco;
-- payload mínimo `contractingId + object`;
-- estado inicial esparso sem stage/status/responsável/waiting/next_action inventados;
-- evento `contracting_created` atômico;
-- replay/double-submit idempotente pelo UUID estável da contratação;
-- Q-001/Q-002/Q-006/Q-009 abertas.
+## Boundary implementada
 
-## Entregas obrigatórias
+### Capability e least privilege
 
-### 1. Migration nova
+A criação possui owner técnico próprio `compras_contracting_create_owner`, separado da F26.
 
-Criar `database/migrations/0005_contracting_create.sql` sem modificar `0001..0004`.
-
-A migration deve criar/validar role técnica equivalente a `compras_contracting_create_owner` com:
+A migration valida que a role é:
 
 - `NOLOGIN`;
 - `NOINHERIT`;
-- `NOSUPERUSER`;
-- `NOBYPASSRLS`;
-- `NOCREATEDB`;
-- `NOCREATEROLE`;
-- `NOREPLICATION`;
-- `rolconfig IS NULL`;
+- não superuser;
+- sem `BYPASSRLS`, `CREATEDB`, `CREATEROLE` ou replication;
+- sem `rolconfig`;
 - sem ownership de tabelas-base;
 - sem membership utilizável.
 
-O lifecycle deve seguir ADR-005 e tolerar somente a aresta administrativa automática PostgreSQL 17 para o principal de migration nas condições `ADMIN TRUE`, `SET FALSE`, `INHERIT FALSE`.
+O lifecycle segue ADR-005 e admite somente a aresta administrativa PostgreSQL 17 permitida para o migrator. O owner não é credencial operacional.
 
-A migration deve criar uma primitive conceitualmente equivalente a:
+A primitive `public.create_contracting_minimal(uuid,text,uuid)` é `SECURITY DEFINER`, possui `search_path = pg_catalog`, `PUBLIC EXECUTE` revogado e grants coluna-a-coluna.
+
+O runtime normal continua sem `INSERT`/`UPDATE`/`DELETE` direto. `grant_contracting_create_runtime.sql` concede somente `EXECUTE` explicitamente e remove toda aresta temporária de `SET ROLE` antes do commit.
+
+Auth/read-only runtimes não recebem essa capability.
+
+### Payload e confiança
+
+A interface server-only aceita semanticamente somente:
 
 ```text
-public.create_contracting_minimal(
-  p_contracting_id uuid,
-  p_object text,
-  p_event_id uuid
-) -> text
+contractingId
+object
 ```
 
-Requisitos:
+O candidate UUID é preparado no servidor por `preparePersistentContractingCandidateId()`. O UUID do evento é gerado por `randomUUID()` dentro do adapter e não pode vir do browser.
 
-- `SECURITY DEFINER`;
-- `search_path = pg_catalog` fixo;
-- SQL estático;
-- `PUBLIC EXECUTE` revogado;
-- owner técnico dedicado;
-- nenhum argumento de team/actor/membership/issuer/subject/created_by;
-- nenhuma dependência de provider hosted.
+Team, actor, membership, issuer, subject e `created_by_membership_id` não são argumentos da primitive nem dados confiáveis do adapter. Eles são derivados exclusivamente da identidade Better Auth validada + contexto PostgreSQL LOCAL + banco.
 
-### 2. Grants e RLS mínimos
+`object` é preservado exatamente. Não foi introduzido trim, tamanho máximo ou regra non-empty; string vazia continua distinta e permitida pelo contrato físico atual.
 
-A capability recebe somente o necessário para:
+### Regra pilot-only
 
-- resolver identidade atual;
-- ler memberships para derivar a única membership ativa do usuário e contar o guard da equipe;
-- verificar a equipe e `archived_at`;
-- verificar candidate `contracting_id` para idempotência;
-- inserir apenas colunas aprovadas da contratação;
-- inserir apenas colunas aprovadas do evento;
-- executar helpers de identidade necessários.
+A primitive só cria quando:
 
-O `INSERT` em `contractings` deve ser coluna-a-coluna e limitado a:
+1. `current_app_user_id()` resolve para usuário interno ativo;
+2. esse usuário possui exatamente uma membership não revogada em todo o banco;
+3. a equipe derivada existe e não está arquivada;
+4. a equipe possui exatamente uma membership não revogada.
+
+Segundo membro não revogado bloqueia mesmo quando o `app_user` correspondente está desabilitado. Múltiplas memberships do próprio usuário bloqueiam por ambiguidade. Q-009 permanece aberta.
+
+### Estado inicial e evento
+
+Criação nova persiste somente:
 
 ```text
 id
@@ -87,214 +83,113 @@ created_at
 updated_at
 ```
 
-O `INSERT` em `contracting_events` deve ser coluna-a-coluna e limitado a:
+Responsável, stage, status, waiting, `next_action`, archived/cancelled permanecem `NULL`.
 
-```text
-id
-team_id
-contracting_id
-actor_membership_id
-event_type
-occurred_at
-created_at
-```
+Na mesma transação nasce exatamente um evento `contracting_created`, com team/actor/contracting derivados. `contractings.created_at`, `contractings.updated_at`, `event.occurred_at` e `event.created_at` usam o mesmo `operation_at` do banco.
 
-A capability não pode receber `UPDATE`/`DELETE` de `contractings` nem `UPDATE`/`DELETE` de eventos.
+Falha do evento reverte a nova contratação integralmente.
 
-Policies específicas devem manter `FORCE RLS` autoritativo e impedir:
+### Idempotência
 
-- team divergente da membership derivada;
-- actor/created_by divergente;
-- preenchimento de colunas fora do formato aprovado;
-- evento diferente de `contracting_created` pela capability.
+O candidate UUID é a chave de idempotência não secreta da solicitação preparada.
 
-### 3. Regra pilot-only de criação
+Após a autorização corrente:
 
-A primitive só cria quando:
+- criação inédita → `created`;
+- mesmo UUID + mesmo team derivado + mesmo creator derivado + mesmo `object` → `already-created`;
+- mismatch ou colisão cross-team → `denied` genérico.
 
-1. `current_app_user_id()` resolve;
-2. o usuário possui exatamente uma membership `revoked_at IS NULL` em todo o banco;
-3. a equipe derivada existe e `archived_at IS NULL`;
-4. a equipe possui exatamente uma membership `revoked_at IS NULL`.
+Campos mutáveis posteriores não participam do replay.
 
-Toda segunda membership não revogada na equipe conta para o bloqueio, ainda que o `app_user` correspondente esteja desabilitado.
+O teste concorrente com oito writers do mesmo candidate prova exatamente:
 
-Múltiplas memberships não revogadas do próprio usuário também bloqueiam a operação por escopo ambíguo.
+- 1 `created`;
+- 7 `already-created`;
+- 1 row;
+- 1 evento.
 
-### 4. Estado e evento atômicos
+## Matriz adversarial comprovada
 
-Em criação nova:
+Os testes PostgreSQL/TypeScript cobrem:
 
-- `object` é preservado exatamente;
-- `team_id` e `created_by_membership_id` vêm do banco;
-- `created_at` e `updated_at` usam o mesmo `operation_at`;
-- responsible/stage/status/waiting/next_action/archived/cancelled ficam `NULL`;
-- exatamente um evento `contracting_created` é inserido;
-- actor/team/contracting do evento são derivados da operação/banco;
-- `occurred_at` e `event.created_at` usam o mesmo `operation_at` da contratação;
-- `field_key`, `old_value`, `new_value`, `note`, `related_identifier_id` e `item_id` ficam `NULL`.
+- claims ausentes/malformados;
+- identidade desconhecida;
+- usuário desabilitado;
+- zero membership ativa;
+- membership revogada;
+- usuário com múltiplas memberships;
+- equipe arquivada;
+- segundo membro não revogado, inclusive usuário desabilitado;
+- derivação de team/actor/created_by;
+- estado inicial esparso;
+- evento único e timestamps atômicos;
+- replay sequencial;
+- mismatch de `object`;
+- colisão cross-team;
+- falha forçada de evento com rollback da row;
+- concorrência de oito writers;
+- runtime sem DML direto;
+- owner sem privilégios de UPDATE/DELETE ou colunas extras de INSERT;
+- capability F29 sem `EXECUTE` F26;
+- Auth/read-only runtimes sem `EXECUTE` F29;
+- PUBLIC EXECUTE revogado;
+- owner/search_path/static SQL seguros;
+- rejection preflight de owner LOGIN, `BYPASSRLS` e membership SET-capable;
+- novo capability owner rejeitado como runtime operacional normal.
 
-Falha do evento deve reverter o `INSERT` da contratação.
+Campos extras forjados no adapter — team, actor, membership, created_by, issuer, subject e eventId — não atravessam a boundary.
 
-### 5. Idempotência e concorrência
+## Red-team
 
-O UUID da contratação funciona como identidade estável e idempotency key da solicitação preparada.
+A revisão integral não encontrou mecanismo que permita:
 
-A primitive deve retornar estado equivalente a `already-created` somente quando, após a autorização corrente, uma linha já existente com o candidate UUID possuir exatamente:
+- browser escolher autoridade de team/actor/created_by;
+- escopo ambíguo criar;
+- segundo membro ampliar permissão;
+- runtime obter DML direto;
+- F29 ampliar F26;
+- F29 atualizar `next_action` ou linhas existentes;
+- criação preencher stage/status/responsável/waiting/next_action;
+- replay exato criar segundo evento;
+- mismatch/cross-team virar sucesso;
+- falha protegida cair para demo;
+- erro técnico ser devolvido pelo adapter.
 
-- `team_id` derivado;
-- `created_by_membership_id` derivado;
-- `object` igual ao solicitado.
+O diff contém somente valores CI claramente fictícios/localhost para PostgreSQL descartável. Não contém credencial/provider real, dado interno ou hosted write.
 
-Campos mutáveis posteriores não entram na comparação.
+## Verificação funcional
 
-Se a correspondência não puder ser provada, retornar `denied`/estado equivalente genérico.
+Primeira execução F29 no head `b801adccf16bb8717a95b5228765c7f86fd2b723`:
 
-O caso concorrente com múltiplas chamadas usando o mesmo UUID deve provar:
+- CI `34636645870`: PASS;
+- F22 Private Preview Preflight `34636645825`: PASS;
+- F29 Contracting Create `34636645932`: FAIL por erro sintático no postflight da migration (`pg_catalog.position(...)`).
 
-- exatamente uma contratação;
-- exatamente um evento de criação;
-- exatamente um resultado `created`;
-- demais resultados `already-created`;
-- nenhuma duplicação silenciosa.
+A falha foi corrigida sem reduzir enforcement. O head funcional `d35edbd54e516de9c2eac943d3c854a30ed729a9` ficou integralmente verde:
 
-Uma corrida de primary key pode ser tratada por subtransação/`unique_violation` + releitura autorizada ou mecanismo PostgreSQL equivalente, sem converter colisão não equivalente em sucesso.
+- CI `34637119318`: PASS;
+- F22 Private Preview Preflight `34637119381`: PASS;
+- F29 Contracting Create `34637119319`: PASS, incluindo preflight adversarial, migration 0005, provisionamento, matriz SQL e concorrência PostgreSQL 17.
 
-### 6. Provisionamento separado
+Os commits documentais de checkpoint posteriores devem manter os mesmos gates verdes antes do merge.
 
-Criar `database/provisioning/grant_contracting_create_runtime.sql` seguindo o padrão de F26.
-
-O asset deve:
-
-- exigir nome explícito da role runtime;
-- rejeitar runtime owner/superuser/`BYPASSRLS`/`CREATEROLE`/atributos inseguros;
-- conceder somente `EXECUTE` da primitive de criação;
-- não conceder DML direto;
-- usar lifecycle transacional que não deixe membership `SET ROLE` persistente para a capability;
-- falhar fechado em estado inesperado.
-
-### 7. Interface server-only
-
-Criar módulo server-only de criação, preferencialmente em `src/features/contracting-create/` ou estrutura equivalente, com interface conceitual:
-
-```text
-createPersistentContracting({ contractingId, object })
-```
-
-A interface:
-
-- valida `contractingId` como UUID candidato;
-- exige `object` como string, sem trim/limite/regra non-empty inventada;
-- gera `eventId` por `randomUUID()` no servidor;
-- chama somente a primitive parametrizada;
-- reutiliza `withTrustedDatabaseMutationContext`;
-- nunca aceita team/actor/membership/issuer/subject/created_by/eventId externos;
-- mapeia `created` e `already-created` diretamente;
-- mapeia `denied` para `not-available`;
-- mapeia falha técnica inesperada para `unavailable`;
-- não possui demo fallback;
-- não loga payload, claims, connection string ou erro sensível.
-
-Também criar helper server-only para gerar o candidate UUID que uma futura UI poderá preparar antes da submissão. Esse UUID não é token de autorização.
-
-### 8. Testes PostgreSQL/adversariais
-
-Criar matriz dedicada, por exemplo `database/tests/contracting_create.sql`, e testes TypeScript necessários.
-
-Provar no mínimo:
-
-1. sole user + sole team membership → `created`;
-2. row possui team/created_by derivados e `object` exato;
-3. stage/status/responsible/waiting/next_action/archived/cancelled = `NULL`;
-4. exatamente um evento `contracting_created` com actor derivado e campos auxiliares nulos;
-5. quatro timestamps da criação usam o mesmo instante;
-6. claims ausentes/malformados → deny;
-7. identidade desconhecida → deny;
-8. usuário desabilitado → deny;
-9. zero membership ativa → deny;
-10. membership revogada → deny;
-11. usuário com múltiplas memberships não revogadas → deny;
-12. equipe arquivada → deny;
-13. segundo membro não revogado → deny, inclusive se seu usuário estiver desabilitado;
-14. replay sequencial idêntico → `already-created`, sem novo evento;
-15. replay com mesmo UUID e `object` diferente → deny;
-16. candidate UUID existente cross-team → deny externamente indistinguível;
-17. corrida de pelo menos 8 writers do mesmo candidate → 1 `created`, 7 `already-created`, 1 row, 1 event;
-18. falha forçada de evento → zero row nova;
-19. runtime sem DML direto;
-20. capability sem privileges de UPDATE/DELETE e sem colunas de INSERT não aprovadas;
-21. capability F26 continua sem `INSERT` de criação;
-22. capability de criação não recebe UPDATE de `next_action` nem `EXECUTE` F26 por conveniência;
-23. Auth/read-only runtimes não recebem a nova `EXECUTE`;
-24. `PUBLIC EXECUTE` revogado;
-25. owner/search_path/static SQL/postflight seguros;
-26. `0001..0004` imutáveis;
-27. apenas dados fictícios.
-
-### 9. CI/regressão
-
-Atualizar os workflows apenas no necessário para provar F29 em PostgreSQL 17 descartável.
-
-Gates obrigatórios:
-
-- lint PASS;
-- typecheck PASS;
-- testes PASS;
-- build PASS;
-- CI database PASS;
-- F26 mutation/RLS/concorrência continua PASS;
-- Auth/F24 continua PASS;
-- F22 Private Preview Preflight continua PASS;
-- diff integral sem secrets/dados reais/provider hosted write.
-
-## Red-team obrigatório
-
-Rejeitar PASS se:
-
-- browser/API de criação conseguir escolher team/actor/membership/issuer/subject/created_by confiável;
-- usuário com >1 membership ativa conseguir criar;
-- equipe com >1 membership não revogada conseguir criar;
-- equipe arquivada aceitar nova contratação;
-- runtime receber `INSERT` direto;
-- capability de criação ganhar `UPDATE` de linhas existentes;
-- F26 ganhar novos grants de criação;
-- `next_action`, stage, status, responsible ou waiting forem preenchidos automaticamente;
-- `object` for trimado/limitado por regra não aprovada;
-- criação existir sem evento;
-- replay idêntico criar segundo evento;
-- collision mismatch virar `already-created`;
-- cross-team UUID revelar existência;
-- erro interno/secrets aparecer em retorno/log;
-- migrations aplicadas forem reescritas;
-- provider hosted ou dado real for usado.
-
-## Invariantes
+## Invariantes preservadas
 
 - `REAL_DATA_ALLOWED = NO`;
 - somente dados/identidades fictícios;
 - nenhum provider hosted write;
-- F21 permanece `ON HOLD` até `resume_when` objetivo;
+- F21 permanece `ON HOLD` até seu `resume_when` objetivo;
 - Q-001/Q-002/Q-006/Q-009 continuam abertas;
 - autenticação não é autorização;
-- RLS permanece autoritativa;
-- runtime normal permanece não privilegiado e sem CRUD amplo;
-- ADR-012 é a fonte da decisão;
-- `0001..0004` são imutáveis;
-- F27 continua sendo a única UI de write persistente integrada durante F29.
+- RLS/capabilities permanecem autoritativas;
+- runtime normal continua não privilegiado e sem CRUD amplo;
+- migrations `0001..0004` não foram reescritas;
+- Server Action/UI de criação permanecem fora de F29.
 
-## Fora do escopo
+## Próxima ação
 
-- Server Action/UI de cadastro;
-- adicionar `next_action` no payload de criação;
-- stage/status/responsável/waiting;
-- itens e identificadores relacionados;
-- arquivamento/cancelamento;
-- edição de `object`;
-- política multiusuário;
-- provider hosted;
-- retomada F21;
-- dado real.
+A única próxima ação é `F30-PERSISTENT-CONTRACTING-CREATE-UI-01`, que deve tornar a boundary F29 utilizável pela aplicação com candidate UUID server-side, Server Action estreita e UI mínima, mantendo demo read-only e sem ampliar o payload.
 
 ## Critério de encerramento
 
-F29 fecha quando a boundary ADR-012 estiver implementada e provada em PostgreSQL 17 real contra autorização, least privilege, atomicidade, rollback e idempotência concorrente, com regressões F22/F26/Auth verdes e exatamente uma nova `NEXT_ACTION` para tornar o cadastro utilizável pela aplicação.
+F29 está encerrada porque a boundary ADR-012 foi implementada e comprovada em PostgreSQL 17 contra least privilege, autorização pilot-only, RLS, atomicidade, rollback, replay e concorrência, com regressões F22/F26/Auth verdes.

@@ -1,7 +1,7 @@
 # F27-PERSISTENT-NEXT-ACTION-DETAIL-UI-01 — Integrar edição persistente de próxima ação no detalhe
 
 **Classe:** T1 — feature normal, com impacto T2 — autorização/escrita server-side  
-**Estado:** PLANNED / NEXT  
+**Estado:** COMPLETED / PASS  
 **Dependências:** F26, ADR-003, ADR-009 e ADR-011  
 **Classificação permitida:** PUBLIC / FICTITIOUS ONLY
 
@@ -190,6 +190,41 @@ Rejeitar PASS se:
 - retomada F21;
 - dado real.
 
+## Execução realizada
+
+F27 foi implementada na PR `#43` sobre F26 integrada.
+
+- `ContractingDetailPresentation` preserva `nextActionValue: string | null` separado da apresentação humana, mantendo `NULL` distinto de string vazia;
+- `updatePersistentNextActionAction` exige modo persistente, valida somente o candidate UUID e encaminha exclusivamente `contractingId`, `expectedNextAction` e `newNextAction` para `mutatePersistentContractingNextAction`;
+- campos extras forjados e `$ACTION_*` não viram autoridade nem são encaminhados;
+- ausência deliberada de `expectedNextAction`/`newNextAction` representa `NULL`; string vazia continua string vazia;
+- demo não renderiza form e a própria Server Action bloqueia execução fora do modo persistente;
+- sucesso e conflito revalidam somente a rota local fixa do detalhe;
+- feedback externo é limitado aos cinco estados sanitizados previstos;
+- o editor expõe apenas `Próxima ação`, com label, pending/disabled e opção explícita de limpar para `NULL`;
+- nenhum DML, grant, migration ou primitive F26 foi alterado.
+
+### Red-team executado
+
+Os testes provam que browser não injeta team/actor/membership/issuer/subject/event UUID/callback confiáveis; duplicate scalar falha fechado; demo/invalid mode não chega à F26; erro inesperado não vaza connection string; conflito não vira sucesso; controles de stage/status/responsável/waiting não aparecem; feedback forjado no modo demo é ignorado.
+
+Uma primeira tentativa adicional de teste do botão pending falhou por assertar a substring `disabled` contra `aria-disabled="false"`; o teste foi corrigido sem alterar implementação ou enforcement.
+
+### Verificação funcional
+
+Head `96eae1dfa3a6105e87f80b2b103c509b897c4db6`:
+
+- CI `34613166500`: PASS — `verify`, `database`, `auth-database`;
+- F22 Private Preview Preflight `34613166498`: PASS;
+- lint: PASS;
+- typecheck: PASS;
+- testes: PASS;
+- build: PASS;
+- F26 PostgreSQL/RLS/concorrência: PASS;
+- Better Auth/F24: PASS.
+
+Nenhum provider hosted, secret, environment variable ou dado real foi usado.
+
 ## Critério de encerramento
 
-F27 fecha quando uma pessoa autorizada, no modo persistente, consegue alterar somente `Próxima ação` pelo detalhe através da Server Action estreita, com feedback correto de concorrência/erro, sem abrir nova superfície de autoridade e com todos os gates de F26/RLS/Auth/F22 novamente em PASS.
+PASS. A aplicação persistente expõe somente a alteração de `Próxima ação` pela boundary F26, com concorrência/feedback fail-closed e demo read-only. A promoção final ainda depende dos mesmos gates verdes no head documental final antes do merge.

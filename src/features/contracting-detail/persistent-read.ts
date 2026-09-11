@@ -193,6 +193,7 @@ async function queryPersistentContractingDetail(
     waitingSince: formatInstant(contracting.waiting_since, "Não informado"),
     waitingReason: nonEmptyOr(contracting.waiting_reason, "Não informado"),
     nextAction: nonEmptyOr(contracting.next_action, "Não informada"),
+    nextActionValue: contracting.next_action,
     lastMovement: latestEvent
       ? formatInstant(latestEvent.occurred_at, "Sem movimentação registrada")
       : "Sem movimentação registrada",

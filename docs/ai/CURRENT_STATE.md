@@ -1,7 +1,7 @@
 # Current State - Compras
 
-**PROJECT_STATUS:** F31_DESIGN_COMPLETE_PROMOTION_PENDING_F32_PLANNED  
-**CURRENT_PHASE:** F31 decisão fechada na branch ativa; promoção pendente; F32 planejada; F21 ON HOLD  
+**PROJECT_STATUS:** F31_INTEGRATED_F32_READY  
+**CURRENT_PHASE:** F31 integrada em `main`; F32 READY; F21 ON HOLD  
 **REPO_VISIBILITY:** PUBLIC  
 **APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_SIGNIN_LIMITER_NEXT_ACTION_WRITE_CREATE_BOUNDARY_AND_F30_CREATE_UI_INTEGRATED  
 **DATABASE_STATUS:** PROTECTED_READ_MODEL_NARROW_NEXT_ACTION_MUTATION_MINIMAL_CREATE_VALIDATED_OBJECT_MUTATION_DESIGNED  
@@ -20,15 +20,22 @@
 **F28_MERGE_COMMIT:** `04b3e063314180e683e76adbe7c9c5affd53e14f`  
 **F29_MERGE_COMMIT:** `3781ec4eebc0b7618f865a83fcf1214ea13c4a71`  
 **F30_MERGE_COMMIT:** `c0f6e822253e9e324f00bc674f4805f52cbca16c`  
-**F31_BRANCH:** `f31-contracting-object-mutation-design`  
-**F31_DESIGN_HEAD:** `5039b5199d1f7e85fd2402646b9a1831652f41b7`  
-**LAST_GOOD_COMMIT:** `ac0162677f39d1f176ad5a9e0c431770c3d3d204`  
-**LAST_GOOD_CI_RUN:** `34700376978`  
+**F31_PR:** `#47` - MERGED  
+**F31_FINAL_PR_HEAD:** `c908e931c30f352b5614e13e76bc277190868bc0`  
+**F31_PR_CI_RUN:** `34702329753` - PASS  
+**F31_PR_F22_PREFLIGHT_RUN:** `34702329739` - PASS  
+**F31_PR_F29_CREATE_RUN:** `34702329761` - PASS  
+**F31_MERGE_COMMIT:** `b541592aa4a392dfab439389daaddcd4c811c5e5`  
+**F31_MAIN_CI_RUN:** `34702460575` - PASS  
+**F31_MAIN_F22_PREFLIGHT_RUN:** `34702460564` - PASS  
+**F31_MAIN_F29_CREATE_RUN:** `34702460571` - PASS  
+**LAST_GOOD_COMMIT:** `b541592aa4a392dfab439389daaddcd4c811c5e5`  
+**LAST_GOOD_CI_RUN:** `34702460575`  
 **F21_STATE:** `ON HOLD / BLOCKED` - Vercel control-plane surface unavailable for required protection/env readback+CRUD  
 **F21_RESUME_WHEN:** sessão Vercel autenticada permitir readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch, sem exposição de valores  
 **ON_HOLD:** `F17-B2` histórico + `F21` conforme resume_when acima
 
-## Recuperação desta sessão
+## Recuperação e promoção desta sessão
 
 A sessão recuperou `main` em `ac0162677f39d1f176ad5a9e0c431770c3d3d204`, confirmou que não havia PR nem branch F31 ativa e localizou F31 como a única `NEXT_ACTION` canônica.
 
@@ -36,7 +43,9 @@ Os 10 blobs do `CONTEXT_MANIFEST` foram revalidados e todos coincidiram com os h
 
 F31 foi classificada como T2 de desenho arquitetural. Foram inspecionados ADR-011/ADR-012, SECURITY, DATABASE, Q-009, F25/F26/F27/F29/F30, migrations 0004/0005, matrizes PostgreSQL F26/F29 e adapters/Server Actions associados.
 
-Nenhum provider hosted foi escrito, nenhum secret foi usado e nenhum dado/identidade real foi introduzido.
+A implementação documental foi realizada na branch `f31-contracting-object-mutation-design`, PR `#47`. O diff final continha somente seis arquivos de documentação/SPEC, sem migration, SQL, adapter, Server Action ou UI. Não houve provider hosted write, secret, dado real ou alteração das migrations aplicadas `0001..0005`.
+
+O head final `c908e931c30f352b5614e13e76bc277190868bc0` passou CI, F22 Private Preview Preflight e F29 Contracting Create antes da promoção. A PR `#47` foi integrada por merge commit `b541592aa4a392dfab439389daaddcd4c811c5e5`, e os três workflows pós-merge também passaram em `main`.
 
 ## F31 - edição persistente de object desenhada
 
@@ -111,7 +120,7 @@ Cross-team, inexistente, identidade inválida, membership ausente/revogada, segu
 
 ## Red-team F31
 
-O desenho foi revisado contra:
+O desenho e o diff integral foram revisados contra:
 
 - authority controlada pelo browser;
 - reutilização indevida de F26/F29;
@@ -127,19 +136,29 @@ O desenho foi revisado contra:
 - reescrita de migrations aplicadas;
 - provider hosted, secret ou dado real.
 
-Nenhum desses caminhos foi aceito.
+Nenhum desses caminhos foi aceito. Não havia review threads pendentes na PR.
 
-## Verificação aplicável
+## Verificação F31
 
 F31 é design-only. Nenhum código operacional, migration, SQL, adapter, Server Action ou UI foi alterado.
 
 A matriz adversarial de F32 foi registrada em `tasks/F32-PERSISTENT-CONTRACTING-OBJECT-MUTATION-IMPLEMENT-01/SPEC.md`, incluindo concorrência real PostgreSQL, rollback, isolamento F26/F29 e preservação de string vazia/espaços.
 
-Gates automatizados da PR ainda devem passar antes da promoção. Até lá, `LAST_GOOD_COMMIT` permanece o checkpoint F30 validado em `main`.
+Gates no head final da PR `c908e931c30f352b5614e13e76bc277190868bc0`:
+
+- CI `34702329753`: PASS, com verify, database e auth-database;
+- F22 Private Preview Preflight `34702329739`: PASS;
+- F29 Contracting Create `34702329761`: PASS.
+
+Pós-merge `b541592aa4a392dfab439389daaddcd4c811c5e5`:
+
+- CI `34702460575`: PASS;
+- F22 Private Preview Preflight `34702460564`: PASS;
+- F29 Contracting Create `34702460571`: PASS.
 
 ## Próxima ação
 
-Existe exatamente uma `NEXT_ACTION` canônica na branch:
+Existe exatamente uma `NEXT_ACTION` canônica:
 
 `F32-PERSISTENT-CONTRACTING-OBJECT-MUTATION-IMPLEMENT-01 - Implementar boundary persistente de edição do objeto`.
 

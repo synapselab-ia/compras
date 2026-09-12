@@ -16,6 +16,7 @@ const FORBIDDEN_OPERATIONAL_ROLES = new Set([
   "neondb_owner",
   "compras_team_directory_view_owner",
   "compras_next_action_mutation_owner",
+  "compras_contracting_create_owner",
 ]);
 
 type RoleSafetyRow = {

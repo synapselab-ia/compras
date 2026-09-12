@@ -18,9 +18,9 @@ A fundação já possui:
 - controle distribuído de abuso de sign-in;
 - capability persistente estreita para `contractings.next_action`;
 - UI persistente do detalhe capaz de editar somente `Próxima ação`;
-- boundary persistente mínima de criação de `contractings`, pilot-only, auditável e idempotente, implementada por F29.
+- boundary persistente mínima de criação de `contractings`, pilot-only, auditável e idempotente, integrada por F29.
 
-F29 está implementada e verde na PR `#45`, aguardando apenas promoção final/merge e confirmação pós-merge. A próxima frente é F30, que tornará o cadastro mínimo utilizável pela aplicação sem ampliar a boundary.
+F29 está integrada em `main` pela PR `#45`, merge `3781ec4eebc0b7618f865a83fcf1214ea13c4a71`, com CI, F22 preflight e workflow F29 verdes pós-merge. A próxima frente é F30, que tornará o cadastro mínimo utilizável pela aplicação sem ampliar a boundary.
 
 F17 permanece `ON HOLD` histórico. F21 permanece `ON HOLD` antes de secrets até existir control plane Vercel capaz de readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch sem expor valores.
 
@@ -126,11 +126,17 @@ Replay autorizado do mesmo UUID só retorna `already-created` quando team deriva
 
 O workflow `.github/workflows/f29-contracting-create.yml` executa red-team da capability, migration/provisionamento, matriz SQL e concorrência em PostgreSQL 17 descartável.
 
-Checkpoint verde conhecido antes da promoção final da PR #45:
+Gates finais da PR #45:
 
-- CI `34637397308`: PASS;
-- F22 Private Preview Preflight `34637397405`: PASS;
-- F29 Contracting Create `34637397361`: PASS.
+- CI `34696792923`: PASS;
+- F22 Private Preview Preflight `34696792988`: PASS;
+- F29 Contracting Create `34696792903`: PASS.
+
+Pós-merge `3781ec4eebc0b7618f865a83fcf1214ea13c4a71`:
+
+- CI `34696856515`: PASS;
+- F22 Private Preview Preflight `34696856531`: PASS;
+- F29 Contracting Create `34696856481`: PASS.
 
 ## Próxima frente
 
@@ -175,7 +181,7 @@ Falha protegida nunca vira demo silenciosamente.
 
 ## Banco canônico
 
-Migrations imutáveis do domínio na linha atual:
+Migrations imutáveis do domínio atualmente integradas:
 
 - `0001_core_foundation.sql`;
 - `0002_trusted_identity_read_policies.sql`;

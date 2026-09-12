@@ -23,6 +23,7 @@ import { createPersistentContractingAction } from "./actions";
 const ID = "30000000-0000-4000-8000-000000000001";
 const DETAIL_PATH = `/contratacoes/${ID}`;
 const CREATE_PATH = "/contratacoes/nova";
+const RETRY_SUFFIX = `&candidate=${ID}`;
 
 function baseForm(): FormData {
   const form = new FormData();
@@ -118,7 +119,7 @@ describe("createPersistentContractingAction", () => {
     duplicateObject.append("object", "FORGED-DUPLICATE");
 
     await expect(createPersistentContractingAction(duplicateObject)).rejects.toThrow(
-      `REDIRECT:${CREATE_PATH}?creation=unavailable`,
+      `REDIRECT:${CREATE_PATH}?creation=unavailable${RETRY_SUFFIX}`,
     );
     expect(actionMocks.createPersistentContracting).not.toHaveBeenCalled();
   });
@@ -142,25 +143,25 @@ describe("createPersistentContractingAction", () => {
       actionMocks.createPersistentContracting.mockResolvedValueOnce(result);
 
       await expect(createPersistentContractingAction(baseForm())).rejects.toThrow(
-        `REDIRECT:${CREATE_PATH}?creation=${result}`,
+        `REDIRECT:${CREATE_PATH}?creation=${result}${RETRY_SUFFIX}`,
       );
       expect(actionMocks.revalidatePath).not.toHaveBeenCalled();
     }
   });
 
-  it("sanitizes unexpected boundary errors without exposing details", async () => {
+  it("sanitizes unexpected boundary errors while preserving only the validated retry candidate", async () => {
     actionMocks.createPersistentContracting.mockRejectedValueOnce(
-      new Error("postgresql://secret-user:secret-pass@private.invalid/database?claim=FORGED"),
+      new Error("INTERNAL-DEMO-CONNECTION-DETAIL claim=FORGED"),
     );
 
     await expect(createPersistentContractingAction(baseForm())).rejects.toThrow(
-      `REDIRECT:${CREATE_PATH}?creation=unavailable`,
+      `REDIRECT:${CREATE_PATH}?creation=unavailable${RETRY_SUFFIX}`,
     );
 
     const serializedRedirects = JSON.stringify(actionMocks.redirect.mock.calls);
-    expect(serializedRedirects).not.toContain("secret-user");
-    expect(serializedRedirects).not.toContain("private.invalid");
+    expect(serializedRedirects).not.toContain("INTERNAL-DEMO-CONNECTION-DETAIL");
     expect(serializedRedirects).not.toContain("FORGED");
+    expect(serializedRedirects).toContain(ID);
     expect(actionMocks.revalidatePath).not.toHaveBeenCalled();
   });
 });

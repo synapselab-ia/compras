@@ -20,11 +20,11 @@ A fundação já possui:
 - UI persistente do detalhe capaz de editar somente `Próxima ação`;
 - boundary persistente mínima de criação de `contractings`, pilot-only, auditável e idempotente;
 - jornada UI/Server Action mínima de criação persistente integrada por F30;
-- ADR-013 desenhando uma capability separada para futura edição persistente de `contractings.object`.
+- ADR-013 integrada, definindo capability separada para futura edição persistente de `contractings.object`.
 
-F30 está integrada em `main` pela PR `#46`, merge `c0f6e822253e9e324f00bc674f4805f52cbca16c`, com CI, F22 Private Preview Preflight e F29 Contracting Create verdes pós-merge.
+F31 está integrada em `main` pela PR `#47`, merge `b541592aa4a392dfab439389daaddcd4c811c5e5`, com CI, F22 Private Preview Preflight e F29 Contracting Create verdes antes e depois do merge.
 
-A frente ativa F31 é design-only. Ela decidiu a arquitetura da edição de `object`; a próxima frente preparada é F32, que implementará apenas PostgreSQL/server-only após a promoção de F31.
+A próxima frente canônica é F32, que implementará somente a boundary PostgreSQL/server-only de edição de `object`, sem UI/Server Action nesta slice.
 
 F17 permanece `ON HOLD` histórico. F21 permanece `ON HOLD` antes de secrets até existir control plane Vercel capaz de readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch sem expor valores.
 
@@ -156,11 +156,23 @@ Propriedades decididas:
 - F29 permanece exclusiva de criação mínima;
 - Q-009 continua aberta.
 
-F31 não implementa migration, SQL, adapter, Server Action ou UI.
+F31 não implementou migration, SQL, adapter, Server Action ou UI.
+
+Gates finais da PR #47:
+
+- CI `34702329753`: PASS;
+- F22 Private Preview Preflight `34702329739`: PASS;
+- F29 Contracting Create `34702329761`: PASS.
+
+Pós-merge `b541592aa4a392dfab439389daaddcd4c811c5e5`:
+
+- CI `34702460575`: PASS;
+- F22 Private Preview Preflight `34702460564`: PASS;
+- F29 Contracting Create `34702460571`: PASS.
 
 ## Próxima frente
 
-A única `NEXT_ACTION` canônica na branch F31 está em `docs/ai/NEXT_ACTION.md`:
+A única `NEXT_ACTION` canônica está em `docs/ai/NEXT_ACTION.md`:
 
 `F32-PERSISTENT-CONTRACTING-OBJECT-MUTATION-IMPLEMENT-01 - Implementar boundary persistente de edição do objeto`.
 

@@ -49,12 +49,21 @@ export default async function Home() {
 
         <div className="prototype-card" aria-label="Limites desta etapa">
           <span>Ambiente</span>
-          <strong>{isDemo ? "Somente demonstração" : isPersistent ? "Leitura persistente" : "Indisponível"}</strong>
-          <p>Nenhuma ação nesta tela grava ou altera registros.</p>
+          <strong>{isDemo ? "Somente demonstração" : isPersistent ? "Persistência restrita" : "Indisponível"}</strong>
+          <p>
+            {isPersistent
+              ? "O cadastro mínimo persistente está habilitado. Demais escritas permanecem restritas às boundaries já implementadas."
+              : "Nenhuma ação desta tela grava ou altera registros."}
+          </p>
           {isPersistent ? (
-            <p>
-              <Link href="/auth/sign-out">Encerrar sessão</Link>
-            </p>
+            <>
+              <p>
+                <Link href="/contratacoes/nova">Cadastrar nova contratação</Link>
+              </p>
+              <p>
+                <Link href="/auth/sign-out">Encerrar sessão</Link>
+              </p>
+            </>
           ) : null}
         </div>
       </header>

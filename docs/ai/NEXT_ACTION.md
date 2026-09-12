@@ -1,39 +1,36 @@
 # Next Action — Compras
 
-## F30-PERSISTENT-CONTRACTING-CREATE-UI-01 — Tornar cadastro persistente mínimo utilizável
+## F31-PERSISTENT-CONTRACTING-OBJECT-MUTATION-DESIGN-01 — Desenhar edição persistente do objeto
 
-**Classe:** `T1 — feature normal` com impacto `T2 — fronteira de autorização`  
+**Classe:** `T2 — fronteira de autorização e mutação persistente`  
 **Estado:** READY  
-**Objetivo:** tornar a boundary F29 utilizável pela aplicação por uma jornada mínima de cadastro persistente, mantendo candidate UUID preparado server-side, payload restrito a `contractingId + object`, demo estritamente read-only e autorização/RLS autoritativas.
+**Objetivo:** decidir a menor boundary segura para editar exclusivamente `contractings.object`, mantendo autorização pilot-only, concorrência explícita, evento atômico, least privilege, RLS autoritativa e a semântica atual de `object` sem transformações inventadas.
 
 Esta é a única `NEXT_ACTION` canônica.
 
 ## Por que esta ação agora
 
-F29 materializou a ADR-012 em PostgreSQL 17 e código server-only: criação mínima, pilot-only, auditável, idempotente e sem DML direto no runtime. A aplicação ainda não expõe uma jornada de cadastro; a Central continua sem UI de criação persistente.
+F30 torna a criação mínima utilizável pela aplicação. O núcleo funcional inicial prevê cadastro e edição de contratação, mas `object` ainda não possui uma mutação própria. F26 é exclusiva de `next_action` e F29 é exclusiva de criação; ampliar qualquer uma por conveniência enfraqueceria o isolamento de authority já provado.
 
-A próxima slice deve apenas conectar uma Server Action/UI estreita à boundary já implementada, sem ampliar payload, sem criar CRUD genérico e sem resolver Q-001/Q-002/Q-006/Q-009 por conveniência.
+A próxima slice deve ser somente de desenho. Antes de qualquer nova migration ou UI, é necessário decidir payload, concorrência, evento, capability, resultados externos e autorização da edição de `object` sem resolver Q-009 silenciosamente.
 
-F21 continua `ON HOLD` sob seu `resume_when` externo e não é dependência da F30.
+F21 continua `ON HOLD` sob seu `resume_when` externo e não é dependência da F31.
 
 ## Execução obrigatória
 
-1. recuperar `main`, confirmar F29 integrada/verde e revalidar `CONTEXT_MANIFEST`;
-2. inspecionar Central, `src/app/page.tsx`, boundary F27, `persistent-read-mode`, F29 adapter/testes, ADR-012, SECURITY e DATABASE;
-3. não modificar migrations `0001..0005`;
-4. apresentar entrada de cadastro somente quando `readPersistentReadMode() === "persistent"`;
-5. manter demo e configuração inválida sem caminho de write persistente;
-6. preparar candidate UUID no servidor com `preparePersistentContractingCandidateId()` antes da submissão;
-7. criar Server Action específica que leia scalars uma única vez, rejeite duplicatas e encaminhe somente `{ contractingId, object }`;
-8. ignorar/rejeitar campos forjados sem confiar team, actor, membership, created_by, issuer, subject, eventId, callback ou redirect;
-9. chamar exclusivamente `createPersistentContracting`, sem SQL/DML direto e sem demo fallback;
-10. preservar `object` exatamente, sem trim, limite, non-empty ou coerção para `NULL` inventados;
-11. construir redirects somente com rotas locais fixas + candidate UUID validado;
-12. mapear `created`, `already-created`, `not-available` e `unavailable` para navegação/feedback sanitizados;
-13. manter UI mínima, sem controles de team/actor/membership/created_by/next_action/stage/status/responsável/waiting;
-14. provar pending contra repetição acidental e matriz adversarial de payload/redirect/duplicate scalar/erro sensível;
-15. executar lint, typecheck, testes, build, CI database/Auth, F22 Private Preview Preflight e F29 Contracting Create;
-16. revisar diff integral, fazer red-team e deixar exatamente uma nova `NEXT_ACTION`.
+1. recuperar o estado canônico após F30 e revalidar `CONTEXT_MANIFEST`;
+2. inspecionar ADR-011, ADR-012, F25/F26/F27, F29/F30, SECURITY, DATABASE, migrations e testes de mutação existentes;
+3. manter migrations aplicadas imutáveis;
+4. definir a fronteira de confiança e o payload mínimo da edição de `object`;
+5. definir concorrência otimista compatível com os padrões já aprovados;
+6. preservar `object` exatamente, inclusive string vazia, sem trim, limite, regra non-empty ou coerção para `NULL` inventados;
+7. manter autorização pilot-only sem transformar Q-009 em política multiusuário;
+8. definir atualização de estado + evento histórico na mesma transação lógica;
+9. definir capability própria/least privilege sem ampliar F26 ou F29;
+10. definir resultados sanitizados para sucesso, conflito, negação e falha, sem oracle cross-team;
+11. produzir nova ADR e matriz adversarial suficiente para a implementação posterior;
+12. não implementar migration, SQL, adapter, Server Action ou UI nesta work unit;
+13. revisar o diff documental, fazer red-team e deixar exatamente uma nova `NEXT_ACTION` somente se a decisão ficar fechada.
 
 ## Invariantes
 
@@ -41,20 +38,20 @@ F21 continua `ON HOLD` sob seu `resume_when` externo e não é dependência da F
 - somente dados/identidades fictícios;
 - nenhum provider hosted write;
 - F21 permanece `ON HOLD` até seu `resume_when` objetivo;
-- Q-001/Q-002/Q-006/Q-009 continuam abertas;
+- Q-001/Q-002/Q-006/Q-009 continuam abertas salvo decisão explícita e necessária;
 - autenticação não é autorização;
 - RLS/capabilities permanecem autoritativas;
 - runtime normal continua sem DML direto;
-- migrations `0001..0005` permanecem imutáveis;
-- F29 é a única boundary de criação usada pela aplicação;
-- browser não define identidade, escopo, actor, membership, creator ou event UUID;
-- falha protegida nunca vira demo fallback;
-- nenhuma mensagem interna, claim, connection string ou secret chega a UI/query string/log.
+- migrations aplicadas permanecem imutáveis;
+- F26 continua exclusiva de `next_action`;
+- F29 continua exclusiva de criação mínima;
+- browser não define identidade, escopo, actor ou membership confiável;
+- erro protegido nunca vira demo fallback nem expõe detalhe interno.
 
 ## Fonte da tarefa
 
-Executar `tasks/F30-PERSISTENT-CONTRACTING-CREATE-UI-01/SPEC.md` seguindo ADR-012 e as fontes de segurança/banco ali referenciadas.
+Executar `tasks/F31-PERSISTENT-CONTRACTING-OBJECT-MUTATION-DESIGN-01/SPEC.md` seguindo as fontes canônicas ali referenciadas.
 
 ## Critério de encerramento
 
-F30 fecha quando uma pessoa no modo persistente puder iniciar e concluir o cadastro mínimo pela boundary F29, com candidate UUID server-side, payload estrito `contractingId + object`, navegação/feedback sanitizados, demo read-only e todos os gates/adversariais verdes.
+F31 fecha quando existir uma ADR implementável para edição exclusiva de `object`, com payload mínimo, concorrência, autorização pilot-only, evento atômico, least privilege e semântica sanitizada definidos, sem alteração de código operacional nesta slice.

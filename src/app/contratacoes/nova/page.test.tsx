@@ -37,6 +37,7 @@ vi.mock("@/features/contracting-create/components/contracting-create-form", () =
 import ContractingCreatePage from "./page";
 
 const ID = "30000000-0000-4000-8000-000000000001";
+const RETRY_ID = "30000000-0000-4000-8000-000000000002";
 
 describe("ContractingCreatePage", () => {
   beforeEach(() => {
@@ -68,6 +69,30 @@ describe("ContractingCreatePage", () => {
       expect(pageMocks.preparePersistentContractingCandidateId).not.toHaveBeenCalled();
       expect(pageMocks.readContractingCreateUiState).not.toHaveBeenCalled();
     }
+  });
+
+  it("reuses only a validated opaque retry candidate and otherwise prepares a new one", async () => {
+    const retryElement = await ContractingCreatePage({
+      searchParams: Promise.resolve({ candidate: RETRY_ID }),
+    });
+    const retryHtml = renderToStaticMarkup(retryElement);
+
+    expect(retryHtml).toContain(`data-contracting-id="${RETRY_ID}"`);
+    expect(pageMocks.preparePersistentContractingCandidateId).not.toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    pageMocks.readPersistentReadMode.mockReturnValue("persistent");
+    pageMocks.preparePersistentContractingCandidateId.mockReturnValue(ID);
+    pageMocks.readContractingCreateUiState.mockReturnValue(null);
+
+    const malformedElement = await ContractingCreatePage({
+      searchParams: Promise.resolve({ candidate: "not-a-uuid" }),
+    });
+    const malformedHtml = renderToStaticMarkup(malformedElement);
+
+    expect(pageMocks.preparePersistentContractingCandidateId).toHaveBeenCalledTimes(1);
+    expect(malformedHtml).toContain(`data-contracting-id="${ID}"`);
+    expect(malformedHtml).not.toContain("not-a-uuid");
   });
 
   it("uses the feedback whitelist instead of echoing arbitrary query text", async () => {

@@ -1,4 +1,4 @@
-# Comece aqui — Compras
+# Comece aqui - Compras
 
 ## Missão
 
@@ -18,9 +18,12 @@ A fundação já possui:
 - controle distribuído de abuso de sign-in;
 - capability persistente estreita para `contractings.next_action`;
 - UI persistente do detalhe capaz de editar somente `Próxima ação`;
-- boundary persistente mínima de criação de `contractings`, pilot-only, auditável e idempotente, integrada por F29.
+- boundary persistente mínima de criação de `contractings`, pilot-only, auditável e idempotente;
+- jornada UI/Server Action mínima de criação persistente integrada por F30.
 
-F29 está integrada em `main` pela PR `#45`, merge `3781ec4eebc0b7618f865a83fcf1214ea13c4a71`, com CI, F22 preflight e workflow F29 verdes pós-merge. A próxima frente é F30, que tornará o cadastro mínimo utilizável pela aplicação sem ampliar a boundary.
+F30 está integrada em `main` pela PR `#46`, merge `c0f6e822253e9e324f00bc674f4805f52cbca16c`, com CI, F22 Private Preview Preflight e F29 Contracting Create verdes pós-merge.
+
+A próxima frente canônica é F31, exclusivamente de desenho, para definir a futura edição persistente de `contractings.object` sem ampliar F26/F29 por conveniência.
 
 F17 permanece `ON HOLD` histórico. F21 permanece `ON HOLD` antes de secrets até existir control plane Vercel capaz de readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch sem expor valores.
 
@@ -42,21 +45,20 @@ Migrations Auth ficam em `database/auth/migrations/`. Auth runtime e domain runt
 
 F24 adicionou limiter distribuído PostgreSQL para sign-in. Falha de limiter/configuração/store fecha o acesso; não existe fallback permissivo.
 
-## F22 — preflight fictício
+## F22 - preflight fictício
 
 O preflight descartável prova:
 
 - bootstrap somente fictício/`example.invalid`;
-- Auth sem autorização interna → zero dados;
-- usuário autorizado → somente própria equipe;
-- UUID cross-team → invisível;
-- claims inválidos → fail-closed;
-- separação Auth/domínio;
-- signup normal continua fechado.
+- Auth sem autorização interna resulta em zero dados;
+- usuário autorizado vê somente a própria equipe;
+- UUID cross-team fica invisível;
+- claims inválidos falham fechado;
+- Auth e domínio permanecem separados;
+- signup normal continua fechado;
+- capabilities/runtimes persistentes não recebem authority indevida.
 
-O preflight também verifica isolamento das capabilities/runtimes introduzidos nas slices persistentes.
-
-## F26/F27 — primeira mutação persistente utilizável
+## F26/F27 - mutação de próxima ação
 
 ADR-011 escolheu uma primitive PostgreSQL `SECURITY DEFINER` específica para alterar somente `contractings.next_action`.
 
@@ -68,17 +70,15 @@ Objetos principais:
 - `src/server/database/trusted-mutation-context.ts`;
 - `src/features/contracting-detail/persistent-mutation.ts`.
 
-A capability `compras_next_action_mutation_owner` é `NOLOGIN`, `NOINHERIT`, não privilegiada, sem ownership de tabelas-base e sem membership utilizável. O runtime recebe apenas `EXECUTE` explícito, sem DML direto.
+A capability `compras_next_action_mutation_owner` é não privilegiada e separada. O runtime recebe apenas `EXECUTE` explícito, sem DML direto.
 
-Q-009 permanece aberta. A escrita é pilot-only: identidade corrente deve ser o único membro não revogado da equipe alvo. Mudança real cria exatamente um `next_action_changed` na mesma transação; no-op não cria evento; stale expected retorna `conflict`.
+Q-009 permanece aberta. A escrita é pilot-only. Mudança real cria exatamente um `next_action_changed` na mesma transação; no-op não cria evento; stale expected retorna `conflict`.
 
 F27 expõe essa operação apenas no detalhe persistente, com Server Action estreita, demo read-only e feedback sanitizado.
 
-## F28/F29 — criação persistente mínima
+## F28/F29 - criação persistente mínima
 
-ADR-012 definiu e F29 implementou a primeira boundary de criação de `contractings`.
-
-### Payload e escopo
+ADR-012 definiu e F29 implementou a boundary de criação mínima de `contractings`.
 
 A boundary aceita somente:
 
@@ -87,72 +87,59 @@ contractingId
 object
 ```
 
-`contractingId` é UUID preparado server-side e idempotency key não secreta. `object` é preservado exatamente, sem trim/tamanho/non-empty inventados além do `NOT NULL` físico.
+`contractingId` é UUID preparado server-side e idempotency key não secreta. `object` é preservado exatamente, sem trim, limite de tamanho ou regra non-empty inventados além do `NOT NULL` físico.
 
-Team, actor e `created_by_membership_id` são derivados da sessão Better Auth validada + banco. A criação exige:
+Team, actor e `created_by_membership_id` são derivados da sessão Better Auth validada e do banco. A criação continua pilot-only e Q-009 permanece aberta.
 
-- usuário interno ativo;
-- exatamente uma membership não revogada do usuário em todo o banco;
-- team derivado não arquivado;
-- exatamente uma membership não revogada no team.
+`database/migrations/0005_contracting_create.sql` introduz capability própria, separada de F26. O runtime recebe somente `EXECUTE` explícito, sem DML direto.
 
-Múltiplas memberships ou segundo membro não revogado bloqueiam, mesmo se esse segundo `app_user` estiver desabilitado. Q-009 continua aberta.
+A row inicial e o evento `contracting_created` são atômicos. Replay autorizado do mesmo candidate UUID retorna `already-created` somente quando os dados canônicos coincidem exatamente. Colisão/mismatch/cross-team retorna negação genérica.
 
-### Capability própria
+## F30 - criação persistente utilizável
 
-`database/migrations/0005_contracting_create.sql` introduz `compras_contracting_create_owner`, separada de F26:
+F30 conecta a aplicação à boundary F29 sem ampliar authority:
 
-- `NOLOGIN`, `NOINHERIT`, não privilegiada;
-- sem ownership de tabelas-base ou membership utilizável;
-- primitive `public.create_contracting_minimal(uuid,text,uuid)` `SECURITY DEFINER`;
-- `search_path = pg_catalog`;
-- `PUBLIC EXECUTE` revogado;
-- grants/policies coluna-a-coluna;
-- runtime normal sem DML direto.
+- entrada `Cadastrar nova contratação` somente no modo persistente;
+- `/contratacoes/nova` falha fechado em demo/configuração inválida;
+- candidate UUID preparado server-side antes da submissão;
+- formulário sem controles de team/actor/membership/creator/event/stage/status/responsável/waiting/next_action;
+- Server Action lê cada scalar confiável uma única vez e rejeita duplicatas;
+- somente `{ contractingId, object }` chega a `createPersistentContracting`;
+- `object` é preservado exatamente, inclusive string vazia;
+- forged authority/callback/redirect/event fields não são encaminhados;
+- redirects usam somente rotas locais fixas e estado público sanitizado;
+- `useFormStatus` bloqueia repetição acidental enquanto pendente;
+- retry após resultado técnico incerto preserva o mesmo candidate UUID validado para manter a idempotência da ADR-012.
 
-`database/provisioning/grant_contracting_create_runtime.sql` concede somente `EXECUTE` à role runtime explícita e segura.
+Gates finais da PR #46:
 
-### Estado, evento e idempotência
+- CI `34700169464`: PASS;
+- F22 Private Preview Preflight `34700169506`: PASS;
+- F29 Contracting Create `34700169547`: PASS.
 
-A row inicial persiste somente ID, team derivado, `object`, creator derivado e timestamps. Responsible/stage/status/waiting/next_action/archived/cancelled ficam `NULL`.
+Pós-merge `c0f6e822253e9e324f00bc674f4805f52cbca16c`:
 
-Na mesma transação nasce exatamente um `contracting_created`; row/event compartilham o mesmo instante. Falha do evento reverte a criação.
-
-Replay autorizado do mesmo UUID só retorna `already-created` quando team derivado, creator derivado e `object` coincidem exatamente. Mismatch/cross-team retorna negação genérica. Teste concorrente com oito writers prova uma única row, um único evento, um `created` e sete `already-created`.
-
-### Adapter server-only
-
-`src/features/contracting-create/persistent-create.ts` gera candidate/event UUIDs no servidor, chama apenas a primitive via `withTrustedDatabaseMutationContext`, não aceita identidade/escopo do browser, não possui demo fallback e sanitiza falhas técnicas.
-
-O workflow `.github/workflows/f29-contracting-create.yml` executa red-team da capability, migration/provisionamento, matriz SQL e concorrência em PostgreSQL 17 descartável.
-
-Gates finais da PR #45:
-
-- CI `34696792923`: PASS;
-- F22 Private Preview Preflight `34696792988`: PASS;
-- F29 Contracting Create `34696792903`: PASS.
-
-Pós-merge `3781ec4eebc0b7618f865a83fcf1214ea13c4a71`:
-
-- CI `34696856515`: PASS;
-- F22 Private Preview Preflight `34696856531`: PASS;
-- F29 Contracting Create `34696856481`: PASS.
+- CI `34700243224`: PASS;
+- F22 Private Preview Preflight `34700243225`: PASS;
+- F29 Contracting Create `34700243158`: PASS.
 
 ## Próxima frente
 
 A única `NEXT_ACTION` canônica está em `docs/ai/NEXT_ACTION.md`:
 
-`F30-PERSISTENT-CONTRACTING-CREATE-UI-01 — Tornar cadastro persistente mínimo utilizável`.
+`F31-PERSISTENT-CONTRACTING-OBJECT-MUTATION-DESIGN-01 - Desenhar edição persistente do objeto`.
 
-F30 deve conectar somente uma jornada UI/Server Action estreita à boundary F29:
+F31 deve somente decidir a arquitetura da próxima mutação de `contractings.object`:
 
-- candidate UUID preparado server-side antes da submissão;
-- payload encaminhado estritamente `contractingId + object`;
-- nenhuma escolha client-side de team/actor/membership/created_by/event UUID;
-- demo e configuração inválida sem write;
-- redirects locais fixos e feedback sanitizado;
-- migrations `0001..0005` imutáveis;
-- regressões F22/F26/F29/Auth verdes.
+- payload mínimo e fronteira de confiança;
+- concorrência otimista;
+- autorização pilot-only sem resolver Q-009 silenciosamente;
+- evento atômico;
+- capability própria e least privilege;
+- resultados sanitizados sem oracle cross-team;
+- preservação exata da semântica atual de `object`.
+
+F31 não implementa migration, SQL, adapter, Server Action ou UI.
 
 ## Modos da aplicação
 

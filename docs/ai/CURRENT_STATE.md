@@ -1,12 +1,12 @@
 # Current State - Compras
 
-**PROJECT_STATUS:** F30_INTEGRATED_F31_READY  
-**CURRENT_PHASE:** F30 integrada em `main`; F31 READY; F21 ON HOLD  
+**PROJECT_STATUS:** F31_DESIGN_COMPLETE_PROMOTION_PENDING_F32_PLANNED  
+**CURRENT_PHASE:** F31 decisão fechada na branch ativa; promoção pendente; F32 planejada; F21 ON HOLD  
 **REPO_VISIBILITY:** PUBLIC  
 **APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_SIGNIN_LIMITER_NEXT_ACTION_WRITE_CREATE_BOUNDARY_AND_F30_CREATE_UI_INTEGRATED  
-**DATABASE_STATUS:** PROTECTED_READ_MODEL_NARROW_NEXT_ACTION_MUTATION_AND_MINIMAL_CONTRACTING_CREATE_VALIDATED  
+**DATABASE_STATUS:** PROTECTED_READ_MODEL_NARROW_NEXT_ACTION_MUTATION_MINIMAL_CREATE_VALIDATED_OBJECT_MUTATION_DESIGNED  
 **AUTH_STATUS:** SELF_HOSTED_BETTER_AUTH_AND_SIGNIN_LIMITER_INTEGRATED  
-**DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_NO_F30_HOSTED_WRITES  
+**DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_NO_F31_HOSTED_WRITES  
 **REAL_DATA_ALLOWED:** NO  
 **CONTEXT_STATUS:** VALID  
 **FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`  
@@ -19,100 +19,130 @@
 **F27_MERGE_COMMIT:** `54b8fa88f06cdc0020333e16e4aa3ab31e8a6fcf`  
 **F28_MERGE_COMMIT:** `04b3e063314180e683e76adbe7c9c5affd53e14f`  
 **F29_MERGE_COMMIT:** `3781ec4eebc0b7618f865a83fcf1214ea13c4a71`  
-**F30_PR:** `#46` - MERGED  
-**F30_FUNCTIONAL_HEAD:** `38f7683bc5c3f7ab539a5764d3f1088dfd499f60`  
-**F30_FINAL_PR_HEAD:** `fdad5471e535a4d2833ca42efd9091308114591d`  
-**F30_PR_FINAL_CI_RUN:** `34700169464` - PASS  
-**F30_PR_FINAL_F22_PREFLIGHT_RUN:** `34700169506` - PASS  
-**F30_PR_FINAL_F29_CREATE_RUN:** `34700169547` - PASS  
 **F30_MERGE_COMMIT:** `c0f6e822253e9e324f00bc674f4805f52cbca16c`  
-**F30_MAIN_CI_RUN:** `34700243224` - PASS  
-**F30_MAIN_F22_PREFLIGHT_RUN:** `34700243225` - PASS  
-**F30_MAIN_F29_CREATE_RUN:** `34700243158` - PASS  
-**LAST_GOOD_COMMIT:** `c0f6e822253e9e324f00bc674f4805f52cbca16c`  
-**LAST_GOOD_CI_RUN:** `34700243224`  
+**F31_BRANCH:** `f31-contracting-object-mutation-design`  
+**F31_DESIGN_HEAD:** `5039b5199d1f7e85fd2402646b9a1831652f41b7`  
+**LAST_GOOD_COMMIT:** `ac0162677f39d1f176ad5a9e0c431770c3d3d204`  
+**LAST_GOOD_CI_RUN:** `34700376978`  
 **F21_STATE:** `ON HOLD / BLOCKED` - Vercel control-plane surface unavailable for required protection/env readback+CRUD  
 **F21_RESUME_WHEN:** sessão Vercel autenticada permitir readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch, sem exposição de valores  
 **ON_HOLD:** `F17-B2` histórico + `F21` conforme resume_when acima
 
-## Recuperação e promoção desta sessão
+## Recuperação desta sessão
 
-A sessão recuperou `main` em `baee340772c00283b19114411b7ecd13c770396b`, confirmou F29 integrada e verde, revalidou os 10 blobs do `CONTEXT_MANIFEST` e confirmou que não havia branch ou PR F30 ativa. A única `NEXT_ACTION` canônica era F30.
+A sessão recuperou `main` em `ac0162677f39d1f176ad5a9e0c431770c3d3d204`, confirmou que não havia PR nem branch F31 ativa e localizou F31 como a única `NEXT_ACTION` canônica.
 
-A implementação foi realizada na branch `f30-persistent-contracting-create-ui`, PR `#46`, sem provider hosted write, sem dado real e sem alteração das migrations aplicadas `0001..0005`.
+Os 10 blobs do `CONTEXT_MANIFEST` foram revalidados e todos coincidiram com os hashes esperados. `CONTEXT_STATUS = VALID`.
 
-O head final da PR `fdad5471e535a4d2833ca42efd9091308114591d` passou todos os gates obrigatórios antes do merge. A PR `#46` foi promovida por merge commit `c0f6e822253e9e324f00bc674f4805f52cbca16c`. Os três workflows pós-merge também passaram em `main`.
+F31 foi classificada como T2 de desenho arquitetural. Foram inspecionados ADR-011/ADR-012, SECURITY, DATABASE, Q-009, F25/F26/F27/F29/F30, migrations 0004/0005, matrizes PostgreSQL F26/F29 e adapters/Server Actions associados.
 
-## F30 - jornada mínima de criação persistente integrada
+Nenhum provider hosted foi escrito, nenhum secret foi usado e nenhum dado/identidade real foi introduzido.
 
-F30 conecta a aplicação à boundary F29 sem criar nova autoridade de persistência.
+## F31 - edição persistente de object desenhada
 
-### Entrada e modo
+A decisão canônica está em `docs/decisions/ADR-013-persistent-contracting-object-mutation.md`.
 
-- a Central mostra `Cadastrar nova contratação` somente quando o view data está em modo `persistent`;
-- acesso direto a `/contratacoes/nova` em `demo` ou configuração inválida falha fechado e não prepara candidate nem executa write;
-- o formulário recebe candidate UUID opaco preparado server-side por `preparePersistentContractingCandidateId()`;
-- somente `contractingId` e `object` são controles semânticos da submissão.
+### Alternativa adotada
 
-### Server Action e confiança
+A edição de `contractings.object` terá capability PostgreSQL própria. Foram rejeitados:
 
-`src/features/contracting-create/actions.ts`:
+- ampliar F26;
+- ampliar F29;
+- conceder DML direto à role runtime.
 
-- exige `readPersistentReadMode() === "persistent"`;
-- lê cada scalar confiável uma única vez e rejeita duplicatas;
-- valida o candidate UUID antes de qualquer chamada à F29;
-- encaminha exclusivamente `{ contractingId, object }` a `createPersistentContracting`;
-- ignora campos extras forjados e nunca confia team, actor, membership, creator, issuer, subject, eventId, callback ou redirect;
-- não executa SQL/DML direto e não possui demo fallback;
-- preserva `object` exatamente, inclusive string vazia;
-- usa somente redirects locais fixos e estados públicos whitelisted.
+A futura role técnica equivalente a `compras_contracting_object_mutation_owner` deve permanecer `NOLOGIN`, `NOINHERIT`, não privilegiada, sem ownership de tabelas-base e sem membership utilizável. A primitive será `SECURITY DEFINER`, `search_path = pg_catalog`, SQL estático e `PUBLIC EXECUTE` revogado.
 
-### Idempotência e feedback
+### Payload e confiança
 
-O red-team identificou antes da promoção que regenerar candidate após resultado técnico incerto enfraqueceria a proteção de retry da ADR-012. A implementação foi corrigida:
+A interface server-only futura recebe somente:
 
-- `created` e `already-created` seguem para o detalhe do UUID validado;
-- `not-available` e `unavailable` retornam ao formulário somente com estado sanitizado e o mesmo candidate UUID validado;
-- a rota reutiliza o candidate apenas se ele for UUID válido; valor malformado é descartado e um novo candidate server-side é preparado;
-- candidate continua sendo apenas idempotency key opaca e não authority;
-- `useFormStatus` bloqueia repetição acidental enquanto a action está pendente.
+```text
+contractingId
+expectedObject
+newObject
+```
 
-Feedback de criação aceita apenas `created`, `already-created`, `not-available` e `unavailable`; texto arbitrário de query não é refletido na UI.
+Event UUID nasce server-side. Team, actor, membership, creator, issuer e subject são derivados exclusivamente da sessão Better Auth validada + contexto LOCAL + banco.
 
-## Red-team e verificação F30
+`object` permanece `text NOT NULL` e é preservado exatamente, inclusive string vazia e espaços. Não existe trim, limite, regra non-empty ou empty-to-NULL inventado.
 
-A revisão integral confirmou:
+### Autorização pilot-only
 
-- migrations `0001..0005` intactas;
-- nenhum novo DML, SQL direto ou grant;
-- demo/invalid sem caminho de write;
-- payload browser-to-boundary limitado a `contractingId + object`;
-- campos de authority e redirects externos forjados não são encaminhados;
-- duplicate scalar falha antes de F29;
-- string vazia e espaços de `object` são preservados;
-- mensagens internas não chegam a redirects/feedback;
-- retry após falha sanitizada preserva o candidate validado;
-- UI não introduz controles de team/actor/membership/created_by/next_action/stage/status/responsável/waiting;
-- não há review thread aberta na PR de promoção.
+A regra segue F26 porque a linha existente já possui `team_id` canônico:
 
-Gates finais da PR no head `fdad5471e535a4d2833ca42efd9091308114591d`:
+- identidade interna ativa;
+- contratação visível e não arquivada/cancelada;
+- membership não revogada do usuário na equipe alvo;
+- exatamente uma membership não revogada na equipe alvo.
 
-- CI `34700169464`: PASS;
-- F22 Private Preview Preflight `34700169506`: PASS;
-- F29 Contracting Create `34700169547`: PASS.
+Segundo membro não revogado bloqueia mesmo com `app_user` desabilitado.
 
-Pós-merge `c0f6e822253e9e324f00bc674f4805f52cbca16c`:
+Uma membership adicional do mesmo usuário em outra equipe não bloqueia por si só. O guard global de exatamente uma membership da F29 é específico da criação antes de existir team derivável da row e não será copiado para edição.
 
-- CI `34700243224`: PASS, incluindo verify, database e auth-database;
-- F22 Private Preview Preflight `34700243225`: PASS;
-- F29 Contracting Create `34700243158`: PASS.
+Q-009 continua aberta.
+
+### Concorrência e histórico
+
+A primitive futura deve usar `SELECT ... FOR UPDATE` + precondição exata/null-safe de `expectedObject`.
+
+Ordem após autorização:
+
+1. stale expected resulta em `conflict`;
+2. expected atual + novo valor igual resulta em `unchanged`;
+3. mudança real atualiza `object`/`updated_at` e cria exatamente um evento `object_changed`.
+
+`conflict` vem antes de `unchanged`, inclusive quando o estado atual já coincide com `newObject`, evitando converter stale write em sucesso causalmente ambíguo.
+
+Mudança real cria `field_key = 'object'`, old/new exatos, actor/team derivados e mesmo instante para estado/evento. Falha do evento reverte o update. Eventos permanecem append-only.
+
+Retry idêntico após sucesso retorna conflito por expected stale e não cria segundo evento. F31 não introduz replay-success para mutações de campo.
+
+### Resultados sanitizados
+
+A boundary futura expõe somente:
+
+- `updated`;
+- `unchanged`;
+- `conflict`;
+- `not-available` para negação;
+- `unavailable` para falha técnica.
+
+Cross-team, inexistente, identidade inválida, membership ausente/revogada, segundo membro e contratação arquivada/cancelada permanecem indistinguíveis externamente.
+
+## Red-team F31
+
+O desenho foi revisado contra:
+
+- authority controlada pelo browser;
+- reutilização indevida de F26/F29;
+- DML direto de runtime;
+- capability com grants além de `object`/`updated_at`;
+- update sem evento atômico;
+- trim/normalização/empty-to-NULL;
+- lost update;
+- stale expected convertido em no-op/sucesso;
+- side channel cross-team;
+- inferência de política multiusuário;
+- cópia indevida do guard global F29;
+- reescrita de migrations aplicadas;
+- provider hosted, secret ou dado real.
+
+Nenhum desses caminhos foi aceito.
+
+## Verificação aplicável
+
+F31 é design-only. Nenhum código operacional, migration, SQL, adapter, Server Action ou UI foi alterado.
+
+A matriz adversarial de F32 foi registrada em `tasks/F32-PERSISTENT-CONTRACTING-OBJECT-MUTATION-IMPLEMENT-01/SPEC.md`, incluindo concorrência real PostgreSQL, rollback, isolamento F26/F29 e preservação de string vazia/espaços.
+
+Gates automatizados da PR ainda devem passar antes da promoção. Até lá, `LAST_GOOD_COMMIT` permanece o checkpoint F30 validado em `main`.
 
 ## Próxima ação
 
-Existe exatamente uma `NEXT_ACTION` canônica:
+Existe exatamente uma `NEXT_ACTION` canônica na branch:
 
-`F31-PERSISTENT-CONTRACTING-OBJECT-MUTATION-DESIGN-01 - Desenhar edição persistente do objeto`.
+`F32-PERSISTENT-CONTRACTING-OBJECT-MUTATION-IMPLEMENT-01 - Implementar boundary persistente de edição do objeto`.
 
-F31 é exclusivamente de desenho. Deve produzir a decisão arquitetural da próxima mutação de `contractings.object`, com payload mínimo, concorrência explícita, evento atômico, least privilege, autorização pilot-only e resultados sanitizados, sem implementar migration, SQL, Server Action ou UI nessa work unit.
+F32 implementará somente PostgreSQL/server-only. UI/Server Action de edição ficará para work unit posterior.
 
-F21 permanece `ON HOLD` até seu `resume_when` objetivo ser satisfeito.
+F21 permanece `ON HOLD` até seu `resume_when` objetivo.

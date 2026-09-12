@@ -19,11 +19,12 @@ A fundação já possui:
 - capability persistente estreita para `contractings.next_action`;
 - UI persistente do detalhe capaz de editar somente `Próxima ação`;
 - boundary persistente mínima de criação de `contractings`, pilot-only, auditável e idempotente;
-- jornada UI/Server Action mínima de criação persistente integrada por F30.
+- jornada UI/Server Action mínima de criação persistente integrada por F30;
+- ADR-013 desenhando uma capability separada para futura edição persistente de `contractings.object`.
 
 F30 está integrada em `main` pela PR `#46`, merge `c0f6e822253e9e324f00bc674f4805f52cbca16c`, com CI, F22 Private Preview Preflight e F29 Contracting Create verdes pós-merge.
 
-A próxima frente canônica é F31, exclusivamente de desenho, para definir a futura edição persistente de `contractings.object` sem ampliar F26/F29 por conveniência.
+A frente ativa F31 é design-only. Ela decidiu a arquitetura da edição de `object`; a próxima frente preparada é F32, que implementará apenas PostgreSQL/server-only após a promoção de F31.
 
 F17 permanece `ON HOLD` histórico. F21 permanece `ON HOLD` antes de secrets até existir control plane Vercel capaz de readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch sem expor valores.
 
@@ -123,23 +124,58 @@ Pós-merge `c0f6e822253e9e324f00bc674f4805f52cbca16c`:
 - F22 Private Preview Preflight `34700243225`: PASS;
 - F29 Contracting Create `34700243158`: PASS.
 
-## Próxima frente
+## F31 - desenho da edição persistente de object
 
-A única `NEXT_ACTION` canônica está em `docs/ai/NEXT_ACTION.md`:
+ADR-013 define a próxima mutação sem ampliar F26/F29.
 
-`F31-PERSISTENT-CONTRACTING-OBJECT-MUTATION-DESIGN-01 - Desenhar edição persistente do objeto`.
+A decisão adota uma capability PostgreSQL própria, equivalente a `compras_contracting_object_mutation_owner`, com primitive conceitualmente equivalente a:
 
-F31 deve somente decidir a arquitetura da próxima mutação de `contractings.object`:
+```text
+mutate_contracting_object(
+  contractingId,
+  expectedObject,
+  newObject,
+  eventId server-only
+)
+```
 
-- payload mínimo e fronteira de confiança;
-- concorrência otimista;
-- autorização pilot-only sem resolver Q-009 silenciosamente;
-- evento atômico;
-- capability própria e least privilege;
-- resultados sanitizados sem oracle cross-team;
-- preservação exata da semântica atual de `object`.
+Propriedades decididas:
+
+- browser não define team/actor/membership/creator/issuer/subject/event UUID;
+- `object` continua `text NOT NULL` e é preservado exatamente, inclusive string vazia e espaços;
+- autorização pilot-only segue F26 por equipe alvo;
+- segundo membro não revogado na equipe alvo bloqueia, inclusive app_user desabilitado;
+- membership adicional do mesmo usuário em outra equipe não bloqueia por si só, pois a row existente já define o team;
+- `SELECT ... FOR UPDATE` + expected object exato evitam lost update;
+- `conflict` é avaliado antes de `unchanged`;
+- no-op não altera timestamp nem cria evento;
+- mudança real atualiza somente `object`/`updated_at` e cria exatamente um `object_changed` atômico;
+- falha do evento reverte o update;
+- runtime continua sem DML direto;
+- F26 permanece exclusiva de `next_action`;
+- F29 permanece exclusiva de criação mínima;
+- Q-009 continua aberta.
 
 F31 não implementa migration, SQL, adapter, Server Action ou UI.
+
+## Próxima frente
+
+A única `NEXT_ACTION` canônica na branch F31 está em `docs/ai/NEXT_ACTION.md`:
+
+`F32-PERSISTENT-CONTRACTING-OBJECT-MUTATION-IMPLEMENT-01 - Implementar boundary persistente de edição do objeto`.
+
+F32 deve materializar somente PostgreSQL/server-only:
+
+- nova migration `0006_...sql` sem reescrever `0001..0005`;
+- capability própria e least privilege;
+- primitive `SECURITY DEFINER` com `search_path` fixo;
+- concorrência por expected object;
+- evento `object_changed` atômico;
+- adapter server-only sanitizado;
+- matriz adversarial e concorrência PostgreSQL 17;
+- regressões F22/F26/F29/Auth verdes.
+
+UI/Server Action de edição fica para work unit posterior.
 
 ## Modos da aplicação
 
@@ -196,7 +232,7 @@ Startup mínimo:
 
 Produto: `PROJECT_DESIGN.md`, `DOMAIN_MODEL.md`, `BUSINESS_WORKFLOW.md`, `OPEN_QUESTIONS.md`.
 
-Arquitetura: `ARCHITECTURE.md`, `SECURITY.md`, `DATABASE.md`, ADR-003, ADR-005, ADR-009, ADR-010, ADR-011, ADR-012.
+Arquitetura: `ARCHITECTURE.md`, `SECURITY.md`, `DATABASE.md`, ADR-003, ADR-005, ADR-009, ADR-010, ADR-011, ADR-012, ADR-013.
 
 Operação por IA: `SOURCE_OF_TRUTH.md`, `WORK_PROTOCOL.md`, `CONTEXT_MANIFEST.md`, `CURRENT_STATE.md`, `NEXT_ACTION.md`.
 

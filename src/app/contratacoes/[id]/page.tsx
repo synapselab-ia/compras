@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { readContractingCreateUiState } from "@/features/contracting-create/feedback";
+import {
+  getContractingCreateFeedback,
+  readContractingCreateUiState,
+} from "@/features/contracting-create/feedback";
 import { ContractingDetail } from "@/features/contracting-detail/components/contracting-detail";
 import { readNextActionMutationUiState } from "@/features/contracting-detail/next-action-feedback";
 import { loadContractingDetailViewData } from "@/features/contracting-detail/view-data";
@@ -50,12 +53,29 @@ export default async function ContractingDetailPage({
     );
   }
 
+  const creationFeedback =
+    viewData.kind === "demo"
+      ? null
+      : getContractingCreateFeedback(readContractingCreateUiState(query.creation));
+
   return (
-    <ContractingDetail
-      detail={viewData.detail}
-      source={viewData.kind}
-      mutationState={readNextActionMutationUiState(query.mutation)}
-      creationState={readContractingCreateUiState(query.creation)}
-    />
+    <>
+      {creationFeedback ? (
+        <div className="detail-shell detail-feedback-shell">
+          <p
+            className={`next-action-feedback next-action-feedback-${creationFeedback.state}`}
+            role={creationFeedback.role}
+            aria-live="polite"
+          >
+            {creationFeedback.message}
+          </p>
+        </div>
+      ) : null}
+      <ContractingDetail
+        detail={viewData.detail}
+        source={viewData.kind}
+        mutationState={readNextActionMutationUiState(query.mutation)}
+      />
+    </>
   );
 }

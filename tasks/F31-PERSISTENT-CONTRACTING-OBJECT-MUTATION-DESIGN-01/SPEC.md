@@ -1,87 +1,192 @@
-# F31-PERSISTENT-CONTRACTING-OBJECT-MUTATION-DESIGN-01 — Desenhar edição persistente do objeto
+# F31-PERSISTENT-CONTRACTING-OBJECT-MUTATION-DESIGN-01 - Desenhar edição persistente do objeto
 
-**Classe:** T2 — fronteira de autorização e mutação persistente  
-**Estado:** PLANNED / NEXT  
+**Classe:** T2 - fronteira de autorização e mutação persistente  
+**Estado:** COMPLETED / DESIGN PASS  
 **Dependências:** F25, F26, F27, F29, F30, ADR-011 e ADR-012  
 **Classificação permitida:** PUBLIC / FICTITIOUS ONLY
 
-## Problema
+## Problema resolvido
 
-Após F30, a aplicação passa a permitir criar uma contratação persistente com `object`, mas esse campo ainda não possui uma boundary específica de edição. O núcleo funcional inicial prevê cadastro e edição de contratação, porém não é aceitável ampliar F26, reutilizar a capability de criação ou conceder `UPDATE` amplo por conveniência.
+Após F30, a aplicação permite criar uma contratação persistente com `object`, mas esse campo ainda não possui boundary própria de edição. F31 precisava decidir a menor authority segura sem ampliar F26, F29 ou conceder DML direto ao runtime.
 
-A próxima decisão precisa definir a menor mutação segura para alterar exclusivamente `contractings.object`, mantendo autorização pilot-only, RLS autoritativa, histórico atômico e Q-009 aberta.
+## Recuperação e contexto
 
-## Objetivo
+A work unit recuperou `main` em `ac0162677f39d1f176ad5a9e0c431770c3d3d204`, confirmou ausência de PR/branch F31 ativa e revalidou os 10 blobs do `CONTEXT_MANIFEST` sem divergência.
 
-Produzir a decisão arquitetural canônica para uma futura edição persistente de `object`, sem implementar migration, SQL, Server Action ou UI nesta slice.
+Foram inspecionados diretamente:
 
-## Execução obrigatória
+- ADR-011 e ADR-012;
+- SECURITY e DATABASE;
+- F25/F26/F27/F29/F30;
+- migrations `0004_next_action_mutation.sql` e `0005_contracting_create.sql`;
+- matrizes PostgreSQL F26/F29;
+- adapters e Server Actions F26/F27/F29/F30;
+- Q-009 em `OPEN_QUESTIONS.md`.
 
-1. recuperar o estado canônico após F30 e revalidar `CONTEXT_MANIFEST`;
-2. inspecionar ADR-011, ADR-012, F25/F26/F27, F29/F30, `SECURITY.md`, `DATABASE.md`, schema/migrations e testes de mutação existentes;
-3. confirmar que migrations aplicadas permanecem imutáveis;
-4. definir explicitamente a fronteira de confiança da edição de `object`;
-5. decidir o payload mínimo, incluindo mecanismo de concorrência otimista compatível com o padrão já adotado, sem confiar team, actor, membership, issuer ou subject vindos do browser;
-6. preservar a semântica já aprovada de `object`: string persistida exatamente, sem trim, limite de tamanho, regra non-empty ou coerção para `NULL` inventados;
-7. definir autorização pilot-only sem resolver Q-009 como política multiusuário;
-8. definir como estado atual e evento auditável serão atualizados atomicamente;
-9. definir least privilege da futura capability sem ampliar F26 nem F29;
-10. definir resultados externos sanitizados e tratamento de conflito/negação/falha sem oracle cross-team;
-11. definir matriz adversarial mínima, rollback e propriedades de idempotência/concorrência aplicáveis;
-12. registrar a decisão em nova ADR e atualizar somente documentação canônica necessária;
-13. não implementar migration, primitive, adapter, Server Action ou UI nesta work unit;
-14. executar red-team documental, verificar consistência com SECURITY/DATABASE e deixar exatamente uma nova `NEXT_ACTION` de implementação somente se a decisão ficar fechada.
+Migrations `0001..0005` permaneceram intocadas.
 
-## Red-team obrigatório
+## Decisão
 
-Rejeitar PASS se o desenho:
+A decisão canônica foi registrada em `docs/decisions/ADR-013-persistent-contracting-object-mutation.md`.
 
-- permitir ao browser escolher team, actor, membership ou creator confiável;
-- reutilizar F26/F29 sem provar least privilege e isolamento de autoridade;
-- conceder DML direto amplo ao runtime;
-- permitir mutação sem evento atômico;
-- transformar string vazia em `NULL`, aplicar trim ou criar validação de conteúdo sem fonte canônica;
-- inferir política multiusuário e encerrar Q-009 silenciosamente;
-- revelar existência cross-team por conflito ou erro;
-- exigir provider hosted, secret ou dado real;
-- reescrever migrations aplicadas.
+Foi adotada capability PostgreSQL própria para editar exclusivamente `contractings.object`, em vez de:
 
-## Verificação
+- ampliar F26;
+- ampliar F29;
+- conceder DML direto ao runtime.
 
-- consistência com ADR-011 e ADR-012;
-- consistência com `SECURITY.md` e `DATABASE.md`;
-- comparação explícita de alternativas e autoridade concedida;
-- matriz de confiança/autorização/concorrência;
-- diff documental sem dado real;
-- exatamente uma nova `NEXT_ACTION` ao encerrar.
+A futura primitive recebe conceitualmente somente:
 
-## Invariantes
+```text
+contractingId
+expectedObject
+newObject
+eventId server-only
+```
 
-- `REAL_DATA_ALLOWED = NO`;
-- somente dados/identidades fictícios;
-- nenhum provider hosted write;
-- F21 permanece `ON HOLD` até seu `resume_when` objetivo;
-- Q-001/Q-002/Q-006/Q-009 continuam abertas salvo decisão explícita e necessária;
-- autenticação não é autorização;
-- RLS/capabilities continuam autoritativas;
-- runtime normal continua sem DML direto;
-- migrations aplicadas permanecem imutáveis;
-- F26 continua exclusiva de `next_action`;
-- F29 continua exclusiva de criação mínima.
+O browser nunca fornece team, actor, membership, creator, issuer, subject ou event UUID confiável.
 
-## Fora do escopo
+## Semântica de `object`
 
-- implementação PostgreSQL;
-- Server Action/UI de edição;
-- edição de `next_action`;
-- stage/status/responsável/waiting;
-- itens e identificadores relacionados;
+`object` permanece `text NOT NULL` e deve ser preservado exatamente:
+
+- sem trim;
+- sem limite de tamanho inventado;
+- sem regra non-empty;
+- sem empty-to-NULL;
+- string vazia e espaços continuam valores válidos.
+
+A mutação só pode atualizar `object` e `updated_at`.
+
+## Autorização pilot-only
+
+A autorização segue F26 porque uma linha existente já possui `team_id` canônico:
+
+1. identidade corrente resolve para `app_user` ativo;
+2. contratação existe no escopo autorizado;
+3. contratação não está arquivada/cancelada;
+4. usuário possui membership não revogada na equipe alvo;
+5. a equipe alvo possui exatamente uma membership não revogada.
+
+Segundo membro não revogado bloqueia, inclusive se seu `app_user` estiver desabilitado.
+
+Uma membership adicional do mesmo usuário em outra equipe não bloqueia por si só. Copiar o guard global de F29 seria incorreto porque esse guard existe para derivar o team antes do `INSERT`. Q-009 continua aberta.
+
+## Concorrência e retry
+
+A ADR definiu:
+
+- `SELECT ... FOR UPDATE`;
+- precondição exata/null-safe de `expectedObject`;
+- `conflict` avaliado antes de `unchanged`;
+- no-op sem `updated_at` novo e sem evento;
+- sem coluna de versão nesta slice.
+
+Duas chamadas concorrentes com o mesmo expected antigo produzem no máximo um update/evento; as demais retornam `conflict`.
+
+Retry idêntico depois de sucesso não é replay-success como F29: expected fica stale, portanto a repetição retorna `conflict` e não cria segundo evento. Essa semântica preserva o padrão F26 e evita sucesso causalmente ambíguo.
+
+## Histórico e atomicidade
+
+Mudança real deve criar exatamente um evento:
+
+- `event_type = 'object_changed'`;
+- `field_key = 'object'`;
+- `old_value` e `new_value` exatos;
+- actor/team/contracting derivados do banco;
+- mesmo instante para `updated_at`, `occurred_at` e `created_at`;
+- campos auxiliares nulos.
+
+Falha do evento reverte o update. Eventos permanecem append-only.
+
+## Least privilege
+
+A implementação deve criar owner técnico próprio equivalente a `compras_contracting_object_mutation_owner`, `NOLOGIN`, `NOINHERIT`, não privilegiado, sem ownership de tabelas-base e sem membership utilizável.
+
+A primitive será `SECURITY DEFINER`, `search_path = pg_catalog`, SQL estático, `PUBLIC EXECUTE` revogado. O runtime recebe somente `EXECUTE` por provisionamento separado.
+
+F26 continua sem authority de `object`; F29 continua sem authority de atualização de linhas existentes.
+
+## Resultados externos
+
+A boundary futura expõe somente:
+
+- `updated`;
+- `unchanged`;
+- `conflict`;
+- `not-available` para negação;
+- `unavailable` para falha técnica.
+
+Cross-team, inexistente, identidade inválida, falta/revogação de membership, segundo membro e contratação arquivada/cancelada colapsam em `not-available`. `conflict` e `unchanged` só aparecem depois de autorização.
+
+## Red-team documental
+
+A decisão foi rejeitada se permitisse:
+
+- browser controlar identity/scope/actor/event UUID;
+- F26/F29 ganhar authority adicional;
+- runtime receber DML direto;
+- capability alterar colunas além de `object`/`updated_at`;
+- update sem evento atômico;
+- trim/normalização/empty-to-NULL inventados;
+- stale write virar last-write-wins;
+- stale expected virar `unchanged` apenas porque `newObject` coincide com estado atual;
+- side channel cross-team;
+- segundo membro virar política multiusuário;
+- guard global de criação F29 ser copiado sem necessidade;
+- migration aplicada ser reescrita;
+- provider hosted, secret ou dado real.
+
+Nenhum desses caminhos foi aceito no desenho final.
+
+## Verificação desta work unit
+
+F31 é design-only, portanto não houve migration, SQL, adapter, Server Action ou UI nova para executar contra PostgreSQL.
+
+A verificação aplicável consiste em:
+
+- `CONTEXT_MANIFEST`: VALID;
+- consistência explícita com ADR-011/ADR-012;
+- consistência com SECURITY/DATABASE;
+- comparação de alternativas e authority;
+- matriz adversarial detalhada para F32;
+- diff documental somente PUBLIC/FICTITIOUS;
+- migrations `0001..0005` intocadas.
+
+Os gates automatizados da PR devem permanecer verdes antes da promoção.
+
+## Artefatos
+
+Criado:
+
+- `docs/decisions/ADR-013-persistent-contracting-object-mutation.md`;
+- `tasks/F32-PERSISTENT-CONTRACTING-OBJECT-MUTATION-IMPLEMENT-01/SPEC.md`.
+
+Atualizados:
+
+- este SPEC;
+- `docs/00-START-HERE.md`;
+- `docs/ai/CURRENT_STATE.md`;
+- `docs/ai/NEXT_ACTION.md`.
+
+## Fora do escopo preservado
+
+- migration/primitive/adapters de F32;
+- UI/Server Action de edição;
+- `next_action`, stage, status, responsável ou waiting;
+- itens/identificadores;
 - arquivamento/cancelamento;
 - política multiusuário;
-- provider hosted;
 - retomada F21;
+- provider hosted;
 - dado real.
+
+## Próxima ação
+
+A única próxima ação canônica é:
+
+`F32-PERSISTENT-CONTRACTING-OBJECT-MUTATION-IMPLEMENT-01 - Implementar boundary persistente de edição do objeto`.
 
 ## Critério de encerramento
 
-F31 fecha quando existir uma ADR suficiente para implementar, em work unit posterior, uma mutação exclusiva de `object` com payload mínimo, autorização pilot-only, concorrência definida, evento atômico, least privilege e resultados sanitizados, sem alterar código operacional nesta slice.
+F31 está encerrada quando ADR-013 e a SPEC F32 estiverem integradas, com a decisão fechada, red-team documental concluído e gates da PR/main verdes.

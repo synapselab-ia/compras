@@ -32,8 +32,15 @@ function detailPath(contractingId: string): string {
   return `/contratacoes/${encodeURIComponent(contractingId)}`;
 }
 
-function createFeedbackPath(result: "not-available" | "unavailable"): string {
-  return `${CREATE_PATH}?creation=${result}`;
+function createFeedbackPath(
+  result: "not-available" | "unavailable",
+  contractingId?: string,
+): string {
+  const base = `${CREATE_PATH}?creation=${result}`;
+
+  return contractingId && isCandidateContractingId(contractingId)
+    ? `${base}&candidate=${encodeURIComponent(contractingId)}`
+    : base;
 }
 
 /**
@@ -54,7 +61,7 @@ export async function createPersistentContractingAction(formData: FormData): Pro
   }
 
   if (!object.ok) {
-    redirect(createFeedbackPath("unavailable"));
+    redirect(createFeedbackPath("unavailable", contractingId.value));
   }
 
   let result: Awaited<ReturnType<typeof createPersistentContracting>>;
@@ -75,5 +82,5 @@ export async function createPersistentContractingAction(formData: FormData): Pro
     redirect(`${path}?creation=${result}`);
   }
 
-  redirect(createFeedbackPath(result));
+  redirect(createFeedbackPath(result, contractingId.value));
 }

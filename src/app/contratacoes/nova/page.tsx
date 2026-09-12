@@ -6,9 +6,18 @@ import { readContractingCreateUiState } from "@/features/contracting-create/feed
 import { preparePersistentContractingCandidateId } from "@/features/contracting-create/persistent-create";
 import { readPersistentReadMode } from "@/server/persistent-read-mode";
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 type ContractingCreatePageProps = {
-  searchParams: Promise<{ creation?: string | string[] }>;
+  searchParams: Promise<{
+    creation?: string | string[];
+    candidate?: string | string[];
+  }>;
 };
+
+function readRetryCandidate(value: string | string[] | undefined): string | null {
+  return typeof value === "string" && UUID_PATTERN.test(value) ? value : null;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +29,8 @@ export default async function ContractingCreatePage({
   }
 
   const query = await searchParams;
-  const contractingId = preparePersistentContractingCandidateId();
+  const contractingId =
+    readRetryCandidate(query.candidate) ?? preparePersistentContractingCandidateId();
   const creationState = readContractingCreateUiState(query.creation);
 
   return (
@@ -41,7 +51,7 @@ export default async function ContractingCreatePage({
           <p className="eyebrow">Contratação · cadastro persistente</p>
           <h1>Nova contratação</h1>
           <p className="lead">
-            Informe apenas o objeto. O identificador candidato foi preparado no servidor e funciona como seletor idempotente, não como autorização.
+            Informe apenas o objeto. O identificador candidato opaco permite retry idempotente e não concede autorização.
           </p>
         </div>
       </header>

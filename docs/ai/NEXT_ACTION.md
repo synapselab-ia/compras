@@ -3,7 +3,7 @@
 ## F32-PERSISTENT-CONTRACTING-OBJECT-MUTATION-IMPLEMENT-01 - Implementar boundary persistente de edição do objeto
 
 **Classe:** T1 - feature normal, com impacto T2 - banco/autorização  
-**Estado:** READY AFTER F31 PROMOTION  
+**Estado:** READY  
 **Objetivo:** materializar ADR-013 em uma capability PostgreSQL/server-only exclusiva para editar `contractings.object`, com optimistic concurrency, evento atômico, autorização pilot-only, least privilege e resultados sanitizados.
 
 Esta é a única `NEXT_ACTION` canônica.

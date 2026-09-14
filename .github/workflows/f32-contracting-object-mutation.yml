@@ -1,0 +1,161 @@
+name: F32 Contracting Object Mutation
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  contracting-object-mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Use Node.js 24 LTS
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24.x"
+          cache: npm
+
+      - name: Install dependencies from lockfile
+        run: npm ci
+
+      - name: Red-team F32 object mutation capability preflight
+        run: |
+          set -euo pipefail
+
+          createdb compras_f32_preflight_ci
+          PGDATABASE=compras_f32_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0001_core_foundation.sql
+          PGDATABASE=compras_f32_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0002_trusted_identity_read_policies.sql
+          PGDATABASE=compras_f32_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0003_team_member_directory.sql
+          PGDATABASE=compras_f32_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0004_next_action_mutation.sql
+          PGDATABASE=compras_f32_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0005_contracting_create.sql
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_contracting_object_mutation_owner LOGIN;"
+          if PGDATABASE=compras_f32_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0006_contracting_object_mutation.sql; then
+            echo "unsafe LOGIN object mutation capability was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_object_mutation_owner;"
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_contracting_object_mutation_owner NOLOGIN BYPASSRLS;"
+          if PGDATABASE=compras_f32_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0006_contracting_object_mutation.sql; then
+            echo "unsafe BYPASSRLS object mutation capability was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_object_mutation_owner;"
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_contracting_object_mutation_owner NOLOGIN NOINHERIT NOBYPASSRLS;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_f32_preflight_member NOLOGIN;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "GRANT compras_contracting_object_mutation_owner TO compras_f32_preflight_member WITH INHERIT FALSE, SET TRUE;"
+          if PGDATABASE=compras_f32_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0006_contracting_object_mutation.sql; then
+            echo "SET-capable object mutation capability membership was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "REVOKE compras_contracting_object_mutation_owner FROM compras_f32_preflight_member;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_f32_preflight_member;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_object_mutation_owner;"
+
+          dropdb compras_f32_preflight_ci
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_create_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_next_action_mutation_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_team_directory_view_owner;"
+
+      - name: Verify F32 persistent object mutation boundary
+        run: |
+          set -euo pipefail
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_f32_migrator_ci LOGIN CREATEROLE NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOREPLICATION PASSWORD 'DEMO-F32-MIGRATOR-PASSWORD';"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_domain_runtime_f32_ci LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD 'DEMO-F32-DOMAIN-RUNTIME-PASSWORD';"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_auth_runtime_f32_ci LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD 'DEMO-F32-AUTH-RUNTIME-PASSWORD';"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_readonly_runtime_f32_ci LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD 'DEMO-F32-READONLY-RUNTIME-PASSWORD';"
+          createdb -O compras_f32_migrator_ci compras_object_mutation_ci
+
+          PGUSER=compras_f32_migrator_ci PGPASSWORD='DEMO-F32-MIGRATOR-PASSWORD' PGDATABASE=compras_object_mutation_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0001_core_foundation.sql
+          PGUSER=compras_f32_migrator_ci PGPASSWORD='DEMO-F32-MIGRATOR-PASSWORD' PGDATABASE=compras_object_mutation_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0002_trusted_identity_read_policies.sql
+          PGUSER=compras_f32_migrator_ci PGPASSWORD='DEMO-F32-MIGRATOR-PASSWORD' PGDATABASE=compras_object_mutation_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0003_team_member_directory.sql
+          PGUSER=compras_f32_migrator_ci PGPASSWORD='DEMO-F32-MIGRATOR-PASSWORD' PGDATABASE=compras_object_mutation_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0004_next_action_mutation.sql
+          PGUSER=compras_f32_migrator_ci PGPASSWORD='DEMO-F32-MIGRATOR-PASSWORD' PGDATABASE=compras_object_mutation_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0005_contracting_create.sql
+          PGUSER=compras_f32_migrator_ci PGPASSWORD='DEMO-F32-MIGRATOR-PASSWORD' PGDATABASE=compras_object_mutation_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0006_contracting_object_mutation.sql
+
+          DOMAIN_PRE="$(PGDATABASE=compras_object_mutation_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_domain_runtime_f32_ci', 'public.mutate_contracting_object(uuid,text,text,uuid)', 'EXECUTE')")"
+          AUTH_PRE="$(PGDATABASE=compras_object_mutation_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_auth_runtime_f32_ci', 'public.mutate_contracting_object(uuid,text,text,uuid)', 'EXECUTE')")"
+          READONLY_PRE="$(PGDATABASE=compras_object_mutation_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_readonly_runtime_f32_ci', 'public.mutate_contracting_object(uuid,text,text,uuid)', 'EXECUTE')")"
+          if [[ "$DOMAIN_PRE" != "f" || "$AUTH_PRE" != "f" || "$READONLY_PRE" != "f" ]]; then
+            echo "F32 object mutation EXECUTE leaked before explicit provisioning" >&2
+            exit 1
+          fi
+
+          PGUSER=compras_f32_migrator_ci PGPASSWORD='DEMO-F32-MIGRATOR-PASSWORD' PGDATABASE=compras_object_mutation_ci \
+            psql -v ON_ERROR_STOP=1 -v runtime_role='compras_domain_runtime_f32_ci' \
+              -f database/provisioning/grant_contracting_object_mutation_runtime.sql
+
+          DOMAIN_POST="$(PGDATABASE=compras_object_mutation_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_domain_runtime_f32_ci', 'public.mutate_contracting_object(uuid,text,text,uuid)', 'EXECUTE')")"
+          AUTH_POST="$(PGDATABASE=compras_object_mutation_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_auth_runtime_f32_ci', 'public.mutate_contracting_object(uuid,text,text,uuid)', 'EXECUTE')")"
+          READONLY_POST="$(PGDATABASE=compras_object_mutation_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_readonly_runtime_f32_ci', 'public.mutate_contracting_object(uuid,text,text,uuid)', 'EXECUTE')")"
+          if [[ "$DOMAIN_POST" != "t" || "$AUTH_POST" != "f" || "$READONLY_POST" != "f" ]]; then
+            echo "F32 runtime provisioning did not remain isolated" >&2
+            exit 1
+          fi
+
+          PGUSER=compras_f32_migrator_ci PGPASSWORD='DEMO-F32-MIGRATOR-PASSWORD' PGDATABASE=compras_object_mutation_ci psql -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT USAGE ON SCHEMA public TO compras_domain_runtime_f32_ci;
+          GRANT SELECT ON TABLE
+            public.app_users,
+            public.memberships,
+            public.teams,
+            public.contractings,
+            public.related_identifiers,
+            public.contracting_items,
+            public.contracting_events
+            TO compras_domain_runtime_f32_ci;
+          GRANT EXECUTE ON FUNCTION public.current_auth_issuer() TO compras_domain_runtime_f32_ci;
+          GRANT EXECUTE ON FUNCTION public.current_auth_subject() TO compras_domain_runtime_f32_ci;
+          GRANT EXECUTE ON FUNCTION public.current_app_user_id() TO compras_domain_runtime_f32_ci;
+          SQL
+
+          PGDATABASE=compras_object_mutation_ci psql -v ON_ERROR_STOP=1 -f database/tests/contracting_object_mutation.sql
+
+          F32_CONTRACTING_OBJECT_POSTGRES_TEST=1 \
+          F32_DOMAIN_RUNTIME_DATABASE_URL='postgresql://compras_domain_runtime_f32_ci:DEMO-F32-DOMAIN-RUNTIME-PASSWORD@localhost:5432/compras_object_mutation_ci' \
+          F32_ADMIN_DATABASE_URL='postgresql://postgres:postgres@localhost:5432/compras_object_mutation_ci' \
+            npx vitest run src/features/contracting-detail/persistent-object-mutation.postgres.test.ts
+
+          dropdb compras_object_mutation_ci
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_object_mutation_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_create_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_next_action_mutation_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_team_directory_view_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_domain_runtime_f32_ci;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_auth_runtime_f32_ci;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_readonly_runtime_f32_ci;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_f32_migrator_ci;"

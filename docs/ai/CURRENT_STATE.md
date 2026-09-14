@@ -1,12 +1,12 @@
 # Current State - Compras
 
-**PROJECT_STATUS:** F32_INTEGRATED_F33_READY  
-**CURRENT_PHASE:** F32 integrada em `main`; F33 READY; F21 ON HOLD  
+**PROJECT_STATUS:** F33_INTEGRATED_F34_READY  
+**CURRENT_PHASE:** F33 integrada em `main`; F34 READY; F21 ON HOLD  
 **REPO_VISIBILITY:** PUBLIC  
-**APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_SIGNIN_LIMITER_NEXT_ACTION_WRITE_CREATE_UI_AND_OBJECT_MUTATION_BOUNDARY_INTEGRATED  
+**APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_SIGNIN_LIMITER_NEXT_ACTION_WRITE_CREATE_UI_OBJECT_MUTATION_AND_OBJECT_DETAIL_UI_INTEGRATED  
 **DATABASE_STATUS:** PROTECTED_READ_MODEL_NARROW_NEXT_ACTION_MUTATION_MINIMAL_CREATE_AND_OBJECT_MUTATION_VALIDATED  
 **AUTH_STATUS:** SELF_HOSTED_BETTER_AUTH_AND_SIGNIN_LIMITER_INTEGRATED  
-**DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_NO_F32_HOSTED_WRITES  
+**DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_NO_F33_HOSTED_WRITES  
 **REAL_DATA_ALLOWED:** NO  
 **CONTEXT_STATUS:** VALID  
 **FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`  
@@ -21,48 +21,41 @@
 **F29_MERGE_COMMIT:** `3781ec4eebc0b7618f865a83fcf1214ea13c4a71`  
 **F30_MERGE_COMMIT:** `c0f6e822253e9e324f00bc674f4805f52cbca16c`  
 **F31_MERGE_COMMIT:** `b541592aa4a392dfab439389daaddcd4c811c5e5`  
-**F32_PR:** `#48` - MERGED  
-**F32_FINAL_PR_HEAD:** `69e304c1fc47e0f548df70f4900b12b9a82d8483`  
-**F32_PR_CI_RUN:** `34840241372` - PASS  
-**F32_PR_F22_PREFLIGHT_RUN:** `34840241356` - PASS  
-**F32_PR_F29_CREATE_RUN:** `34840241361` - PASS  
-**F32_PR_F32_MUTATION_RUN:** `34840241521` - PASS  
 **F32_MERGE_COMMIT:** `e7f893e8d186853b859dfb281f134d057b0b6e97`  
-**F32_MAIN_CI_RUN:** `34840505900` - PASS  
-**F32_MAIN_F22_PREFLIGHT_RUN:** `34840505998` - PASS  
-**F32_MAIN_F29_CREATE_RUN:** `34840505896` - PASS  
-**F32_MAIN_F32_MUTATION_RUN:** `34840505989` - PASS  
-**LAST_GOOD_COMMIT:** `e7f893e8d186853b859dfb281f134d057b0b6e97`  
-**LAST_GOOD_CI_RUN:** `34840505900`  
+**F33_PR:** `#49` - MERGED  
+**F33_FINAL_PR_HEAD:** `81f926b91657fe6de458d4ad01aee15f62672592`  
+**F33_PR_CI_RUN:** `34850892351` - PASS  
+**F33_PR_F22_PREFLIGHT_RUN:** `34850892414` - PASS  
+**F33_PR_F29_CREATE_RUN:** `34850892361` - PASS  
+**F33_PR_F32_MUTATION_RUN:** `34850892323` - PASS  
+**F33_MERGE_COMMIT:** `c4c3d5416ecfd7f49c74ffd0a32425db8621958c`  
+**F33_MAIN_CI_RUN:** `34851216964` - PASS  
+**F33_MAIN_F22_PREFLIGHT_RUN:** `34851216895` - PASS  
+**F33_MAIN_F29_CREATE_RUN:** `34851216887` - PASS  
+**F33_MAIN_F32_MUTATION_RUN:** `34851217022` - PASS  
+**LAST_GOOD_COMMIT:** `c4c3d5416ecfd7f49c74ffd0a32425db8621958c`  
+**LAST_GOOD_CI_RUN:** `34851216964`  
 **F21_STATE:** `ON HOLD / BLOCKED` - Vercel control-plane surface unavailable for required protection/env readback+CRUD  
 **F21_RESUME_WHEN:** sessão Vercel autenticada permitir readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch, sem exposição de valores  
 **ON_HOLD:** `F17-B2` histórico + `F21` conforme resume_when acima
 
-## Recuperação e promoção desta sessão
+## Recuperação e execução desta sessão
 
-A sessão recuperou o estado real do GitHub em `main`, localizou F32 como a única `NEXT_ACTION` canônica e confirmou que não havia frente F32 preexistente em PR/branch. Os blobs do `CONTEXT_MANIFEST` foram revalidados contra os hashes canônicos antes da execução. `CONTEXT_STATUS = VALID`.
+A sessão recuperou `main` em `d4afcca06b968bfac8467a1f492d99cdcc8d5c57`, confirmou ausência de PR/branch F33 preexistente e localizou F33 como a única `NEXT_ACTION` canônica.
 
-F32 foi classificada como feature T1 com impacto T2 em banco/autorização. Foram lidos ADR-013, SECURITY, DATABASE, SPEC F32, migrations/provisionamentos/testes F26/F29 e `withTrustedDatabaseMutationContext` antes de materializar a boundary.
+O `CONTEXT_MANIFEST` foi revalidado contra a árvore real de `main`; os blobs estáveis permaneceram coerentes e `CONTEXT_STATUS = VALID`.
 
-A implementação foi realizada na branch `f32-contracting-object-mutation-implement`, PR `#48`. O diff final adicionou somente a migration F32, provisionamento, provas PostgreSQL, adapter server-only, testes e workflow dedicado. Migrations aplicadas `0001..0005` permaneceram imutáveis. Não houve UI/Server Action nesta slice, provider hosted write, secret ou dado real.
+F33 foi classificada como feature T1 com impacto T2 em autorização/escrita server-side. Foram inspecionados ADR-013, SECURITY, DATABASE, SPEC F33, precedentes F27/F30, read model do detalhe e a boundary F32 antes da implementação.
 
-O head `69e304c1fc47e0f548df70f4900b12b9a82d8483` passou todos os gates da PR. A PR `#48` foi integrada por merge commit `e7f893e8d186853b859dfb281f134d057b0b6e97`. CI, F22, F29 e o workflow F32 passaram novamente em `main` após o merge.
+A implementação ocorreu na branch `f33-persistent-contracting-object-detail-ui`, PR `#49`. O diff final continha somente sete arquivos de aplicação/testes. Não houve migration, grant, policy, RLS, capability, primitive PostgreSQL, provider hosted write, secret ou dado real.
 
-## F32 - boundary persistente de edição de object integrada
+O head `81f926b91657fe6de458d4ad01aee15f62672592` passou CI, F22, F29 e F32. A PR foi integrada por merge commit `c4c3d5416ecfd7f49c74ffd0a32425db8621958c` e os quatro workflows passaram novamente em `main`.
 
-### Capability e least privilege
+## F33 - edição persistente de Objeto integrada no detalhe
 
-`database/migrations/0006_contracting_object_mutation.sql` cria `compras_contracting_object_mutation_owner` como capability separada de F26/F29.
+### Server Action estreita
 
-A role é `NOLOGIN`, `NOINHERIT`, `NOSUPERUSER`, `NOBYPASSRLS`, sem ownership de tabelas-base, sem membership utilizável e sem schema `CREATE` residual. O runtime normal não recebe DML direto.
-
-A primitive `public.mutate_contracting_object(uuid,text,text,uuid)` é `SECURITY DEFINER`, `search_path = pg_catalog`, SQL estático e `PUBLIC EXECUTE` revogado. `database/provisioning/grant_contracting_object_mutation_runtime.sql` concede somente `EXECUTE` ao runtime explicitamente escolhido.
-
-F26 não ganhou authority sobre `object`. F29 não ganhou update authority. F32 não herdou EXECUTE das primitives F26/F29.
-
-### Payload e confiança
-
-O adapter server-only `src/features/contracting-detail/persistent-object-mutation.ts` aceita somente:
+`updatePersistentObjectAction` aceita do FormData somente:
 
 ```text
 contractingId
@@ -70,7 +63,17 @@ expectedObject
 newObject
 ```
 
-O event UUID é gerado server-side. Team, actor, membership, issuer e subject não são aceitos do browser. O adapter usa `withTrustedDatabaseMutationContext` para estabelecer o contexto LOCAL confiável e devolve somente:
+Cada scalar confiável é lido exatamente uma vez. Duplicata ou ausência falha fechado. `expectedObject` e `newObject` são strings obrigatórias porque `object` é `NOT NULL`, mas string vazia e espaços continuam valores válidos e são preservados sem trim/normalização.
+
+Team, actor, membership, issuer, subject, event UUID, callback e campos extras não são encaminhados. A action delega autorização, lock, optimistic concurrency, atomicidade e auditoria integralmente a `mutatePersistentContractingObject`.
+
+Erro inesperado vira somente `unavailable`, sem detalhe interno. Redirects e revalidação usam rota local fixa do detalhe. `updated` e `conflict` revalidam o read model; conflito nunca vira overwrite silencioso.
+
+### UI e feedback
+
+No modo persistente, o detalhe passou a mostrar editor de `Objeto` usando o valor protegido atual como `expectedObject`. O editor de `Próxima ação` da F27 permanece separado.
+
+A UI de objeto expõe somente os cinco estados sanitizados:
 
 - `updated`;
 - `unchanged`;
@@ -78,93 +81,70 @@ O event UUID é gerado server-side. Team, actor, membership, issuer e subject n�
 - `not-available`;
 - `unavailable`.
 
-Detalhes internos de banco/driver não são propagados.
+Cross-team, inexistente e outras negações continuam sem oracle externo. Query string carrega somente o estado sanitizado, nunca conteúdo do objeto ou authority.
 
-### Autorização pilot-only
+No modo demo, nenhum form de mutação de objeto é renderizado e feedback forjado é ignorado. A Server Action também bloqueia execução fora do modo persistente.
 
-A autorização segue o guard da F26 por equipe alvo:
+### Authority preservada
 
-- identidade interna ativa;
-- contratação alvo visível, não arquivada e não cancelada;
-- membership não revogada do usuário na equipe alvo;
-- exatamente uma membership não revogada na equipe alvo.
+F33 não adicionou SQL nem DML próprio. A authority continua:
 
-Segundo membro não revogado bloqueia mesmo quando o `app_user` correspondente está desabilitado.
+```text
+sessão Better Auth validada
+-> iss/sub em contexto LOCAL
+-> boundary F32
+-> capability PostgreSQL estreita
+-> RLS/autorização pilot-only
+```
 
-Uma membership adicional do mesmo usuário em outra equipe não bloqueia por si só, pois a row existente define a equipe canônica. O guard global da F29 não foi copiado.
+F26 continua exclusiva de `next_action`; F29 continua exclusiva de criação mínima de contratação; F32 continua exclusiva de mutação de `object`.
 
-Q-009 continua aberta.
+Migrations `0001..0006` permanecem imutáveis.
 
-### Concorrência, string exata e histórico
+## Red-team F33
 
-A primitive usa `SELECT ... FOR UPDATE` e compara `expectedObject` exatamente.
+O diff e os testes cobrem e rejeitam:
 
-Ordem após autorização:
-
-1. stale expected retorna `conflict`;
-2. expected atual + novo valor igual retorna `unchanged`;
-3. mudança real atualiza `object`/`updated_at` e cria exatamente um `object_changed`.
-
-`conflict` é avaliado antes de `unchanged`, inclusive quando outro writer já chegou ao mesmo `newObject`.
-
-`object` continua `text NOT NULL` sem regra inventada de trim, tamanho, non-empty ou empty-to-NULL. String vazia, spaces-only e leading/trailing spaces são preservados exatamente.
-
-Mudança real cria `field_key = 'object'`, old/new exatos, actor/team derivados e o mesmo instante de banco para `contractings.updated_at`, `contracting_events.occurred_at` e `created_at`.
-
-Falha de inserção do evento reverte também a atualização e o timestamp. No-op não altera timestamp nem cria evento.
-
-### Indistinguibilidade de negação
-
-Cross-team, UUID inexistente, identidade inválida, membership ausente/revogada, segundo membro, contratação arquivada e contratação cancelada resultam externamente em negação genérica, sem oracle de existência.
-
-## Red-team F32
-
-A matriz adversarial rejeita:
-
-- capability com `LOGIN`, `BYPASSRLS` ou membership `SET` utilizável;
-- runtime com DML direto;
-- capability atualizando colunas fora de `object`/`updated_at`;
-- reutilização ou vazamento de authority entre F26/F29/F32;
-- claims ausentes/malformados/desconhecidos;
-- usuário desabilitado;
-- membership ausente ou revogada;
-- segundo membro não revogado na equipe alvo, inclusive `app_user` desabilitado;
-- lost update e stale retry convertido em sucesso;
-- trim/normalização de vazio/espaços;
-- evento em no-op/conflito/negação;
-- diferença externa entre cross-team e inexistente;
-- escrita em arquivado/cancelado;
-- update sobrevivendo à falha do evento;
+- authority de browser para team/actor/membership/issuer/subject/event UUID;
+- callback/redirect arbitrário;
+- scalar duplicado ou ausente alcançando F32;
+- demo/configuração inválida alcançando write;
+- trim, normalização ou empty-to-NULL;
+- conflito convertido em sucesso;
+- falha de banco vazando connection string ou detalhe interno;
+- feedback distinguível entre negações protegidas;
+- controles novos de stage/status/responsável/waiting;
+- SQL/DML na Server Action;
+- expansão de grants/capabilities;
+- alteração de migrations aplicadas;
 - provider hosted, secret ou dado real.
 
-A prova de concorrência PostgreSQL dispara 8 writers com o mesmo expected value. O resultado provado é exatamente 1 `updated`, 7 `conflict` e 1 evento correspondente ao estado vencedor.
+Não havia review threads pendentes na PR `#49`.
 
-## Verificação F32
+## Verificação F33
 
-Head final da PR `69e304c1fc47e0f548df70f4900b12b9a82d8483`:
+Head final da PR `81f926b91657fe6de458d4ad01aee15f62672592`:
 
-- CI `34840241372`: PASS;
-- F22 Private Preview Preflight `34840241356`: PASS;
-- F29 Contracting Create `34840241361`: PASS;
-- F32 Contracting Object Mutation `34840241521`: PASS.
+- CI `34850892351`: PASS, incluindo lint, typecheck, testes, build, database e auth-database;
+- F22 Private Preview Preflight `34850892414`: PASS;
+- F29 Contracting Create `34850892361`: PASS;
+- F32 Contracting Object Mutation `34850892323`: PASS.
 
-Pós-merge `e7f893e8d186853b859dfb281f134d057b0b6e97`:
+Pós-merge `c4c3d5416ecfd7f49c74ffd0a32425db8621958c`:
 
-- CI `34840505900`: PASS;
-- F22 Private Preview Preflight `34840505998`: PASS;
-- F29 Contracting Create `34840505896`: PASS;
-- F32 Contracting Object Mutation `34840505989`: PASS.
-
-O workflow F32 executa PostgreSQL 17, preflight adversarial de role/capability, matriz SQL completa e teste real de concorrência. CI preserva lint, typecheck, testes, build, database e auth-database.
+- CI `34851216964`: PASS;
+- F22 Private Preview Preflight `34851216895`: PASS;
+- F29 Contracting Create `34851216887`: PASS;
+- F32 Contracting Object Mutation `34851217022`: PASS.
 
 ## Próxima ação
 
 Existe exatamente uma `NEXT_ACTION` canônica:
 
-`F33-PERSISTENT-CONTRACTING-OBJECT-DETAIL-UI-01 - Integrar edição persistente do objeto no detalhe`.
+`F34-PERSISTENT-CONTRACTING-ITEM-CREATE-DESIGN-01 - Desenhar adição persistente mínima de item`.
 
-A SPEC está em `tasks/F33-PERSISTENT-CONTRACTING-OBJECT-DETAIL-UI-01/SPEC.md`.
+A SPEC está em `tasks/F34-PERSISTENT-CONTRACTING-ITEM-CREATE-DESIGN-01/SPEC.md`.
 
-F33 deve apenas conectar a boundary F32 ao detalhe persistente por Server Action/UI estreita, mantendo migrations `0001..0006` e capabilities imutáveis, demo read-only, exact-string, expected-value, conflito sem overwrite e authority fora do browser.
+F34 é design-only. Deve decidir payload mínimo, UUIDs server-side, autorização por contratação/equipe alvo, atribuição concorrente de `ordinal`, capability least-privilege, evento atômico e matriz adversarial da futura implementação, sem resolver Q-004/Q-009 e sem alterar migrations `0001..0006`.
 
 F21 permanece `ON HOLD` até seu `resume_when` objetivo.

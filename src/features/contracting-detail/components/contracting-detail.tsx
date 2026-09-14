@@ -1,10 +1,17 @@
 import Link from "next/link";
 
-import { updatePersistentNextActionAction } from "../actions";
+import {
+  updatePersistentNextActionAction,
+  updatePersistentObjectAction,
+} from "../actions";
 import {
   getNextActionMutationFeedback,
   type NextActionMutationUiState,
 } from "../next-action-feedback";
+import {
+  getObjectMutationFeedback,
+  type ObjectMutationUiState,
+} from "../object-feedback";
 import type {
   ContractingDetailPresentation,
   ContractingDetailSource,
@@ -15,19 +22,28 @@ type ContractingDetailProps = Readonly<{
   detail: ContractingDetailPresentation;
   source: ContractingDetailSource;
   mutationState?: NextActionMutationUiState | null;
+  objectMutationState?: ObjectMutationUiState | null;
 }>;
 
 export function ContractingDetail({
   detail,
   source,
   mutationState = null,
+  objectMutationState = null,
 }: ContractingDetailProps) {
   const isDemo = source === "demo";
   const feedback = isDemo ? null : getNextActionMutationFeedback(mutationState);
+  const objectFeedback = isDemo ? null : getObjectMutationFeedback(objectMutationState);
   const editorId = `next-action-${detail.id}`;
   const editorHelpId = `${editorId}-help`;
   const feedbackId = `${editorId}-feedback`;
   const describedBy = feedback ? `${editorHelpId} ${feedbackId}` : editorHelpId;
+  const objectEditorId = `object-${detail.id}`;
+  const objectEditorHelpId = `${objectEditorId}-help`;
+  const objectFeedbackId = `${objectEditorId}-feedback`;
+  const objectDescribedBy = objectFeedback
+    ? `${objectEditorHelpId} ${objectFeedbackId}`
+    : objectEditorHelpId;
 
   return (
     <main className="detail-shell">
@@ -40,7 +56,7 @@ export function ContractingDetail({
         ) : (
           <>
             <strong>Dados persistentes autorizados.</strong>
-            <span>Somente “Próxima ação” possui edição nesta etapa; autorização e histórico permanecem no servidor e no banco.</span>
+            <span>Somente “Objeto” e “Próxima ação” possuem edição restrita nesta etapa; autorização e histórico permanecem no servidor e no banco.</span>
           </>
         )}
       </section>
@@ -107,6 +123,57 @@ export function ContractingDetail({
           </div>
         </dl>
       </section>
+
+      {!isDemo ? (
+        <section className="detail-panel next-action-editor" aria-labelledby={`${objectEditorId}-title`}>
+          <div className="detail-section-heading compact-heading">
+            <div>
+              <p className="section-kicker">Edição restrita</p>
+              <h2 id={`${objectEditorId}-title`}>Objeto</h2>
+            </div>
+          </div>
+
+          <p className="next-action-current">
+            <strong>Valor atual:</strong>{" "}
+            <span style={{ whiteSpace: "pre-wrap" }}>{detail.object}</span>
+          </p>
+
+          {objectFeedback ? (
+            <p
+              id={objectFeedbackId}
+              className={`next-action-feedback next-action-feedback-${objectFeedback.state}`}
+              role={objectFeedback.role}
+              aria-live="polite"
+            >
+              {objectFeedback.message}
+            </p>
+          ) : null}
+
+          <form action={updatePersistentObjectAction} className="next-action-form">
+            <input type="hidden" name="contractingId" value={detail.id} />
+            <input type="hidden" name="expectedObject" value={detail.object} />
+
+            <label htmlFor={objectEditorId}>Objeto</label>
+            <textarea
+              id={objectEditorId}
+              name="newObject"
+              rows={4}
+              defaultValue={detail.object}
+              aria-describedby={objectDescribedBy}
+            />
+            <p id={objectEditorHelpId} className="next-action-help">
+              O texto é preservado exatamente como informado. String vazia e espaços são mantidos sem trim ou normalização.
+            </p>
+
+            <div className="next-action-actions">
+              <NextActionSubmitButton
+                label="Salvar objeto"
+                pendingLabel="Salvando…"
+              />
+            </div>
+          </form>
+        </section>
+      ) : null}
 
       {!isDemo ? (
         <section className="detail-panel next-action-editor" aria-labelledby={`${editorId}-title`}>

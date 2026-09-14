@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { readPersistentReadMode } from "@/server/persistent-read-mode";
 import { mutatePersistentContractingNextAction } from "./persistent-mutation";
+import { mutatePersistentContractingObject } from "./persistent-object-mutation";
 import { isPersistentContractingId } from "./persistent-read";
 
 type ParsedNullableField = Readonly<
@@ -85,4 +86,48 @@ export async function updatePersistentNextActionAction(formData: FormData): Prom
   }
 
   redirect(`${path}?mutation=${result}`);
+}
+
+/**
+ * The only F33 browser-facing object edit entrypoint. `object` is NOT NULL, so
+ * expected/new values must each be present exactly once as strings. Empty
+ * strings and whitespace are valid values and are forwarded without changes.
+ * Framework fields and unrelated forged authority fields are never forwarded.
+ */
+export async function updatePersistentObjectAction(formData: FormData): Promise<never> {
+  if (readPersistentReadMode() !== "persistent") {
+    redirect("/");
+  }
+
+  const contractingId = readRequiredStringOnce(formData, "contractingId");
+
+  if (!contractingId || !isPersistentContractingId(contractingId)) {
+    redirect("/");
+  }
+
+  const path = detailPath(contractingId);
+  const expectedObject = readRequiredStringOnce(formData, "expectedObject");
+  const newObject = readRequiredStringOnce(formData, "newObject");
+
+  if (expectedObject === null || newObject === null) {
+    redirect(`${path}?objectMutation=unavailable`);
+  }
+
+  let result: Awaited<ReturnType<typeof mutatePersistentContractingObject>>;
+
+  try {
+    result = await mutatePersistentContractingObject({
+      contractingId,
+      expectedObject,
+      newObject,
+    });
+  } catch {
+    result = "unavailable";
+  }
+
+  if (result === "updated" || result === "conflict") {
+    revalidatePath(path);
+  }
+
+  redirect(`${path}?objectMutation=${result}`);
 }

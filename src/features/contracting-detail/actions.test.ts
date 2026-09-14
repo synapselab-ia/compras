@@ -4,6 +4,7 @@ const actionMocks = vi.hoisted(() => ({
   readPersistentReadMode: vi.fn(),
   isPersistentContractingId: vi.fn(),
   mutatePersistentContractingNextAction: vi.fn(),
+  mutatePersistentContractingObject: vi.fn(),
   revalidatePath: vi.fn(),
   redirect: vi.fn((url: string) => {
     throw new Error(`REDIRECT:${url}`);
@@ -21,8 +22,14 @@ vi.mock("./persistent-read", () => ({
 vi.mock("./persistent-mutation", () => ({
   mutatePersistentContractingNextAction: actionMocks.mutatePersistentContractingNextAction,
 }));
+vi.mock("./persistent-object-mutation", () => ({
+  mutatePersistentContractingObject: actionMocks.mutatePersistentContractingObject,
+}));
 
-import { updatePersistentNextActionAction } from "./actions";
+import {
+  updatePersistentNextActionAction,
+  updatePersistentObjectAction,
+} from "./actions";
 
 const ID = "27000000-0000-4000-8000-000000000001";
 const PATH = `/contratacoes/${ID}`;
@@ -32,6 +39,14 @@ function baseForm(): FormData {
   form.set("contractingId", ID);
   form.set("expectedNextAction", "DEMO old");
   form.set("newNextAction", "DEMO new");
+  return form;
+}
+
+function baseObjectForm(): FormData {
+  const form = new FormData();
+  form.set("contractingId", ID);
+  form.set("expectedObject", "DEMO old object");
+  form.set("newObject", "DEMO new object");
   return form;
 }
 
@@ -169,6 +184,144 @@ describe("updatePersistentNextActionAction", () => {
     const serializedRedirects = JSON.stringify(actionMocks.redirect.mock.calls);
     expect(serializedRedirects).not.toContain("secret-user");
     expect(serializedRedirects).not.toContain("private.invalid");
+    expect(actionMocks.revalidatePath).not.toHaveBeenCalled();
+  });
+});
+
+describe("updatePersistentObjectAction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    actionMocks.readPersistentReadMode.mockReturnValue("persistent");
+    actionMocks.isPersistentContractingId.mockReturnValue(true);
+    actionMocks.mutatePersistentContractingObject.mockResolvedValue("updated");
+  });
+
+  it("forwards only candidate ID + exact expected/new object strings", async () => {
+    const form = baseObjectForm();
+    form.set("expectedObject", "  DEMO old object  ");
+    form.set("newObject", "  DEMO new object  ");
+    form.set("team_id", "FORGED-TEAM");
+    form.set("actorMembershipId", "FORGED-ACTOR");
+    form.set("membershipId", "FORGED-MEMBERSHIP");
+    form.set("issuer", "https://attacker.invalid");
+    form.set("subject", "FORGED-SUBJECT");
+    form.set("eventId", "27000000-0000-4000-8000-000000009999");
+    form.set("callbackURL", "https://attacker.invalid/collect");
+    form.set("$ACTION_ID_FORGED", "framework-like-field");
+
+    await expect(updatePersistentObjectAction(form)).rejects.toThrow(
+      `REDIRECT:${PATH}?objectMutation=updated`,
+    );
+
+    expect(actionMocks.mutatePersistentContractingObject).toHaveBeenCalledWith({
+      contractingId: ID,
+      expectedObject: "  DEMO old object  ",
+      newObject: "  DEMO new object  ",
+    });
+    expect(actionMocks.mutatePersistentContractingObject.mock.calls[0]?.[0]).toEqual({
+      contractingId: ID,
+      expectedObject: "  DEMO old object  ",
+      newObject: "  DEMO new object  ",
+    });
+    expect(actionMocks.revalidatePath).toHaveBeenCalledWith(PATH);
+    expect(actionMocks.redirect).not.toHaveBeenCalledWith("https://attacker.invalid/collect");
+  });
+
+  it("preserves the literal empty string and whitespace-only values", async () => {
+    const form = baseObjectForm();
+    form.set("expectedObject", "");
+    form.set("newObject", "   ");
+    actionMocks.mutatePersistentContractingObject.mockResolvedValueOnce("unchanged");
+
+    await expect(updatePersistentObjectAction(form)).rejects.toThrow(
+      `REDIRECT:${PATH}?objectMutation=unchanged`,
+    );
+
+    expect(actionMocks.mutatePersistentContractingObject).toHaveBeenCalledWith({
+      contractingId: ID,
+      expectedObject: "",
+      newObject: "   ",
+    });
+  });
+
+  it("maps every F32 result to a fixed local sanitized state and revalidates only writes/conflicts", async () => {
+    for (const [result, shouldRevalidate] of [
+      ["updated", true],
+      ["unchanged", false],
+      ["conflict", true],
+      ["not-available", false],
+      ["unavailable", false],
+    ] as const) {
+      vi.clearAllMocks();
+      actionMocks.readPersistentReadMode.mockReturnValue("persistent");
+      actionMocks.isPersistentContractingId.mockReturnValue(true);
+      actionMocks.mutatePersistentContractingObject.mockResolvedValueOnce(result);
+
+      await expect(updatePersistentObjectAction(baseObjectForm())).rejects.toThrow(
+        `REDIRECT:${PATH}?objectMutation=${result}`,
+      );
+
+      if (shouldRevalidate) {
+        expect(actionMocks.revalidatePath).toHaveBeenCalledWith(PATH);
+      } else {
+        expect(actionMocks.revalidatePath).not.toHaveBeenCalled();
+      }
+    }
+  });
+
+  it("cannot reach F32 in demo or invalid mode", async () => {
+    for (const mode of ["demo", "invalid"] as const) {
+      vi.clearAllMocks();
+      actionMocks.readPersistentReadMode.mockReturnValue(mode);
+
+      await expect(updatePersistentObjectAction(baseObjectForm())).rejects.toThrow("REDIRECT:/");
+      expect(actionMocks.isPersistentContractingId).not.toHaveBeenCalled();
+      expect(actionMocks.mutatePersistentContractingObject).not.toHaveBeenCalled();
+      expect(actionMocks.revalidatePath).not.toHaveBeenCalled();
+    }
+  });
+
+  it("fails closed on malformed IDs, missing required values and duplicate scalars", async () => {
+    actionMocks.isPersistentContractingId.mockReturnValueOnce(false);
+    await expect(updatePersistentObjectAction(baseObjectForm())).rejects.toThrow("REDIRECT:/");
+    expect(actionMocks.mutatePersistentContractingObject).not.toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    actionMocks.readPersistentReadMode.mockReturnValue("persistent");
+    actionMocks.isPersistentContractingId.mockReturnValue(true);
+    const missingExpected = baseObjectForm();
+    missingExpected.delete("expectedObject");
+    await expect(updatePersistentObjectAction(missingExpected)).rejects.toThrow(
+      `REDIRECT:${PATH}?objectMutation=unavailable`,
+    );
+    expect(actionMocks.mutatePersistentContractingObject).not.toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    actionMocks.readPersistentReadMode.mockReturnValue("persistent");
+    actionMocks.isPersistentContractingId.mockReturnValue(true);
+    const duplicate = baseObjectForm();
+    duplicate.append("newObject", "FORGED-DUPLICATE");
+    await expect(updatePersistentObjectAction(duplicate)).rejects.toThrow(
+      `REDIRECT:${PATH}?objectMutation=unavailable`,
+    );
+    expect(actionMocks.mutatePersistentContractingObject).not.toHaveBeenCalled();
+  });
+
+  it("sanitizes unexpected F32 failure without exposing details or using client redirects", async () => {
+    const form = baseObjectForm();
+    form.set("callbackURL", "https://attacker.invalid/collect");
+    actionMocks.mutatePersistentContractingObject.mockRejectedValueOnce(
+      new Error("postgresql://secret-user:secret-pass@private.invalid/database"),
+    );
+
+    await expect(updatePersistentObjectAction(form)).rejects.toThrow(
+      `REDIRECT:${PATH}?objectMutation=unavailable`,
+    );
+
+    const serializedRedirects = JSON.stringify(actionMocks.redirect.mock.calls);
+    expect(serializedRedirects).not.toContain("secret-user");
+    expect(serializedRedirects).not.toContain("private.invalid");
+    expect(actionMocks.redirect).not.toHaveBeenCalledWith("https://attacker.invalid/collect");
     expect(actionMocks.revalidatePath).not.toHaveBeenCalled();
   });
 });

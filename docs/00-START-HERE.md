@@ -18,11 +18,12 @@ A fundação já possui:
 - controle distribuído de abuso de sign-in;
 - capability persistente estreita para `contractings.next_action` e UI correspondente;
 - boundary persistente mínima de criação de `contractings`, pilot-only, auditável e idempotente, com jornada UI/Server Action integrada;
-- capability persistente separada para edição de `contractings.object`, com optimistic concurrency, auditoria atômica e adapter server-only.
+- capability persistente separada para edição de `contractings.object`;
+- UI/Server Action persistente de edição de `Objeto` integrada sobre a boundary F32, sem ampliar authority PostgreSQL.
 
-F32 está integrada em `main` pela PR `#48`, merge `e7f893e8d186853b859dfb281f134d057b0b6e97`. CI, F22 Private Preview Preflight, F29 Contracting Create e F32 Contracting Object Mutation passaram antes e depois do merge.
+F33 está integrada em `main` pela PR `#49`, merge `c4c3d5416ecfd7f49c74ffd0a32425db8621958c`. CI, F22 Private Preview Preflight, F29 Contracting Create e F32 Contracting Object Mutation passaram antes e depois do merge.
 
-A próxima e única frente canônica é F33, que conectará a boundary F32 ao detalhe persistente por uma Server Action/UI estreita para editar somente `Objeto`.
+A próxima e única frente canônica é F34, design-only para criação persistente mínima de item dentro de uma contratação existente.
 
 F17 permanece `ON HOLD` histórico. F21 permanece `ON HOLD` antes de secrets até existir control plane Vercel capaz de readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch sem expor valores.
 
@@ -59,15 +60,7 @@ O preflight descartável prova:
 
 ## F26/F27 - mutação de próxima ação
 
-ADR-011 escolheu uma primitive PostgreSQL `SECURITY DEFINER` específica para alterar somente `contractings.next_action`.
-
-Objetos principais:
-
-- `database/migrations/0004_next_action_mutation.sql`;
-- `database/provisioning/grant_next_action_runtime.sql`;
-- `database/tests/next_action_mutation.sql`;
-- `src/server/database/trusted-mutation-context.ts`;
-- `src/features/contracting-detail/persistent-mutation.ts`.
+ADR-011 escolheu primitive PostgreSQL `SECURITY DEFINER` específica para alterar somente `contractings.next_action`.
 
 A capability `compras_next_action_mutation_owner` é não privilegiada e separada. O runtime recebe apenas `EXECUTE` explícito, sem DML direto.
 
@@ -94,18 +87,16 @@ Team, actor e `created_by_membership_id` são derivados da sessão Better Auth v
 
 A row inicial e o evento `contracting_created` são atômicos. Replay autorizado do mesmo candidate UUID retorna `already-created` somente quando os dados canônicos coincidem exatamente. Colisão/mismatch/cross-team retorna negação genérica.
 
-## F31/F32 - edição persistente de object
+## F31/F32/F33 - edição persistente de objeto
 
-ADR-013 definiu e F32 implementou uma capability PostgreSQL própria para editar somente `contractings.object`, sem ampliar F26/F29.
+ADR-013 definiu e F32 implementou capability PostgreSQL própria para editar somente `contractings.object`, sem ampliar F26/F29.
 
-Objetos principais:
+Objetos principais da boundary:
 
 - `database/migrations/0006_contracting_object_mutation.sql`;
 - `database/provisioning/grant_contracting_object_mutation_runtime.sql`;
 - `database/tests/contracting_object_mutation.sql`;
 - `src/features/contracting-detail/persistent-object-mutation.ts`;
-- `src/features/contracting-detail/persistent-object-mutation.test.ts`;
-- `src/features/contracting-detail/persistent-object-mutation.postgres.test.ts`;
 - `.github/workflows/f32-contracting-object-mutation.yml`.
 
 A boundary aceita somente:
@@ -116,37 +107,33 @@ expectedObject
 newObject
 ```
 
-Event UUID nasce server-side. Team, actor, membership, issuer e subject não vêm do browser e são derivados do contexto confiável e do banco.
+Event UUID nasce server-side. Team, actor, membership, issuer e subject não vêm do browser. `SELECT ... FOR UPDATE` + comparação exata do expected value evitam lost update. String vazia e espaços são preservados. No-op não altera timestamp nem cria evento. Mudança real atualiza somente `object`/`updated_at` e cria exatamente um `object_changed` atômico. Falha do evento reverte o update.
 
-Propriedades provadas:
+F33 conecta essa boundary ao detalhe persistente:
 
-- role `compras_contracting_object_mutation_owner` é `NOLOGIN`, `NOINHERIT`, não privilegiada, sem ownership de tabelas-base e sem membership utilizável;
-- runtime normal não recebe DML direto e obtém somente `EXECUTE` explícito da primitive;
-- autorização pilot-only segue F26 por equipe alvo, não o guard global de criação F29;
-- segundo membro não revogado na equipe alvo bloqueia, inclusive quando o respectivo `app_user` está desabilitado;
-- outra membership do mesmo usuário em equipe diferente não bloqueia por si só;
-- `SELECT ... FOR UPDATE` serializa writers concorrentes;
-- `expectedObject` é comparado exatamente e `conflict` é avaliado antes de `unchanged`;
-- string vazia, espaços e leading/trailing spaces são preservados exatamente;
-- no-op não altera `updated_at` nem cria evento;
-- mudança real atualiza somente `object`/`updated_at` e cria exatamente um `object_changed` no mesmo instante de banco;
-- falha de inserção do evento reverte estado e timestamp;
-- cross-team, inexistente, arquivado, cancelado e demais negações são externamente colapsados;
-- teste de 8 writers concorrentes produz exatamente 1 `updated`, 7 `conflict` e 1 evento.
+- Server Action lê somente `contractingId`, `expectedObject` e `newObject`;
+- scalars duplicados/ausentes falham fechado;
+- team/actor/membership/issuer/subject/event UUID/callback não são authority do browser;
+- erro inesperado vira somente `unavailable`;
+- revalidação/redirect usam rota local fixa;
+- feedback externo é limitado a `updated`, `unchanged`, `conflict`, `not-available` e `unavailable`;
+- conflito força readback/revisão e nunca sobrescreve silenciosamente;
+- demo permanece read-only e ignora feedback forjado;
+- nenhuma migration, grant, policy, capability ou primitive foi alterada.
 
-PR `#48`, head `69e304c1fc47e0f548df70f4900b12b9a82d8483`:
+PR F33 `#49`, head `81f926b91657fe6de458d4ad01aee15f62672592`:
 
-- CI `34840241372`: PASS;
-- F22 Private Preview Preflight `34840241356`: PASS;
-- F29 Contracting Create `34840241361`: PASS;
-- F32 Contracting Object Mutation `34840241521`: PASS.
+- CI `34850892351`: PASS;
+- F22 Private Preview Preflight `34850892414`: PASS;
+- F29 Contracting Create `34850892361`: PASS;
+- F32 Contracting Object Mutation `34850892323`: PASS.
 
-Pós-merge `e7f893e8d186853b859dfb281f134d057b0b6e97`:
+Pós-merge `c4c3d5416ecfd7f49c74ffd0a32425db8621958c`:
 
-- CI `34840505900`: PASS;
-- F22 Private Preview Preflight `34840505998`: PASS;
-- F29 Contracting Create `34840505896`: PASS;
-- F32 Contracting Object Mutation `34840505989`: PASS.
+- CI `34851216964`: PASS;
+- F22 Private Preview Preflight `34851216895`: PASS;
+- F29 Contracting Create `34851216887`: PASS;
+- F32 Contracting Object Mutation `34851217022`: PASS.
 
 Nenhum provider hosted write, secret ou dado real foi usado.
 
@@ -154,21 +141,22 @@ Nenhum provider hosted write, secret ou dado real foi usado.
 
 A única `NEXT_ACTION` canônica está em `docs/ai/NEXT_ACTION.md`:
 
-`F33-PERSISTENT-CONTRACTING-OBJECT-DETAIL-UI-01 - Integrar edição persistente do objeto no detalhe`.
+`F34-PERSISTENT-CONTRACTING-ITEM-CREATE-DESIGN-01 - Desenhar adição persistente mínima de item`.
 
-F33 deve somente expor a authority F32 já integrada:
+F34 deve permanecer design-only e partir do schema já integrado de `contracting_items`:
 
-- Server Action dedicada a `contractingId + expectedObject + newObject`;
-- preservação exata do texto, inclusive vazio/espaços;
-- nenhum team/actor/membership/issuer/subject/event UUID confiado ao browser;
-- feedback sanitizado para `updated`, `unchanged`, `conflict`, `not-available` e `unavailable`;
-- conflito sem overwrite silencioso;
-- revalidação por rota local fixa;
-- demo estritamente read-only;
-- editor somente de `Objeto`;
-- migrations `0001..0006` e capabilities existentes imutáveis.
+- `id` UUID;
+- `contracting_id` + `team_id`;
+- `ordinal` inteiro único por contratação;
+- `description text NOT NULL`;
+- `quantity`, `unit` e `catalog_code` nullable;
+- timestamps e `retired_at`.
 
-A SPEC é `tasks/F33-PERSISTENT-CONTRACTING-OBJECT-DETAIL-UI-01/SPEC.md`.
+A slice deve decidir payload mínimo, UUIDs server-side, autorização por equipe alvo, atribuição concorrente de `ordinal`, capability least-privilege, evento atômico e matriz adversarial da futura F35.
+
+Não pode inventar validações de quantidade/unidade/catálogo nem resolver Q-004 de pesquisa de preços ou Q-009 de política multiusuário.
+
+A SPEC é `tasks/F34-PERSISTENT-CONTRACTING-ITEM-CREATE-DESIGN-01/SPEC.md`.
 
 ## Modos da aplicação
 

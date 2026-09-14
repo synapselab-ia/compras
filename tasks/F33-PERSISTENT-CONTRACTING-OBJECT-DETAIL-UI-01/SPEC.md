@@ -1,13 +1,13 @@
 # F33-PERSISTENT-CONTRACTING-OBJECT-DETAIL-UI-01 - Integrar edição persistente do objeto no detalhe
 
 **Classe:** T1 - feature normal, com impacto T2 - autorização/escrita server-side  
-**Estado:** READY  
+**Estado:** COMPLETED / PASS  
 **Dependências:** F32, ADR-003, ADR-009 e ADR-013  
 **Classificação permitida:** PUBLIC / FICTITIOUS ONLY
 
 ## Problema
 
-F32 entrega a primitive PostgreSQL estreita e o adapter server-only para alterar `contractings.object`, mas o detalhe persistente continua sem uma jornada de edição desse campo. A próxima slice deve expor somente a mutação já aprovada, sem abrir CRUD amplo, sem ampliar authority e sem resolver implicitamente política multiusuário.
+F32 entrega a primitive PostgreSQL estreita e o adapter server-only para alterar `contractings.object`, mas o detalhe persistente continuava sem uma jornada de edição desse campo. A slice deveria expor somente a mutação já aprovada, sem abrir CRUD amplo, sem ampliar authority e sem resolver implicitamente política multiusuário.
 
 ## Resultado esperado
 
@@ -22,7 +22,7 @@ A jornada deve:
 5. mapear `updated`, `unchanged`, `conflict`, `not-available` e `unavailable` para feedback sanitizado;
 6. atualizar/recarregar o detalhe após os resultados previstos, sem fallback para fixtures;
 7. permanecer read-only no modo demo;
-8. não liberar qualquer outra coluna ou operação persistente.
+8. não liberar qualquer outra coluna ou operação persistente além das já integradas anteriormente.
 
 ## Fronteira funcional
 
@@ -35,17 +35,15 @@ A jornada deve:
 
 ### Modo persistente
 
-- somente `Objeto` fica editável nesta slice;
+- `Objeto` fica editável por esta slice, ao lado da edição de `Próxima ação` já existente da F27;
 - o ID da rota é seletor candidato, nunca fonte de escopo;
 - o valor atual de `object` carregado do banco é enviado como `expectedObject` para a precondição otimista da ADR-013;
-- `newObject` é preservado byte-for-byte como string JS/SQL text, sem trim, limite de tamanho, regra non-empty ou conversão empty-to-NULL inventados;
-- a UI não deve inferir disponibilidade cross-team nem política de membership.
+- `newObject` é preservado como string sem trim, limite de tamanho, regra non-empty ou conversão empty-to-NULL inventados;
+- a UI não infere disponibilidade cross-team nem política de membership.
 
 ## Server Action obrigatória
 
-Criar uma Server Action dedicada à alteração de `object`.
-
-Ela pode receber somente dados equivalentes a:
+A Server Action dedicada à alteração de `object` recebe somente dados equivalentes a:
 
 ```text
 contractingId
@@ -53,7 +51,7 @@ expectedObject
 newObject
 ```
 
-Requisitos:
+Requisitos preservados:
 
 - validar o shape do payload sem criar regra de negócio nova;
 - delegar autorização, lock, concorrência, atomicidade e auditoria à boundary F32;
@@ -66,120 +64,85 @@ Requisitos:
 
 ## Semântica de resultado na UI
 
-### `updated`
-
-- informar sucesso;
-- revalidar o detalhe persistente por rota local fixa;
-- o novo valor e o evento devem ser observáveis no readback posterior.
-
-### `unchanged`
-
-- informar que não houve alteração;
-- não apresentar movimentação inexistente.
-
-### `conflict`
-
-- informar que o objeto mudou desde a leitura e que o usuário deve revisar o estado atual;
-- não sobrescrever silenciosamente;
-- revalidar/recarregar o detalhe antes de nova tentativa.
-
-### `not-available`
-
-- usar mensagem genérica de recurso/ação indisponível;
-- não distinguir UUID inexistente, cross-team, identidade sem autorização, membership ausente/revogada, segundo membro, arquivado ou cancelado.
-
-### `unavailable`
-
-- usar erro técnico sanitizado;
-- não expor driver, SQL, session, claims ou connection string;
-- não trocar silenciosamente para demo.
-
-## UI/UX mínima
-
-A interface deve permanecer coerente com o detalhe existente e incluir:
-
-- label clara `Objeto`;
-- controle acessível por teclado;
-- valor atual visível antes da edição;
-- estado pending/disabled contra submissão acidental repetida;
-- feedback textual associado à ação;
-- tratamento deliberado de conflito;
-- nenhum controle novo para `next_action`, stage, status, responsável, waiting, archive/cancel ou itens.
-
-Não criar editor genérico, CRUD genérico, modal complexo ou design system novo.
+- `updated`: sucesso e revalidação da rota local fixa;
+- `unchanged`: informa no-op sem movimentação inexistente;
+- `conflict`: informa stale state, revalida/readback e exige revisão antes de nova tentativa;
+- `not-available`: mensagem genérica sem oracle de existência/autorização;
+- `unavailable`: erro técnico sanitizado, sem fallback para demo.
 
 ## Segurança
 
-A UI não é enforcement. Devem permanecer verdadeiros:
+A UI não é enforcement. Permanecem verdadeiros:
 
-- sessão Better Auth é validada no servidor;
+- sessão Better Auth validada no servidor;
 - contexto confiável usa somente `iss/sub` LOCAL;
-- RLS/capability F32 permanecem autoritativas;
+- RLS/capability F32 continuam autoritativas;
 - runtime normal continua sem DML direto em tabelas protegidas;
-- runtime usa somente `EXECUTE` explícito da primitive F32 para esta escrita;
 - browser não define identity/scope/actor/membership/event UUID;
 - Q-009 continua aberta e o guard pilot-only permanece no banco;
 - cross-team e inexistente continuam indistinguíveis externamente;
 - modo demo nunca vira caminho de escrita;
 - F26 continua exclusiva de `next_action` e F29 continua exclusiva de criação mínima.
 
-## Testes obrigatórios
+## Execução realizada
 
-### Server Action / aplicação
+F33 foi implementada na branch `f33-persistent-contracting-object-detail-ui`, PR `#49`, sobre `main` em `d4afcca06b968bfac8467a1f492d99cdcc8d5c57`.
 
-- payload válido chama F32 com exatamente candidate ID + expected + new;
-- string vazia e espaços são preservados sem normalização;
-- campos extras forjados de actor/team/membership/issuer/subject/event UUID/callback são rejeitados ou ignorados e nunca encaminhados;
-- scalar duplicado/ambíguo falha fechado;
-- payload malformado falha fechado;
-- demo/configuração inválida não chega à F32;
-- `updated`, `unchanged`, `conflict`, `not-available` e `unavailable` são mapeados para estados sanitizados;
-- `conflict` não é convertido em sucesso;
-- erro interno não vaza detalhes;
-- revalidação usa somente rota local fixa e ocorre nos resultados deliberados;
-- nenhum redirect arbitrário é aceito do cliente.
+A implementação adicionou:
 
-### Componente/detalhe
+- `updatePersistentObjectAction` em `src/features/contracting-detail/actions.ts`;
+- feedback sanitizado dedicado em `object-feedback.ts`;
+- editor persistente de `Objeto` no detalhe;
+- parsing do estado sanitizado `objectMutation` na página de detalhe;
+- testes de Server Action, feedback e componente.
 
-- demo renderiza somente leitura e não expõe form de mutação persistente;
-- persistente renderiza controle apenas de `object` nesta slice;
-- expected value corresponde ao estado persistido apresentado;
-- feedback de sucesso, no-op, conflito, indisponibilidade de recurso e erro técnico é compreensível;
-- teclado/label/status possuem acessibilidade básica;
-- nenhuma authority ou outra coluna editável aparece no formulário.
+A Server Action lê exatamente uma vez `contractingId`, `expectedObject` e `newObject`. `expectedObject` e `newObject` são obrigatoriamente strings presentes, mas `""` permanece válido e distinto de ausência. Espaços e leading/trailing spaces são encaminhados sem trim/normalização.
 
-### Regressão
+Campos forjados de team, actor, membership, issuer, subject, event UUID, callback e campos framework-like não se tornam authority e não são encaminhados a F32. Redirect e revalidação usam exclusivamente a rota local fixa do detalhe.
 
-- lint PASS;
-- typecheck PASS;
-- testes completos PASS;
-- build PASS;
-- CI database PASS, incluindo F26/F29/F32;
-- Better Auth/F24 PostgreSQL PASS;
-- F22 Private Preview Preflight PASS;
-- F29 Contracting Create PASS;
-- F32 Contracting Object Mutation PASS;
-- nenhuma migration aplicada `0001..0006` é reescrita.
+A UI usa o valor protegido carregado pelo read model como `expectedObject`; conflito não sobrescreve o estado atual e provoca readback/revisão. Demo não renderiza editor nem feedback forjado e a própria Server Action bloqueia modo não persistente.
 
-## Red-team obrigatório
+Nenhuma migration, grant, policy, RLS, capability ou primitive PostgreSQL foi alterada. `0001..0006` permaneceram imutáveis. Não houve provider hosted write, secret ou dado real.
 
-Rejeitar PASS se:
+## Red-team executado
 
-- browser puder fornecer actor/team/membership/issuer/subject/event UUID confiável;
-- demo conseguir disparar write;
-- Server Action contornar `mutatePersistentContractingObject` com SQL/DML próprio;
-- texto for trimado, normalizado ou vazio for rejeitado sem regra canônica;
-- conflito sobrescrever estado atual ou virar sucesso;
-- cross-team e inexistente produzirem mensagens distinguíveis;
-- falha protegida cair para fixtures/demo;
-- payload ou erro sensível chegar a log/UI;
-- controle liberar outra coluna além de `object`;
-- Q-009 for resolvida implicitamente;
-- runtime ganhar DML direto;
-- migrations `0001..0006` forem alteradas;
-- provider hosted ou dado real for usado.
+O diff e a suíte rejeitam:
 
-## Invariantes
+- authority de browser para team/actor/membership/issuer/subject/event UUID;
+- callback/redirect arbitrário;
+- scalars duplicados ou ausentes chegando à F32;
+- demo ou configuração inválida alcançando a mutação;
+- trim, normalização ou rejeição de string vazia;
+- stale conflict convertido em sucesso;
+- erro de banco vazando connection string/detalhe interno;
+- feedback cross-team/inexistente distinguível;
+- formulário expondo stage/status/responsável/waiting ou outras authorities;
+- SQL/DML próprio na Server Action;
+- expansão de F26/F29/F32;
+- alteração das migrations aplicadas;
+- provider hosted ou dado real.
+
+Não havia review threads pendentes na PR.
+
+## Verificação
+
+Head final da PR `81f926b91657fe6de458d4ad01aee15f62672592`:
+
+- CI `34850892351`: PASS, incluindo lint, typecheck, testes, build, database e auth-database;
+- F22 Private Preview Preflight `34850892414`: PASS;
+- F29 Contracting Create `34850892361`: PASS;
+- F32 Contracting Object Mutation `34850892323`: PASS.
+
+A PR `#49` foi integrada por merge commit `c4c3d5416ecfd7f49c74ffd0a32425db8621958c`.
+
+Pós-merge em `main`:
+
+- CI `34851216964`: PASS;
+- F22 Private Preview Preflight `34851216895`: PASS;
+- F29 Contracting Create `34851216887`: PASS;
+- F32 Contracting Object Mutation `34851217022`: PASS.
+
+## Invariantes preservadas
 
 - `REAL_DATA_ALLOWED = NO`;
 - somente dados/identidades fictícios em teste;
@@ -191,18 +154,6 @@ Rejeitar PASS se:
 - migrations aplicadas permanecem imutáveis;
 - sem fallback protegido para demo.
 
-## Fora do escopo
-
-- mutação de `next_action`, stage, status, responsável ou waiting;
-- criação, arquivamento ou cancelamento de contratação;
-- mutação de itens ou identificadores;
-- política multiusuário;
-- resolução de Q-001/Q-002/Q-006/Q-009;
-- mudança de migration/capability F32;
-- provider hosted;
-- retomada F21;
-- dado real.
-
 ## Critério de encerramento
 
-F33 fecha quando o detalhe persistente expuser exclusivamente a edição de `object` por Server Action estreita sobre F32, preservando exact-value/optimistic concurrency, mantendo demo read-only, authority fora do browser, feedback fail-closed e todos os gates/regressões verdes.
+PASS. O detalhe persistente expõe a edição de `object` exclusivamente pela boundary F32, com expected-value exato, conflito fail-closed, demo read-only, payload sem authority controlada pelo cliente e regressões verdes, sem ampliação da camada PostgreSQL.

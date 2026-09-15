@@ -19,9 +19,10 @@ A fundação já possui:
 - capability persistente estreita para `contractings.next_action` e UI correspondente;
 - boundary persistente mínima de criação de `contractings`, pilot-only, auditável e idempotente, com jornada UI/Server Action integrada;
 - capability persistente separada para edição de `contractings.object`;
-- UI/Server Action persistente de edição de `Objeto` integrada sobre F32.
+- UI/Server Action persistente de edição de `Objeto` integrada sobre F32;
+- ADR-014 aceita e verificada para criação persistente mínima de `contracting_items`.
 
-F34 está em verificação final na PR `#51`. ADR-014 e a SPEC F35 foram produzidas, e o red-team corrigiu o mecanismo de serialização de ordinal para evitar conceder UPDATE desnecessário em `contractings`.
+F34 está concluída no desenho. A próxima e única frente canônica é F35, implementação PostgreSQL/server-only dessa boundary.
 
 F17 permanece `ON HOLD` histórico. F21 permanece `ON HOLD` antes de secrets até existir control plane Vercel capaz de readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch sem expor valores.
 
@@ -61,7 +62,7 @@ F33 foi integrada pela PR `#49`, merge `c4c3d5416ecfd7f49c74ffd0a32425db8621958c
 
 ## F34 - desenho de criação persistente de item
 
-A tabela física `contracting_items` já existe desde `0001`, com `ordinal`, descrição, quantidade, unidade, catálogo e timestamps. F34 não implementa escrita; define a próxima boundary.
+A tabela física `contracting_items` existe desde `0001`, com `ordinal`, descrição, quantidade, unidade, catálogo e timestamps. F34 não implementou escrita; definiu a próxima boundary em ADR-014.
 
 ### Payload futuro
 
@@ -73,7 +74,7 @@ unit
 catalogCode
 ```
 
-`quantity` será `string | null` no adapter até o PostgreSQL `numeric`. Item UUID e event UUID nascem server-side. Team, actor, membership, issuer, subject e ordinal não são confiados ao browser.
+`quantity` será `string | null` no adapter até PostgreSQL `numeric`. Item UUID e event UUID nascem server-side. Team, actor, membership, issuer, subject e ordinal não são confiados ao browser.
 
 Nenhuma regra de quantidade positiva, unidade obrigatória, catálogo obrigatório, trim, empty-to-NULL, limite de tamanho ou precisão de negócio foi inventada. Q-004 continua aberta.
 
@@ -92,11 +93,11 @@ Segundo membro não revogado bloqueia. Outra membership do mesmo usuário em equ
 
 F35 deverá criar capability própria equivalente a `compras_contracting_item_create_owner`, sem ampliar F26/F29/F32. Runtime normal continuará sem DML direto e receberá somente `EXECUTE` da primitive F35.
 
-### Allocator de ordinal corrigido pelo red-team
+### Allocator de ordinal
 
-O primeiro rascunho considerou `SELECT ... FOR UPDATE` em `contractings`. A revisão adversarial rejeitou essa alternativa porque locking clauses PostgreSQL exigem privilégio UPDATE, o que ampliaria a capability sobre a contratação pai.
+O red-team rejeitou o primeiro rascunho que usava row lock em `contractings`, pois locking clauses PostgreSQL exigem privilégio UPDATE. A decisão final mantém zero UPDATE na contratação pai.
 
-ADR-014 agora exige uma tabela técnica por contratação, equivalente a:
+ADR-014 exige tabela técnica por contratação, equivalente a:
 
 ```text
 contracting_item_ordinal_counters
@@ -111,23 +112,21 @@ Gaps não são reutilizados. Contratações distintas usam rows distintas e não
 
 ### Atomicidade
 
-Uma criação bem-sucedida deverá inserir item, avanço do allocator e evento `item_created` na mesma transação. Falha do evento reverte tudo. `contractings.updated_at` não é alterado.
+Uma criação bem-sucedida deverá inserir avanço do allocator, item e evento `item_created` na mesma transação. Falha do evento reverte tudo. `contractings.updated_at` não é alterado.
 
 A futura boundary server-only expõe apenas `created`, `not-available` e `unavailable`.
 
-## Frente ativa
+O desenho completo está em `docs/decisions/ADR-014-minimal-persistent-contracting-item-creation.md` e a implementação está especificada em `tasks/F35-PERSISTENT-CONTRACTING-ITEM-CREATE-IMPLEMENT-01/SPEC.md`.
 
-A única `NEXT_ACTION` canônica continua F34 enquanto o desenho corrigido estiver em verificação.
+## Próxima frente
 
-F34 fecha somente após:
+A única `NEXT_ACTION` canônica está em `docs/ai/NEXT_ACTION.md`:
 
-- revisão integral do diff corrigido;
-- CI, F22, F29 e F32 verdes no head corrigido;
-- checkpoint final promovendo F35;
-- nova rodada de gates verde;
-- merge da PR `#51` e verificação pós-merge.
+`F35-PERSISTENT-CONTRACTING-ITEM-CREATE-IMPLEMENT-01 - Implementar criação persistente mínima de item`.
 
-Depois disso, a implementação será `F35-PERSISTENT-CONTRACTING-ITEM-CREATE-IMPLEMENT-01` conforme `tasks/F35-PERSISTENT-CONTRACTING-ITEM-CREATE-IMPLEMENT-01/SPEC.md`.
+F35 deve implementar exclusivamente ADR-014: migration `0007`, allocator técnico, capability própria, primitive, provisioning, adapter server-only, matriz PostgreSQL 17, teste real de concorrência e workflow dedicado.
+
+UI e Server Action de item permanecem fora dessa slice.
 
 ## Modos da aplicação
 
@@ -165,7 +164,7 @@ Migrations imutáveis atualmente integradas:
 - `0005_contracting_create.sql`;
 - `0006_contracting_object_mutation.sql`.
 
-Migration aplicada não é reescrita. F35, após promoção da F34, deverá acrescentar `0007`.
+Migration aplicada não é reescrita. F35 deverá acrescentar `0007`.
 
 ## Fonte de verdade
 

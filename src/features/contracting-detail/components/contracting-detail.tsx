@@ -1,9 +1,14 @@
 import Link from "next/link";
 
 import {
+  createPersistentContractingItemAction,
   updatePersistentNextActionAction,
   updatePersistentObjectAction,
 } from "../actions";
+import {
+  getItemCreationFeedback,
+  type ItemCreationUiState,
+} from "../item-create-feedback";
 import {
   getNextActionMutationFeedback,
   type NextActionMutationUiState,
@@ -23,6 +28,7 @@ type ContractingDetailProps = Readonly<{
   source: ContractingDetailSource;
   mutationState?: NextActionMutationUiState | null;
   objectMutationState?: ObjectMutationUiState | null;
+  itemCreationState?: ItemCreationUiState | null;
 }>;
 
 export function ContractingDetail({
@@ -30,10 +36,12 @@ export function ContractingDetail({
   source,
   mutationState = null,
   objectMutationState = null,
+  itemCreationState = null,
 }: ContractingDetailProps) {
   const isDemo = source === "demo";
   const feedback = isDemo ? null : getNextActionMutationFeedback(mutationState);
   const objectFeedback = isDemo ? null : getObjectMutationFeedback(objectMutationState);
+  const itemCreationFeedback = isDemo ? null : getItemCreationFeedback(itemCreationState);
   const editorId = `next-action-${detail.id}`;
   const editorHelpId = `${editorId}-help`;
   const feedbackId = `${editorId}-feedback`;
@@ -44,6 +52,16 @@ export function ContractingDetail({
   const objectDescribedBy = objectFeedback
     ? `${objectEditorHelpId} ${objectFeedbackId}`
     : objectEditorHelpId;
+  const itemEditorId = `item-create-${detail.id}`;
+  const itemDescriptionId = `${itemEditorId}-description`;
+  const itemQuantityId = `${itemEditorId}-quantity`;
+  const itemUnitId = `${itemEditorId}-unit`;
+  const itemCatalogCodeId = `${itemEditorId}-catalog-code`;
+  const itemHelpId = `${itemEditorId}-help`;
+  const itemFeedbackId = `${itemEditorId}-feedback`;
+  const itemDescriptionDescribedBy = itemCreationFeedback
+    ? `${itemHelpId} ${itemFeedbackId}`
+    : itemHelpId;
 
   return (
     <main className="detail-shell">
@@ -56,7 +74,7 @@ export function ContractingDetail({
         ) : (
           <>
             <strong>Dados persistentes autorizados.</strong>
-            <span>Somente “Objeto” e “Próxima ação” possuem edição restrita nesta etapa; autorização e histórico permanecem no servidor e no banco.</span>
+            <span>Objeto, próxima ação e inclusão de item possuem operações restritas nesta etapa; autorização e histórico permanecem no servidor e no banco.</span>
           </>
         )}
       </section>
@@ -270,6 +288,72 @@ export function ContractingDetail({
               <h2 id="items-title">Itens ativos</h2>
             </div>
           </div>
+
+          {!isDemo ? (
+            <div className="item-create-editor" aria-labelledby={`${itemEditorId}-title`}>
+              <h3 id={`${itemEditorId}-title`} className="item-create-title">Adicionar item</h3>
+
+              {itemCreationFeedback ? (
+                <p
+                  id={itemFeedbackId}
+                  className={`next-action-feedback next-action-feedback-${itemCreationFeedback.state}`}
+                  role={itemCreationFeedback.role}
+                  aria-live="polite"
+                >
+                  {itemCreationFeedback.message}
+                </p>
+              ) : null}
+
+              <form action={createPersistentContractingItemAction} className="next-action-form">
+                <input type="hidden" name="contractingId" value={detail.id} />
+
+                <label htmlFor={itemDescriptionId}>Descrição</label>
+                <textarea
+                  id={itemDescriptionId}
+                  name="description"
+                  rows={3}
+                  aria-describedby={itemDescriptionDescribedBy}
+                />
+
+                <label htmlFor={itemQuantityId}>Quantidade opcional</label>
+                <input
+                  id={itemQuantityId}
+                  name="quantity"
+                  type="text"
+                  inputMode="decimal"
+                  autoComplete="off"
+                />
+
+                <label htmlFor={itemUnitId}>Unidade opcional</label>
+                <input
+                  id={itemUnitId}
+                  name="unit"
+                  type="text"
+                  autoComplete="off"
+                />
+
+                <label htmlFor={itemCatalogCodeId}>Código de catálogo opcional</label>
+                <input
+                  id={itemCatalogCodeId}
+                  name="catalogCode"
+                  type="text"
+                  autoComplete="off"
+                />
+
+                <p id={itemHelpId} className="next-action-help">
+                  Descrição, unidade e código são preservados exatamente. Quantidade vazia representa ausência; qualquer texto informado segue sem conversão numérica no navegador.
+                </p>
+
+                <div className="next-action-actions">
+                  <NextActionSubmitButton
+                    label="Adicionar item"
+                    pendingLabel="Adicionando…"
+                  />
+                </div>
+              </form>
+            </div>
+          ) : null}
+
           {detail.items.length > 0 ? (
             <ul className="demo-list">
               {detail.items.map((item) => (

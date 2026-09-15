@@ -1,211 +1,135 @@
 # F34-PERSISTENT-CONTRACTING-ITEM-CREATE-DESIGN-01 - Desenhar adição persistente mínima de item
 
 **Classe:** T2 - desenho arquitetural de escrita/autorização  
-**Estado:** READY  
+**Estado:** COMPLETED / PASS  
 **Dependências:** fundação `contracting_items`, F26, F29, F32, SECURITY, DATABASE e modelo de domínio  
 **Classificação permitida:** PUBLIC / FICTITIOUS ONLY
 
-## Problema
+## Resultado
 
-O núcleo funcional inicial prevê itens dentro de uma contratação, e a fundação física já possui `contracting_items`, mas ainda não existe boundary persistente autorizada para adicionar um item. A próxima slice deve desenhar essa mutação antes de escrever migration, primitive, adapter ou UI.
+F34 foi concluída como slice exclusivamente de desenho. A decisão arquitetural foi registrada em `docs/decisions/ADR-014-minimal-persistent-contracting-item-creation.md` e a implementação futura foi especificada em `tasks/F35-PERSISTENT-CONTRACTING-ITEM-CREATE-IMPLEMENT-01/SPEC.md`.
 
-O desenho não pode inventar taxonomias, regras de pesquisa de preços, validações de quantidade/unidade ou política multiusuário ainda não aprovadas.
+Nenhuma migration, primitive, policy, grant, adapter, Server Action ou UI operacional foi criada nesta slice. Migrations `0001..0006` permaneceram imutáveis. Q-004 e Q-009 permanecem abertas.
 
-## Base canônica já existente
+## Decisões fechadas
 
-A tabela física integrada desde `0001_core_foundation.sql` possui:
+### Payload e confiança
+
+A futura boundary server-only recebe somente:
 
 ```text
-id uuid PK
-team_id uuid NOT NULL
-contracting_id uuid NOT NULL
-ordinal integer NOT NULL
-description text NOT NULL
-quantity numeric NULL
-unit text NULL
-catalog_code text NULL
-created_at timestamptz NOT NULL
-updated_at timestamptz NOT NULL
-retired_at timestamptz NULL
-UNIQUE (contracting_id, ordinal)
+contractingId
+description
+quantity
+unit
+catalogCode
 ```
 
-`contracting_events` já pode referenciar `item_id` dentro do mesmo `team_id + contracting_id`.
+`description` é string. `quantity` é transportada como `string | null` no adapter para não passar por `Number` JavaScript antes do PostgreSQL `numeric`. `unit` e `catalogCode` são `string | null`.
 
-O modelo conceitual prevê item com ordem, descrição, quantidade, unidade e código de catálogo, mas não aprova validações adicionais além das invariantes já canônicas. Q-004 sobre a regra de pesquisa de preços permanece aberta e está fora desta slice.
+Team, actor, membership, issuer, subject, ordinal, item UUID e event UUID não são authority do browser. Item UUID e event UUID são gerados server-side em cada tentativa.
 
-## Objetivo
+O desenho não cria trim, empty-to-NULL, descrição non-empty, quantidade positiva, unidade obrigatória, catálogo obrigatório, limite de tamanho ou precisão/escala de negócio.
 
-Definir uma boundary mínima, least-privilege e auditável para adicionar um item a uma contratação existente, incluindo:
+### Autorização pilot-only
 
-- payload mínimo confiável;
-- derivação de team/actor/scope exclusivamente do servidor/banco;
-- geração server-side dos UUIDs necessários;
-- atribuição de `ordinal` segura sob concorrência;
-- autorização pilot-only coerente com uma contratação já existente;
-- capability PostgreSQL dedicada ou alternativa formalmente justificada;
-- criação atômica da row e do evento correspondente;
-- resultados externos sanitizados e indistinguíveis para negações;
-- matriz adversarial e de concorrência para a futura implementação.
-
-## Decisões obrigatórias
-
-### 1. Payload e semântica dos campos
-
-Definir o menor payload server-only necessário. O desenho deve partir do schema real e do domínio aprovado, sem criar regra de negócio nova.
-
-Devem ser avaliados explicitamente:
-
-- `contractingId` como seletor candidato, nunca fonte de scope;
-- item UUID gerado server-side;
-- event UUID gerado server-side;
-- `description` como `text NOT NULL`, preservada conforme a semântica física/canônica aprovada;
-- `quantity`, `unit` e `catalogCode` como nullable enquanto nenhuma regra mais restritiva estiver aprovada;
-- ausência de team, actor, membership, issuer, subject e ordinal confiados ao browser.
-
-O desenho não pode introduzir silenciosamente trim, empty-to-NULL, quantidade positiva obrigatória, unidade obrigatória, precisão/escala de negócio, catálogo obrigatório ou limites de tamanho.
-
-### 2. Ordenação e concorrência
-
-`ordinal` participa de `UNIQUE (contracting_id, ordinal)`. A ADR deve decidir como o banco atribui o próximo ordinal sem depender de valor confiado ao browser e sem race condition.
-
-A solução deve especificar:
-
-- mecanismo de serialização/lock;
-- comportamento com duas ou mais criações concorrentes na mesma contratação;
-- comportamento em contratações diferentes;
-- se gaps existentes são preservados ou reutilizados;
-- invariantes para evitar duplicidade e lost insert.
-
-A escolha deve ser provável em PostgreSQL 17 por teste concorrente real na futura implementação.
-
-### 3. Autorização pilot-only
-
-Como a contratação alvo já existe e possui `team_id` canônico, o desenho deve partir do padrão por equipe alvo de F26/F32, e não copiar automaticamente o guard global de criação F29.
-
-A decisão deve cobrir pelo menos:
+A autorização segue F26/F32 por equipe alvo, porque a contratação existente já define o `team_id` canônico:
 
 - identidade interna ativa;
 - contratação alvo visível, não arquivada e não cancelada;
 - membership não revogada do usuário na equipe alvo;
-- política pilot-only vigente enquanto Q-009 estiver aberta;
-- segundo membro não revogado na equipe alvo;
-- membership adicional do mesmo usuário em outra equipe;
-- inexistente e cross-team externamente indistinguíveis.
+- exatamente uma membership não revogada na equipe alvo.
 
-Nenhuma política multiusuário nova pode ser inferida.
+Segundo membro não revogado bloqueia, inclusive quando seu `app_user` estiver desabilitado. Outra membership do mesmo usuário em equipe diferente não bloqueia por si só. Inexistente, cross-team e demais negações permanecem externamente indistinguíveis.
 
-### 4. Capability e least privilege
+### Capability
 
-Avaliar explicitamente capability própria para item create versus ampliação de capabilities existentes. A decisão deve preservar separação de authority.
+A implementação F35 usará capability própria equivalente a `compras_contracting_item_create_owner`, separada de F26/F29/F32.
 
-Se houver primitive `SECURITY DEFINER`, o desenho deve exigir, no mínimo:
+A role será `NOLOGIN`, `NOINHERIT`, não privilegiada, sem `BYPASSRLS`, sem ownership de tabelas-base e sem membership utilizável. A primitive será `SECURITY DEFINER`, com `search_path = pg_catalog`, SQL estático e `PUBLIC EXECUTE` revogado.
 
-- owner técnico dedicado `NOLOGIN`, `NOINHERIT`, não privilegiado;
-- `search_path = pg_catalog`;
-- SQL estático;
-- `PUBLIC EXECUTE` revogado;
-- runtime normal sem DML direto;
-- grant separado concedendo somente `EXECUTE` necessário;
-- ausência de membership utilizável ou ownership indevido de tabelas-base.
+Runtime normal continuará sem DML direto e receberá apenas `EXECUTE` explícito da primitive F35 por provisionamento separado.
 
-F26 deve continuar exclusiva de `next_action`, F29 exclusiva de criação mínima de contratação e F32 exclusiva de mutação de `object`.
+### Ordinal e concorrência
 
-### 5. Atomicidade e auditoria
+`ordinal` não é input do caller.
 
-Definir evento automático para criação do item e seus campos mínimos, usando `contracting_events.item_id` já existente.
+A primitive deve:
 
-O desenho deve especificar:
+1. autorizar e bloquear a contratação alvo com `SELECT ... FOR UPDATE`;
+2. após o lock, calcular `MAX(ordinal)` considerando todos os itens da contratação, inclusive retirados;
+3. usar `1` se não houver item, senão `MAX + 1`;
+4. não reutilizar gaps.
 
-- event type e semântica do evento;
-- vínculo ao item criado;
-- actor/team derivados;
-- instante de banco consistente;
-- item e evento na mesma transação;
-- rollback integral se a auditoria falhar;
-- nenhum evento em negação/falha anterior à criação.
+Writers concorrentes na mesma contratação são serializados pela row pai. Contratações diferentes não usam lock global. A constraint `UNIQUE (contracting_id, ordinal)` permanece como backstop, sem retry cego como algoritmo primário.
 
-Não inventar histórico textual duplicado quando campos estruturados existentes forem suficientes.
+### Atomicidade e histórico
 
-### 6. Resultados externos
+Cada criação bem-sucedida gera exatamente um item e exatamente um evento `item_created` na mesma transação.
 
-Definir conjunto pequeno de resultados sanitizados. Negação por inexistência, cross-team, identidade inválida, membership inválida, segundo membro, arquivada ou cancelada deve permanecer sem oracle de existência.
+O evento referencia `item_id`, deriva team/actor/contracting do banco e usa o mesmo instante de banco dos timestamps de criação do item. `field_key`, `old_value`, `new_value`, `note` e `related_identifier_id` ficam nulos.
 
-Falhas técnicas não podem expor SQL, driver, claims, connection string ou detalhes internos e nunca podem cair para demo.
+Falha do evento reverte o item. Negação não cria item nem evento. `contractings.updated_at` não é alterado nesta operação.
 
-## Artefatos esperados
+### Resultados externos
 
-F34 é design-only. Deve produzir, no mínimo:
+A futura primitive distingue internamente somente `created` e `denied`. O adapter expõe apenas:
 
-1. uma ADR nova, prevista como `ADR-014`, com as decisões acima;
-2. atualização documental mínima necessária em SECURITY/DATABASE se a decisão materialmente exigir;
-3. SPEC da futura implementação F35, com matriz PostgreSQL/adversarial/concurrency verificável;
-4. checkpoint canônico apontando somente para F35 após todos os gates documentais.
+- `created`;
+- `not-available`;
+- `unavailable`.
 
-## Testes e matriz a desenhar para F35
+Nenhum UUID interno, ordinal, team, actor, SQL, driver, claim ou connection string é retornado. Falha protegida nunca cai para demo.
 
-A SPEC futura deve exigir prova de, no mínimo:
+## Red-team F34
 
-- runtime sem DML direto;
-- capability sem privilege escalation;
-- Auth/read-only/F26/F29/F32 sem authority de item create;
-- claims ausentes, malformados e desconhecidos;
-- usuário desabilitado;
-- membership ausente/revogada;
-- segundo membro não revogado na equipe alvo;
-- membership adicional do mesmo usuário em outra equipe;
-- cross-team e inexistente indistinguíveis;
-- arquivada/cancelada negadas;
-- valores nullable preservados de acordo com a decisão;
-- ausência de normalização inventada;
-- item UUID e event UUID não controlados pelo browser;
-- concorrência de múltiplos creates na mesma contratação sem ordinal duplicado;
-- concorrência em contratações diferentes sem bloqueio global desnecessário;
-- exatamente um evento por criação bem-sucedida;
-- rollback do item se o evento falhar;
-- nenhuma alteração das migrations aplicadas `0001..0006`.
+O desenho foi rejeitado como PASS se permitisse qualquer uma das seguintes propriedades. Nenhuma permaneceu no desenho final:
 
-## Red-team obrigatório
+- scope, actor, membership, ordinal ou UUIDs internos controlados pelo browser;
+- `MAX(ordinal) + 1` sem serialização pela contratação pai;
+- retry cego de unique violation como solução de corrida;
+- table lock ou advisory lock global;
+- reutilização automática de gaps;
+- retirada do item excluindo seu ordinal histórico do máximo;
+- DML direto para runtime;
+- ampliação das capabilities F26/F29/F32;
+- role de capability utilizável como login ou role privilegiada;
+- criação em contratação inexistente, cross-team, arquivada ou cancelada;
+- guard global da F29 copiado para uma row com team já conhecido;
+- regra de quantidade/unidade/catálogo inventada;
+- quantidade convertida por `Number`/`parseFloat`;
+- evento não atômico;
+- alteração desnecessária de `contractings.updated_at`;
+- deduplicação de item sem chave de negócio aprovada;
+- resolução implícita de Q-004 ou Q-009;
+- provider hosted, secret ou dado real.
 
-Rejeitar PASS do desenho se:
+## Verificação documental
 
-- browser puder definir team, actor, membership, issuer, subject, item UUID, event UUID ou scope confiável;
-- `ordinal` controlado pelo cliente puder causar overwrite, collision ou authority indevida;
-- a solução depender de retry cego não especificado para resolver corrida de ordinal;
-- F26/F29/F32 forem ampliadas sem justificativa de least privilege;
-- runtime receber DML direto;
-- capability técnica puder ser usada como role de login normal ou ganhar authority ampla;
-- Q-004 ou Q-009 forem resolvidas implicitamente;
-- quantidade/unidade/catálogo ganharem validação de negócio não suportada pelas fontes;
-- item puder ser criado em contratação arquivada/cancelada ou cross-team;
-- evento não for atômico com o item;
-- provider hosted, secret ou dado real forem usados;
-- migrations `0001..0006` forem reescritas.
+Head de desenho validado antes do checkpoint: `cfb83dbe9510495016584acda837cbcae30db5e4`.
 
-## Invariantes
+Gates executados nesse head:
+
+- CI `34970699468`: PASS;
+- F22 Private Preview Preflight `34970699518`: PASS;
+- F29 Contracting Create `34970699591`: PASS;
+- F32 Contracting Object Mutation `34970699549`: PASS.
+
+O diff validado antes do checkpoint continha somente ADR-014 e a SPEC F35. Não havia alteração de migration, código operacional, grant, policy, provider hosted, secret ou dado real.
+
+## Invariantes preservadas
 
 - `REAL_DATA_ALLOWED = NO`;
 - somente dados/identidades fictícios;
-- nenhum provider hosted write;
 - F21 permanece `ON HOLD` até seu `resume_when` objetivo;
 - Q-001/Q-002/Q-003/Q-004/Q-006/Q-009 continuam abertas;
 - autenticação não é autorização;
 - RLS/capabilities permanecem autoritativas;
 - runtime normal continua sem DML direto;
-- migrations aplicadas `0001..0006` permanecem imutáveis;
-- nenhuma regra nova é aprovada só por aparecer como exemplo em documento draft.
+- migrations aplicadas `0001..0006` permanecem imutáveis.
 
-## Fora do escopo
+## Encerramento
 
-- implementar migration, SQL, provisionamento, adapter, Server Action ou UI de item;
-- editar, reordenar, retirar ou restaurar item existente;
-- pesquisa de preços, evidências, regra de +/-25% ou Q-004;
-- alterar taxonomias de etapa/status;
-- resolver Q-003 de processos relacionados;
-- resolver política multiusuário Q-009;
-- importar dado real;
-- retomar F21.
+O critério de encerramento da F34 foi satisfeito. A arquitetura de criação mínima de item está fechada quanto a payload, autorização, UUIDs, ordinal concorrente, capability, atomicidade/auditoria, resultados sanitizados e matriz adversarial.
 
-## Critério de encerramento
-
-F34 fecha quando existir uma decisão arquitetural completa e adversarialmente revisada para criação mínima de item, com payload, autorização, ordinal concorrente, capability, atomicidade/auditoria e matriz de implementação definidos sem inventar regras de negócio, deixando exatamente uma futura implementação F35 como `NEXT_ACTION`.
+A implementação correspondente está especificada na F35.

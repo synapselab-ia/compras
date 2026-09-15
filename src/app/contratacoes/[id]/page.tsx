@@ -6,6 +6,7 @@ import {
   readContractingCreateUiState,
 } from "@/features/contracting-create/feedback";
 import { ContractingDetail } from "@/features/contracting-detail/components/contracting-detail";
+import { readItemCreationUiState } from "@/features/contracting-detail/item-create-feedback";
 import { readNextActionMutationUiState } from "@/features/contracting-detail/next-action-feedback";
 import { readObjectMutationUiState } from "@/features/contracting-detail/object-feedback";
 import { loadContractingDetailViewData } from "@/features/contracting-detail/view-data";
@@ -15,6 +16,7 @@ type ContractingDetailPageProps = {
   searchParams: Promise<{
     mutation?: string | string[];
     objectMutation?: string | string[];
+    itemCreation?: string | string[];
     creation?: string | string[];
   }>;
 };
@@ -78,6 +80,7 @@ export default async function ContractingDetailPage({
         source={viewData.kind}
         mutationState={readNextActionMutationUiState(query.mutation)}
         objectMutationState={readObjectMutationUiState(query.objectMutation)}
+        itemCreationState={readItemCreationUiState(query.itemCreation)}
       />
     </>
   );

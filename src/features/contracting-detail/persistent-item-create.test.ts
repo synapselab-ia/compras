@@ -106,7 +106,11 @@ describe("persistent contracting item create adapter", () => {
   });
 
   it("passes zero, negative and fractional quantity strings without JavaScript numeric coercion", async () => {
-    for (const [index, quantity] of ["0", "-2.500", "0.000000000000000000123456789"] .entries()) {
+    for (const [index, quantity] of [
+      "0",
+      "-2.500",
+      "0.000000000000000000123456789",
+    ].entries()) {
       query.mockResolvedValueOnce({ rows: [{ outcome: "created" }] });
 
       await expect(

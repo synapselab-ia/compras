@@ -68,6 +68,20 @@ jobs:
           fi
           psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_item_create_owner;"
 
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_contracting_item_create_owner NOLOGIN NOINHERIT SUPERUSER;"
+          if PGDATABASE=compras_f35_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0007_contracting_item_create.sql; then
+            echo "unsafe SUPERUSER item create capability was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_item_create_owner;"
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_contracting_item_create_owner NOLOGIN NOINHERIT CREATEROLE NOBYPASSRLS;"
+          if PGDATABASE=compras_f35_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0007_contracting_item_create.sql; then
+            echo "unsafe CREATEROLE item create capability was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_item_create_owner;"
+
           psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_contracting_item_create_owner NOLOGIN NOINHERIT BYPASSRLS;"
           if PGDATABASE=compras_f35_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0007_contracting_item_create.sql; then
             echo "unsafe BYPASSRLS item create capability was accepted" >&2
@@ -147,6 +161,7 @@ jobs:
           SQL
 
           PGDATABASE=compras_item_create_ci psql -v ON_ERROR_STOP=1 -f database/tests/contracting_item_create.sql
+          PGDATABASE=compras_item_create_ci psql -v ON_ERROR_STOP=1 -f database/tests/contracting_item_create_edge_cases.sql
 
           F35_CONTRACTING_ITEM_CREATE_POSTGRES_TEST=1 \
           F35_DOMAIN_RUNTIME_DATABASE_URL='postgresql://compras_domain_runtime_f35_ci:DEMO-F35-DOMAIN-RUNTIME-PASSWORD@localhost:5432/compras_item_create_ci' \

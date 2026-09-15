@@ -1,7 +1,7 @@
 # Current State - Compras
 
-**PROJECT_STATUS:** F37_DESIGN_VERIFIED_F38_READY_AFTER_PROMOTION  
-**CURRENT_PHASE:** F37 concluída e verificada na PR #57; promoção pendente; F38 é a próxima implementação; F21 ON HOLD  
+**PROJECT_STATUS:** F37_INTEGRATED_F38_READY  
+**CURRENT_PHASE:** F37 integrada e verificada; F38 READY; F21 ON HOLD  
 **REPO_VISIBILITY:** PUBLIC  
 **APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_SIGNIN_LIMITER_NEXT_ACTION_WRITE_CREATE_UI_OBJECT_MUTATION_OBJECT_DETAIL_UI_ITEM_CREATE_BOUNDARY_AND_ITEM_CREATE_DETAIL_UI_INTEGRATED  
 **DATABASE_STATUS:** PROTECTED_READ_MODEL_F26_F29_F32_F35_VALIDATED_F29_CONCURRENCY_REPAIR_0008_INTEGRATED_F37_DESIGN_ONLY  
@@ -33,74 +33,60 @@
 **F29_CONCURRENCY_REPAIR_MERGE_COMMIT:** `738666901fae43ce25dd11398904735e15c85da1`  
 **F37_PR:** `#57`  
 **F37_DESIGN_VERIFIED_HEAD:** `811786a774342a23b09576e6bb7f6040443a5775`  
-**LAST_GOOD_MAIN_COMMIT:** `738666901fae43ce25dd11398904735e15c85da1`  
-**LAST_GOOD_MAIN_CI_RUN:** `35010854766`  
+**F37_FINAL_PR_HEAD:** `40a7fb0de96ae571b4a07afc43c41bf1787da0a8`  
+**F37_MERGE_COMMIT:** `88d7d43f06afe8a9eef4d446331c173a8d238856`  
+**LAST_GOOD_MAIN_COMMIT:** `88d7d43f06afe8a9eef4d446331c173a8d238856`  
+**LAST_GOOD_MAIN_CI_RUN:** `35011822038`  
 **F21_STATE:** `ON HOLD / BLOCKED` - Vercel control-plane surface unavailable for required protection/env readback+CRUD  
 **F21_RESUME_WHEN:** sessão Vercel autenticada permitir readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch, sem exposição de valores  
 **ON_HOLD:** `F17-B2` histórico + `F21` conforme resume_when acima
 
-## Recuperação desta sessão
+## Recuperação e contexto
 
-A sessão recuperou o estado real do GitHub antes de iniciar F37. `main` apontava para o checkpoint F36/F37 em `a65ceca1eb6662c96882f0569a0ae8b17bb884f5`, mas existia uma frente operacional ainda não promovida na branch `repair-f29-concurrency-conflict`.
+A sessão recuperou o estado real do GitHub, incluindo a branch operacional `repair-f29-concurrency-conflict` que ainda não havia sido promovida. Essa frente foi concluída antes da NEXT_ACTION canônica F37.
 
-Essa branch correspondia à regressão concorrencial real encontrada após o checkpoint anterior na boundary F29. O protocolo canônico determinou concluir e verificar essa frente antes de executar a NEXT_ACTION de design.
+O `CONTEXT_MANIFEST` foi revalidado contra os 10 inputs canônicos. Todos os blobs declarados permaneceram idênticos. `CONTEXT_STATUS = VALID`.
 
-O `CONTEXT_MANIFEST` foi revalidado contra os 10 inputs canônicos. Todos os blobs declarados continuaram idênticos. `CONTEXT_STATUS = VALID`.
+GitHub continua sendo a fonte de verdade. Chat é descartável.
 
-## Reparo F29 promovido antes da F37
+## Reparo F29 concluído
 
-A criação mínima de contratação da F29 usava `ON CONFLICT (id) DO NOTHING`. `contractings` possui, além da PK em `id`, a unique composta `(team_id, id)` usada por FKs escopadas. Sob retries concorrentes da mesma solicitação, PostgreSQL podia detectar primeiro a unique composta e lançar `23505`, impedindo o resultado idempotente `already-created`.
+A verificação pós-checkpoint anterior havia encontrado uma corrida real na criação mínima F29. `contractings` possui PK em `id` e unique composta `(team_id, id)`. Com múltiplos retries simultâneos, `ON CONFLICT (id) DO NOTHING` podia perder a corrida na unique composta e lançar `23505` antes do reconhecimento idempotente.
 
-A PR `#56` materializou a correção como migration aditiva:
+A PR `#56` adicionou exclusivamente:
 
 `database/migrations/0008_contracting_create_concurrency_repair.sql`
 
-Migrations `0001..0007` permaneceram byte-for-byte imutáveis.
+A correção usa `ON CONFLICT DO NOTHING` e só retorna `already-created` depois da mesma prova exata e autorizada de replay. Colisões não equivalentes continuam `denied`.
 
-A correção substitui apenas o corpo da primitive F29 para usar `ON CONFLICT DO NOTHING` e, após qualquer conflito de unicidade, executar a mesma verificação exata e autorizada de replay antes de retornar `already-created`. Colisão não equivalente continua `denied` e não vira oracle.
-
-O teste concorrente foi ampliado para rodadas repetidas com oito writers.
+Migrations `0001..0007` não foram reescritas.
 
 ### Red-team do reparo
 
-O primeiro head da PR #56 falhou corretamente: `CREATE OR REPLACE FUNCTION` executado como o owner selado não possuía `CREATE` no schema `public`.
+O primeiro head do reparo falhou corretamente porque o owner selado da primitive não possuía `CREATE` no schema durante `CREATE OR REPLACE FUNCTION`.
 
-O reparo foi corrigido para:
+A correção final concede esse privilege apenas dentro da transaction de migration, faz o replace sob o owner, revoga a aresta temporária e o schema `CREATE` antes do postflight e prova que nenhum privilege extra permaneceu.
 
-1. conceder `CREATE ON SCHEMA public` ao owner somente dentro da transaction de migration;
-2. obter a aresta temporária necessária para `SET ROLE`;
-3. substituir a função;
-4. resetar role e revogar a aresta temporária;
-5. revogar `CREATE` do schema antes do postflight;
-6. provar no postflight que o owner não reteve esse privilege e que owner, `SECURITY DEFINER` e `search_path` continuaram corretos.
+Head final `4866569e96c8c1dc1547528727183f1443153b1d` passou CI, F22, F29, F32 e F35. A PR #56 foi integrada por `738666901fae43ce25dd11398904735e15c85da1`, também com gates pós-merge verdes.
 
-Head verificado `4866569e96c8c1dc1547528727183f1443153b1d`:
+Migrations `0001..0008` são agora histórico aplicado imutável.
 
-- F29 Contracting Create run `35010742639`: PASS;
-- F35 Contracting Item Create run `35010742711`: PASS;
-- F32 Contracting Object Mutation run `35010742570`: PASS;
-- F22 Private Preview Preflight run `35010742884`: PASS;
-- CI run `35010742710`: PASS.
+## F37 integrada
 
-A PR #56 foi integrada por merge `738666901fae43ce25dd11398904735e15c85da1`. Os workflows pós-merge de `main` ficaram verdes, incluindo CI run `35010854766` e F35 run `35010854614`; nenhuma execução desse head terminou em failure.
+A única NEXT_ACTION canônica F37 foi executada como design-only na PR `#57`.
 
-A partir desse merge, migrations aplicadas `0001..0008` são histórico imutável.
-
-## F37 - desenho da edição persistente mínima de item
-
-Com `main` reparado e verde, a única NEXT_ACTION canônica F37 foi executada na branch `f37-persistent-contracting-item-mutation-design`, PR `#57`.
-
-F37 permaneceu design-only. Nenhuma migration, primitive, grant, policy, provisioning, adapter, Server Action ou UI da edição de item foi implementada.
-
-Artefatos:
+Artefatos integrados:
 
 - `docs/decisions/ADR-015-minimal-persistent-contracting-item-mutation.md`;
 - `tasks/F38-PERSISTENT-CONTRACTING-ITEM-MUTATION-IMPLEMENT-01/SPEC.md`;
-- SPEC F37 atualizada para `COMPLETED / DESIGN PASS`.
+- SPEC F37 marcada `COMPLETED / DESIGN PASS`;
+- checkpoint canônico atualizado para F38.
 
-### Decisão de concorrência
+Nenhuma migration, policy, grant, primitive, provisioning, adapter, Server Action ou UI F38 foi implementada pela F37.
 
-A mutação futura usa snapshot completo dos quatro campos editáveis:
+### Decisão ADR-015
+
+A primeira edição persistente de item será uma mutação atômica dos quatro campos existentes:
 
 ```text
 description
@@ -109,46 +95,71 @@ unit
 catalog_code
 ```
 
-O contrato server-only recebe `contractingId + itemId`, os quatro valores esperados e os quatro valores novos.
+O contrato server-only recebe:
 
-`SELECT ... FOR UPDATE` é feito somente na row do item. Depois da autorização e lock:
+```text
+contractingId
+itemId
+expectedDescription
+expectedQuantity
+expectedUnit
+expectedCatalogCode
+newDescription
+newQuantity
+newUnit
+newCatalogCode
+```
 
-1. qualquer divergência entre estado atual e snapshot esperado retorna `conflict`;
-2. somente com expected atual, snapshot novo idêntico retorna `unchanged`;
-3. caso contrário, a operação retorna `updated`.
-
-`conflict` é avaliado antes de `unchanged`. Isso impede lost update entre campos diferentes e impede replay pós-sucesso de criar novo histórico.
-
-### Semântica de dados
-
-- `description`, `unit` e `catalog_code` não sofrem trim ou normalização;
-- `description` continua `NOT NULL`, mas `''` e spaces-only não são proibidos;
-- `unit` e `catalog_code` preservam `NULL`, `''` e espaços como valores distintos;
-- `quantity` permanece `numeric NULL` no PostgreSQL e `string | null` na interface TypeScript;
-- nenhum `Number` ou `parseFloat` é permitido;
-- numeric inválido deve falhar fechado como `unavailable`, sem update/evento e sem detalhe interno;
-- não foi criada regra de positividade, escala, precisão de negócio, unidade obrigatória ou catálogo obrigatório.
-
-### Autorização
-
-O guard segue F26/F32/F35 por team alvo:
-
-- identidade interna ativa;
-- item candidato vinculado ao `contractingId` candidato e visível sob RLS;
-- item com `retired_at IS NULL`;
-- parent no mesmo team, não arquivado e não cancelado;
-- membership do usuário não revogada no team;
-- exatamente uma membership não revogada no team.
-
-Segundo membro não revogado bloqueia, inclusive se o app_user estiver desabilitado. Outra membership do mesmo usuário em outro team não bloqueia por si só.
+`contractingId + itemId` são seletores candidatos e vinculam o item ao parent esperado, mas não definem scope ou autorização.
 
 Team, actor, membership, issuer, subject, ordinal, retired state, timestamps e event UUIDs nunca são authority do browser.
 
+### Semântica exata
+
+- `description`, `unit` e `catalog_code` não sofrem trim ou normalização;
+- `description` permanece `NOT NULL`, sem regra non-empty inventada;
+- `unit` e `catalog_code` preservam `NULL`, `''` e espaços como estados distintos;
+- `quantity` permanece `numeric NULL` no PostgreSQL e `string | null` no TypeScript;
+- nenhum `Number`, `parseFloat` ou round-trip floating-point é permitido;
+- numeric inválido falha fechado e vira `unavailable` sem write;
+- nenhuma regra de positividade, escala, precisão de negócio ou unidade obrigatória foi criada.
+
+### Optimistic concurrency
+
+A primitive F38 bloqueará apenas a row do item por `SELECT ... FOR UPDATE`.
+
+Depois de autorização e lock:
+
+1. qualquer diferença entre o estado atual e qualquer dos quatro expected retorna `conflict`;
+2. somente com o snapshot esperado atual, um novo snapshot idêntico retorna `unchanged`;
+3. caso contrário, a operação retorna `updated`.
+
+`conflict` é avaliado antes de `unchanged`. Isso impede lost update entre campos diferentes e impede replay pós-sucesso de gerar novo histórico.
+
+No-op não altera `updated_at` e não cria evento.
+
+### Autorização target-team
+
+A futura mutation exige:
+
+- identidade interna ativa;
+- item vinculado ao `contractingId` candidato;
+- item com `retired_at IS NULL`;
+- parent no mesmo team, não arquivado e não cancelado;
+- membership não revogada do usuário no team alvo;
+- exatamente uma membership não revogada no team.
+
+Segundo membro não revogado bloqueia, inclusive se seu app_user estiver desabilitado. Outra membership do mesmo usuário em outro team não bloqueia por si só.
+
+Cross-team, inexistente, parent mismatch, retired e parent inativo continuam externamente indistinguíveis.
+
+Q-009 continua aberta.
+
 ### Capability e auditoria
 
-F38 terá capability própria equivalente a `compras_contracting_item_mutation_owner`, sem ampliar F26/F29/F32/F35.
+F38 criará uma capability dedicada equivalente a `compras_contracting_item_mutation_owner`.
 
-Authority máxima de UPDATE em item:
+Ela poderá atualizar somente:
 
 ```text
 description
@@ -158,74 +169,79 @@ catalog_code
 updated_at
 ```
 
-Sem INSERT/DELETE de item, sem alteração de ordinal/retired/scope, sem UPDATE em `contractings`, sem authority no allocator F35 e sem UPDATE/DELETE de eventos.
+Ela não poderá:
 
-Uma mudança de N campos gera exatamente N eventos escalares `item_changed`, um por campo realmente alterado, usando `field_key`, `old_value`, `new_value`, `item_id` e o mesmo `operation_at`. Quantity é auditada a partir de `numeric::text` no banco. No-op gera zero eventos. Falha de qualquer evento reverte toda a operação.
+- inserir/deletar item;
+- alterar ordinal, retired state, scope ou created_at;
+- atualizar `contractings`;
+- tocar o allocator F35;
+- atualizar/deletar eventos;
+- reutilizar authority de F26/F29/F32/F35.
 
-O adapter F38 gerará quatro event UUIDs server-side por tentativa, mapeados fixamente aos quatro campos. Nenhum deles vem do browser.
+Runtime normal continuará sem DML direto e receberá somente `EXECUTE` por provisioning explícito.
 
-### Resultados sanitizados
-
-Primitive futura:
-
-- `updated`;
-- `unchanged`;
-- `conflict`;
-- `denied`.
-
-Adapter futuro:
-
-- `updated`;
-- `unchanged`;
-- `conflict`;
-- `not-available`;
-- `unavailable`.
-
-`conflict` e `unchanged` só são observáveis depois da autorização. Cross-team, inexistente, retired, parent mismatch e demais negações continuam indistinguíveis externamente.
+Cada campo realmente alterado gera exatamente um evento escalar `item_changed`, com `item_id`, `field_key`, `old_value`, `new_value` e o mesmo `operation_at`. Quantity é serializada para auditoria por `numeric::text` no banco. Falha de qualquer evento reverte toda a tentativa.
 
 ## Red-team F37
 
-O desenho final rejeita explicitamente:
+O desenho final rejeita:
 
-- scope/actor/event UUID controlados pelo browser;
+- payload forjado de scope/actor/event IDs;
 - `itemId` desvinculado do `contractingId` candidato;
-- mutação de retired ou parent inativo;
-- side channel cross-team/inexistente;
-- autorização multiusuário implícita;
-- guard global F29 copiado sem necessidade;
+- item retired ou parent inativo mutável;
+- oracle cross-team/inexistente;
+- policy multiusuário implícita;
 - DML direto no runtime;
-- expansão de capabilities existentes;
-- authority sobre allocator, ordinal, retire/restore ou `contractings`;
-- trim, empty-to-NULL ou validação de negócio inventada;
+- expansão de F26/F29/F32/F35;
+- authority sobre allocator, reorder, retire/restore ou `contractings`;
+- trim, empty-to-NULL ou regra de negócio inventada;
 - float JavaScript para quantity;
-- stale snapshot parcial com last-write-wins;
+- expected parcial com last-write-wins;
 - stale expected convertido em `unchanged`;
 - no-op com timestamp/evento;
-- update sobrevivendo a falha de evento;
+- update parcial quando evento falha;
 - audit blob JSON inventado;
-- reescrita de migrations `0001..0008`;
+- alteração de migrations `0001..0008`;
 - provider hosted, secret ou dado real.
 
-## Verificação F37 antes do checkpoint
+## Verificação F37
 
 Head de design `811786a774342a23b09576e6bb7f6040443a5775`:
 
-- F29 Contracting Create run `35011273671`: PASS;
-- F35 Contracting Item Create run `35011273867`: PASS;
-- F32 Contracting Object Mutation run `35011273734`: PASS;
-- F22 Private Preview Preflight run `35011273773`: PASS;
+- F29 run `35011273671`: PASS;
+- F35 run `35011273867`: PASS;
+- F32 run `35011273734`: PASS;
+- F22 run `35011273773`: PASS;
 - CI run `35011273737`: PASS.
 
-O diff verificado antes deste checkpoint continha somente ADR-015, SPEC F37 e SPEC F38. Nenhum arquivo operacional ou de banco foi alterado pela F37.
+Depois do checkpoint, head final da PR `40a7fb0de96ae571b4a07afc43c41bf1787da0a8`:
+
+- F29 run `35011718484`: PASS;
+- F35 run `35011718305`: PASS;
+- F32 run `35011718284`: PASS;
+- F22 run `35011718452`: PASS;
+- CI run `35011718318`: PASS.
+
+A PR #57 foi integrada por merge `88d7d43f06afe8a9eef4d446331c173a8d238856`.
+
+Pós-merge em `main`:
+
+- F29 run `35011821924`: PASS;
+- F35 run `35011821930`: PASS;
+- F32 run `35011822011`: PASS;
+- F22 run `35011822040`: PASS;
+- CI run `35011822038`: PASS.
+
+O diff F37 alterou somente documentação, ADR e SPECs. Nenhum arquivo operacional, migration, policy, grant, workflow de authority ou provider foi alterado na F37.
 
 ## Próxima ação
 
-Existe exatamente uma NEXT_ACTION canônica após a promoção da F37:
+Existe exatamente uma `NEXT_ACTION` canônica:
 
 `F38-PERSISTENT-CONTRACTING-ITEM-MUTATION-IMPLEMENT-01 - Implementar edição persistente mínima de item`.
 
 A SPEC está em `tasks/F38-PERSISTENT-CONTRACTING-ITEM-MUTATION-IMPLEMENT-01/SPEC.md`.
 
-F38 implementará migration `0009_contracting_item_mutation.sql`, capability e RLS dedicadas, primitive, provisioning, adapter server-only e matriz adversarial PostgreSQL/concorrência. Server Action e UI permanecem fora da F38.
+F38 começa em migration `0009_contracting_item_mutation.sql` e deve implementar capability/RLS/primitive dedicadas, provisioning de EXECUTE, adapter server-only e a matriz adversarial PostgreSQL/concorrência da ADR-015. Server Action e UI permanecem fora da F38.
 
 F21 permanece `ON HOLD` até seu `resume_when` objetivo. Q-004 e Q-009 permanecem abertas.

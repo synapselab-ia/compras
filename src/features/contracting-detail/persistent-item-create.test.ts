@@ -148,6 +148,22 @@ describe("persistent contracting item create adapter", () => {
     await expect(createPersistentContractingItem(input)).resolves.toBe("unavailable");
   });
 
+  it("sanitizes a PostgreSQL numeric cast failure without changing the submitted string first", async () => {
+    query.mockRejectedValueOnce(new Error('invalid input syntax for type numeric: "not-a-number"'));
+
+    await expect(
+      createPersistentContractingItem({
+        contractingId: "35040000-0000-4000-8000-000000000021",
+        description: "DEMO invalid numeric",
+        quantity: "not-a-number",
+        unit: null,
+        catalogCode: null,
+      }),
+    ).resolves.toBe("unavailable");
+
+    expect((query.mock.calls[0]?.[1] as unknown[] | undefined)?.[2]).toBe("not-a-number");
+  });
+
   it("fails closed on malformed item field types before database execution", async () => {
     const invalidCall = createPersistentContractingItem as unknown as (
       input: Record<string, unknown>,

@@ -80,6 +80,13 @@ BEGIN
 END;
 $preflight$;
 
+-- Replacing a function still requires CREATE on its schema for the role that
+-- executes CREATE OR REPLACE. Give the sealed owner that authority only inside
+-- this migration transaction, then remove it before postflight. This mirrors
+-- the temporary schema privilege used by 0005 during the original ownership
+-- transfer without widening runtime authority.
+GRANT CREATE ON SCHEMA public TO compras_contracting_create_owner;
+
 -- Obtain a transaction-local SET edge exactly as the existing provisioning
 -- scripts do. The edge is removed before commit and never reaches runtime.
 GRANT compras_contracting_create_owner
@@ -230,6 +237,8 @@ REVOKE compras_contracting_create_owner
   FROM CURRENT_USER
   GRANTED BY CURRENT_USER;
 
+REVOKE CREATE ON SCHEMA public FROM compras_contracting_create_owner;
+
 DO $postflight$
 DECLARE
   capability_oid oid;
@@ -256,6 +265,14 @@ BEGIN
        )
   ) THEN
     RAISE EXCEPTION 'usable contracting create capability membership remained after repair';
+  END IF;
+
+  IF pg_catalog.has_schema_privilege(
+       'compras_contracting_create_owner',
+       'public',
+       'CREATE'
+     ) THEN
+    RAISE EXCEPTION 'contracting create capability retained schema CREATE after repair';
   END IF;
 
   SELECT p.proowner, p.prosecdef, p.proconfig

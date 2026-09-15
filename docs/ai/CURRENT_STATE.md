@@ -1,10 +1,10 @@
 # Current State - Compras
 
-**PROJECT_STATUS:** F34_DESIGN_CORRECTED_VERIFYING  
-**CURRENT_PHASE:** F34 desenho corrigido em PR #51; gates finais pendentes; F21 ON HOLD  
+**PROJECT_STATUS:** F34_DESIGN_COMPLETE_F35_READY  
+**CURRENT_PHASE:** F34 concluída e verificada; F35 READY; F21 ON HOLD  
 **REPO_VISIBILITY:** PUBLIC  
 **APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_SIGNIN_LIMITER_NEXT_ACTION_WRITE_CREATE_UI_OBJECT_MUTATION_AND_OBJECT_DETAIL_UI_INTEGRATED  
-**DATABASE_STATUS:** PROTECTED_READ_MODEL_F26_F29_F32_VALIDATED_F34_ITEM_CREATE_DESIGN_VERIFYING  
+**DATABASE_STATUS:** PROTECTED_READ_MODEL_F26_F29_F32_VALIDATED_F34_ITEM_CREATE_DESIGN_ACCEPTED  
 **AUTH_STATUS:** SELF_HOSTED_BETTER_AUTH_AND_SIGNIN_LIMITER_INTEGRATED  
 **DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_NO_F34_HOSTED_WRITES  
 **REAL_DATA_ALLOWED:** NO  
@@ -24,13 +24,14 @@
 **F32_MERGE_COMMIT:** `e7f893e8d186853b859dfb281f134d057b0b6e97`  
 **F33_MERGE_COMMIT:** `c4c3d5416ecfd7f49c74ffd0a32425db8621958c`  
 **F33_CHECKPOINT_MERGE_COMMIT:** `bfa9a65fae06ef8c3cc29586287160be3ab29d31`  
-**F34_PR:** `#51` - OPEN  
-**F34_INITIAL_DESIGN_HEAD:** `cfb83dbe9510495016584acda837cbcae30db5e4`  
-**F34_INITIAL_CI_RUN:** `34970699468` - PASS  
-**F34_INITIAL_F22_PREFLIGHT_RUN:** `34970699518` - PASS  
-**F34_INITIAL_F29_CREATE_RUN:** `34970699591` - PASS  
-**F34_INITIAL_F32_MUTATION_RUN:** `34970699549` - PASS  
-**LAST_GOOD_COMMIT:** `bfa9a65fae06ef8c3cc29586287160be3ab29d31`  
+**F34_PR:** `#51`  
+**F34_CORRECTED_DESIGN_HEAD:** `86d1ca411ee2a74af322aae43693255651d1d0c3`  
+**F34_CORRECTED_CI_RUN:** `34971780173` - PASS  
+**F34_CORRECTED_F22_PREFLIGHT_RUN:** `34971780249` - PASS  
+**F34_CORRECTED_F29_CREATE_RUN:** `34971780144` - PASS  
+**F34_CORRECTED_F32_MUTATION_RUN:** `34971780237` - PASS  
+**LAST_GOOD_COMMIT:** `86d1ca411ee2a74af322aae43693255651d1d0c3`  
+**LAST_GOOD_CI_RUN:** `34971780173`  
 **F21_STATE:** `ON HOLD / BLOCKED` - Vercel control-plane surface unavailable for required protection/env readback+CRUD  
 **F21_RESUME_WHEN:** sessão Vercel autenticada permitir readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch, sem exposição de valores  
 **ON_HOLD:** `F17-B2` histórico + `F21` conforme resume_when acima
@@ -43,11 +44,13 @@ O `CONTEXT_MANIFEST` foi revalidado contra todos os blobs estáveis declarados. 
 
 F34 foi classificada como T2 design-only. Foram lidos schema físico, SECURITY, DATABASE, fontes de produto, OPEN_QUESTIONS, SPEC F34, ADR-011/012/013 e migrations F26/F29/F32.
 
-## F34 - desenho de item create
+## F34 - criação persistente mínima de item desenhada
 
-A decisão está em `docs/decisions/ADR-014-minimal-persistent-contracting-item-creation.md`. A implementação futura está especificada em `tasks/F35-PERSISTENT-CONTRACTING-ITEM-CREATE-IMPLEMENT-01/SPEC.md`.
+A decisão aceita está em `docs/decisions/ADR-014-minimal-persistent-contracting-item-creation.md`.
 
-### Payload e semântica
+A implementação futura está especificada em `tasks/F35-PERSISTENT-CONTRACTING-ITEM-CREATE-IMPLEMENT-01/SPEC.md`.
+
+### Payload
 
 A futura boundary server-only aceita apenas:
 
@@ -59,7 +62,7 @@ unit
 catalogCode
 ```
 
-`quantity` será `string | null` até o parâmetro PostgreSQL `numeric`. Item UUID e event UUID serão gerados server-side. Team, actor, membership, issuer, subject e ordinal ficam fora da authority do browser.
+`quantity` será `string | null` até PostgreSQL `numeric`. Item UUID e event UUID são gerados server-side. Team, actor, membership, issuer, subject e ordinal ficam fora da authority do browser.
 
 Não foi criada regra de trim, empty-to-NULL, descrição non-empty, quantidade positiva, unidade obrigatória, catálogo obrigatório, limite de tamanho ou precisão/escala de negócio. Q-004 permanece aberta.
 
@@ -80,13 +83,13 @@ ADR-014 escolhe capability própria equivalente a `compras_contracting_item_crea
 
 F26/F29/F32 permanecem inalteradas.
 
-### Red-team corrigiu o mecanismo de lock
+### Red-team e correção do lock
 
-O rascunho inicial usava `SELECT ... FOR UPDATE` na contratação pai para serializar `MAX(ordinal) + 1`.
+O primeiro rascunho usava `SELECT ... FOR UPDATE` em `contractings` para serializar `MAX(ordinal) + 1`.
 
-O red-team manual detectou que PostgreSQL exige privilégio `UPDATE` para locking clauses. Isso obrigaria a capability de item create a receber UPDATE em `contractings`, contrariando least privilege e a decisão de não alterar a entidade pai.
+O red-team manual bloqueou essa abordagem porque locking clauses PostgreSQL exigem privilégio `UPDATE`. Conceder UPDATE à capability de item create ampliaria authority sobre a contratação pai sem necessidade funcional.
 
-O desenho foi corrigido para usar tabela técnica de allocator por contratação, equivalente a:
+O desenho final usa tabela técnica de allocator por contratação:
 
 ```text
 contracting_item_ordinal_counters
@@ -99,39 +102,66 @@ Fluxo final:
 
 1. autorizar a contratação por leitura protegida;
 2. criar a row do allocator somente após autorização;
-3. bloquear a row do allocator com `SELECT ... FOR UPDATE`;
+3. bloquear a row do allocator;
 4. revalidar autorização após o lock;
 5. reconciliar `last_ordinal` com `MAX(ordinal)` real, incluindo retired;
 6. alocar `1` se não houver valor ou `maior + 1` caso contrário;
 7. atualizar allocator e inserir item + evento na mesma transação.
 
-A capability recebe UPDATE somente de `last_ordinal` na tabela técnica e zero UPDATE em `contractings`.
+A capability recebe UPDATE somente de `last_ordinal` e zero UPDATE em `contractings`.
 
-Writers da mesma contratação serializam na mesma row de allocator. Contratações diferentes usam rows distintas e não dependem de lock global. Gaps não são reutilizados. Falha de item/evento reverte também o allocator.
+Writers da mesma contratação serializam na mesma row técnica. Contratações diferentes usam rows distintas, sem lock global. Gaps não são reutilizados. Falha de item/evento reverte também o allocator.
 
-### Atomicidade e resultados
+### Atomicidade e resultado
 
 Cada sucesso gera exatamente um item e um evento `item_created` atômicos. `contractings.updated_at` não é alterado.
 
 A futura boundary expõe somente `created`, `not-available` e `unavailable`.
 
-## Verificação até aqui
+## Red-team F34
 
-O primeiro head de desenho `cfb83dbe9510495016584acda837cbcae30db5e4` passou CI, F22, F29 e F32, mas os gates automatizados não detectaram a questão de privilégio necessária ao row lock da contratação pai.
+O desenho final rejeita:
 
-Por isso esse head não foi promovido como last-good da F34. O last-good canônico permanece `bfa9a65fae06ef8c3cc29586287160be3ab29d31` até o desenho corrigido e o checkpoint final passarem todos os gates.
+- authority de browser sobre scope/actor/membership/ordinal/UUIDs internos;
+- UPDATE em `contractings` só para locking;
+- allocator antes de autorização ou sem revalidação após lock;
+- `MAX + 1` sem serialização;
+- retry cego de unique violation;
+- lock global;
+- reutilização automática de gaps;
+- DML direto para runtime;
+- ampliação de F26/F29/F32;
+- capability privilegiada ou utilizável como login;
+- regras de quantidade/unidade/catálogo não suportadas;
+- conversão de `numeric` por `Number`/`parseFloat`;
+- item/evento/allocator sem atomicidade;
+- update de `contractings.updated_at`;
+- deduplicação sem chave canônica;
+- resolução implícita de Q-004 ou Q-009;
+- provider hosted, secret ou dado real;
+- reescrita de migrations aplicadas.
 
-## Próximo passo da sessão
+## Verificação F34
 
-F34 permanece a work unit ativa até:
+O primeiro head `cfb83dbe9510495016584acda837cbcae30db5e4` passou os gates automatizados, mas não foi promovido após o red-team detectar a questão de privilégio do row lock.
 
-- diff corrigido revisado integralmente;
-- CI, F22, F29 e F32 verdes no head corrigido;
-- checkpoint final atualizado;
-- nova rodada de gates verde;
-- PR #51 integrada;
-- pós-merge verificado.
+Head corrigido `86d1ca411ee2a74af322aae43693255651d1d0c3`:
 
-Somente então F35 será promovida como a única `NEXT_ACTION` canônica.
+- CI `34971780173`: PASS;
+- F22 Private Preview Preflight `34971780249`: PASS;
+- F29 Contracting Create `34971780144`: PASS;
+- F32 Contracting Object Mutation `34971780237`: PASS.
+
+O diff da F34 permanece exclusivamente documental. Migrations `0001..0006`, código operacional, grants, policies, provider hosted, secrets e dados reais permanecem intocados.
+
+## Próxima ação
+
+Existe exatamente uma `NEXT_ACTION` canônica:
+
+`F35-PERSISTENT-CONTRACTING-ITEM-CREATE-IMPLEMENT-01 - Implementar criação persistente mínima de item`.
+
+A SPEC está em `tasks/F35-PERSISTENT-CONTRACTING-ITEM-CREATE-IMPLEMENT-01/SPEC.md`.
+
+F35 deve implementar somente ADR-014: migration `0007`, allocator técnico, capability dedicada, primitive, provisioning, adapter server-only, provas PostgreSQL 17 e workflow dedicado. UI/Server Action permanecem fora da slice.
 
 F21 permanece `ON HOLD` até seu `resume_when` objetivo.

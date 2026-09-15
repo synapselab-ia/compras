@@ -1,45 +1,39 @@
 # Next Action - Compras
 
-## F35-PERSISTENT-CONTRACTING-ITEM-CREATE-IMPLEMENT-01 - Implementar criação persistente mínima de item
+## F36-PERSISTENT-CONTRACTING-ITEM-CREATE-DETAIL-UI-01 - Integrar criação persistente de item no detalhe
 
-**Classe:** T2 - banco, autorização e escrita server-side  
+**Classe:** T1 - feature normal, com impacto T2 - autorização/escrita server-side  
 **Estado:** READY  
-**Objetivo:** materializar ADR-014 em uma boundary PostgreSQL/server-only para adicionar item a contratação existente, com capability dedicada, allocator técnico de ordinal por contratação, auditoria atômica e resultados sanitizados.
+**Objetivo:** tornar a boundary F35 utilizável no detalhe persistente por uma Server Action e UI mínimas, mantendo payload estreito, readback protegido, feedback sanitizado e demo estritamente read-only.
 
 Esta é a única `NEXT_ACTION` canônica.
 
 ## Por que esta ação agora
 
-F34 fechou e verificou o desenho da criação mínima de item. O red-team removeu a necessidade de UPDATE na contratação pai: F35 deve serializar ordinais por uma tabela técnica de allocator, mantendo zero UPDATE de `contractings` para a nova capability.
+F35 está integrada e provou a criação persistente mínima de item com capability dedicada, allocator técnico por contratação, auditoria atômica, concorrência real e adapter server-only. A próxima slice pode expor essa operação sem ampliar a camada PostgreSQL.
 
-Q-004 sobre pesquisa de preços e Q-009 sobre política multiusuário permanecem abertas. F21 continua `ON HOLD` sob seu `resume_when` externo e não é dependência da F35.
+Q-004 sobre pesquisa de preços e Q-009 sobre política multiusuário permanecem abertas. F21 continua `ON HOLD` sob seu `resume_when` externo e não é dependência da F36.
 
 ## Execução obrigatória
 
-1. recuperar o estado canônico após F34 e revalidar `CONTEXT_MANIFEST`;
-2. ler ADR-014 e `tasks/F35-PERSISTENT-CONTRACTING-ITEM-CREATE-IMPLEMENT-01/SPEC.md`;
-3. revalidar SECURITY, DATABASE, ADR-003/005/009/011/012/013 e precedentes F26/F29/F32;
-4. manter migrations `0001..0006` byte-for-byte imutáveis;
-5. criar `0007_contracting_item_create.sql` com tabela técnica de allocator, capability própria, RLS específica e primitive estreita;
-6. manter F26 exclusiva de `next_action`, F29 exclusiva de criação de contratação e F32 exclusiva de mutação de `object`;
-7. manter runtime normal sem DML direto e conceder somente `EXECUTE` da primitive F35 por provisioning separado;
-8. garantir zero UPDATE em `contractings` para a capability F35;
-9. criar adapter server-only que aceite somente `contractingId`, `description`, `quantity`, `unit` e `catalogCode`;
-10. gerar item UUID e event UUID server-side e manter team, actor, membership, issuer, subject e ordinal fora da authority do browser;
-11. transportar `quantity` como `string | null` até PostgreSQL `numeric`, sem `Number` ou `parseFloat`;
-12. preservar `description`, `unit` e `catalogCode` exatamente, inclusive vazio/espaços conforme nullability física;
-13. seguir autorização pilot-only por equipe alvo de F26/F32, sem copiar o guard global da F29;
-14. somente após autorização, criar/bloquear a row do allocator da contratação;
-15. revalidar autorização depois de adquirir o lock do allocator;
-16. reconciliar `last_ordinal` com `MAX(ordinal)` real, incluindo itens retirados, e não reutilizar gaps;
-17. criar item, avanço do allocator e evento `item_created` na mesma transação, com rollback integral se a auditoria falhar;
-18. não alterar `contractings.updated_at`;
-19. expor somente `created`, `not-available` e `unavailable` na boundary server-only;
-20. provar em PostgreSQL 17 concorrência real de no mínimo 8 writers na mesma contratação, sem ordinal duplicado e sem retry cego;
-21. provar que contratações diferentes usam rows de allocator distintas e não dependem de lock global;
-22. executar preflight adversarial de role/capability, regressões Auth/RLS/F24/F26/F29/F32, lint, typecheck, testes e build;
-23. criar workflow F35 dedicado e exigir todos os gates verdes antes da promoção;
-24. revisar diff integral, fazer red-team e deixar exatamente uma nova `NEXT_ACTION` somente após validação completa.
+1. recuperar o estado canônico após F35 e revalidar `CONTEXT_MANIFEST`;
+2. ler ADR-014 e `tasks/F36-PERSISTENT-CONTRACTING-ITEM-CREATE-DETAIL-UI-01/SPEC.md`;
+3. inspecionar precedentes F27/F30/F33, detalhe persistente, read model de itens, `persistent-read-mode` e adapter F35;
+4. manter migrations `0001..0007`, grants, policies, capabilities e primitives byte-for-byte imutáveis;
+5. adicionar Server Action dedicada que só encaminhe `contractingId`, `description`, `quantity`, `unit` e `catalogCode` para `createPersistentContractingItem`;
+6. rejeitar scalars duplicados/ambíguos e não aceitar team, actor, membership, issuer, subject, ordinal, item UUID, event UUID, callback ou redirect como authority do browser;
+7. não executar SQL/DML próprio na action e não criar fallback demo;
+8. preservar description, unit e catalogCode exatamente, inclusive vazio e espaços, sem trim ou empty-to-NULL;
+9. transportar quantity como `string | null`, sem `Number`/`parseFloat`; ausência do campo numérico na UI representa `null`, texto presente segue exato para F35/PostgreSQL;
+10. não inventar positividade, required, escala, precisão, vínculo com unidade ou regra de Q-004;
+11. renderizar criação somente no detalhe em modo persistente válido e manter demo/configuração inválida sem write;
+12. manter inputs de authority e operações de update/reorder/retire fora da UI;
+13. usar estado pending para reduzir double-submit acidental, sem inventar idempotência persistente;
+14. em `created`, revalidar apenas a rota local fixa e fazer readback pelo read model protegido;
+15. mapear somente `created`, `not-available` e `unavailable` para feedback sanitizado, sem oracle cross-team/inexistente;
+16. provar forged payload, duplicatas, semântica exata de strings, quantity string/null, demo read-only, sanitização, revalidação local, pending e acessibilidade;
+17. executar lint, typecheck, testes, build, CI/Auth/RLS, F22, F29, F32 e F35;
+18. revisar diff integral, fazer red-team e deixar exatamente uma nova `NEXT_ACTION` somente após todos os gates verdes.
 
 ## Invariantes
 
@@ -51,15 +45,14 @@ Q-004 sobre pesquisa de preços e Q-009 sobre política multiusuário permanecem
 - autenticação não é autorização;
 - RLS/capabilities permanecem autoritativas;
 - runtime normal continua sem DML direto;
-- capability F35 não recebe UPDATE em `contractings`;
+- F35 continua sendo a única boundary de item create;
 - migrations aplicadas não são reescritas;
-- nenhuma regra de quantidade positiva, unidade obrigatória, catálogo obrigatório, trim, tamanho ou pesquisa de preços pode ser inventada;
 - falha protegida nunca vira demo fallback nem expõe detalhe interno.
 
 ## Fonte da tarefa
 
-Executar `tasks/F35-PERSISTENT-CONTRACTING-ITEM-CREATE-IMPLEMENT-01/SPEC.md` seguindo ADR-014 e as fontes canônicas nela referenciadas.
+Executar `tasks/F36-PERSISTENT-CONTRACTING-ITEM-CREATE-DETAIL-UI-01/SPEC.md` seguindo ADR-014 e os precedentes F27/F30/F33.
 
 ## Critério de encerramento
 
-F35 fecha quando a criação mínima de item estiver implementada e provada com capability dedicada, allocator técnico por contratação, autorização pilot-only, auditoria atômica, adapter server-only sanitizado e todas as regressões verdes, sem UI e sem ampliar as capabilities anteriores.
+F36 fecha quando o detalhe persistente permitir adicionar item mínimo exclusivamente pela boundary F35, com payload restrito, sem authority controlada pelo browser, sem normalização textual indevida, quantity string/null, readback protegido, feedback sanitizado, demo read-only e todos os gates/adversariais verdes.

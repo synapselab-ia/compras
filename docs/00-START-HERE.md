@@ -19,9 +19,10 @@ A fundação já possui:
 - capability persistente estreita para `contractings.next_action` e UI correspondente;
 - boundary persistente mínima de criação de `contractings`, pilot-only, auditável e idempotente, com jornada UI/Server Action integrada;
 - capability persistente separada para edição de `contractings.object` e UI correspondente;
-- boundary persistente mínima de criação de `contracting_items`, pilot-only, auditável e concorrente, ainda sem UI.
+- boundary persistente mínima de criação de `contracting_items`, pilot-only, auditável e concorrente;
+- formulário persistente mínimo de inclusão de item no detalhe, conectado exclusivamente à boundary F35, com demo read-only.
 
-F35 foi integrada pela PR `#52`, merge `879902c9e55c60ae514e0ce961f9246202c5c9f8`, com gates pós-merge verdes. A próxima e única frente canônica é F36, integração da criação mínima de item no detalhe persistente.
+F36 foi integrada pela PR `#54`, merge `c177e7e8c1b3a46a5d5c3276b4945b81019c706a`, com gates pós-merge verdes. A próxima e única frente canônica é F37, desenho da edição persistente mínima de item existente.
 
 F17 permanece `ON HOLD` histórico. F21 permanece `ON HOLD` antes de secrets até existir control plane Vercel capaz de readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch sem expor valores.
 
@@ -57,11 +58,11 @@ ADR-012 definiu capability separada para criação mínima de `contractings`. O 
 
 ADR-013 definiu capability própria para editar somente `contractings.object`. O payload é `contractingId + expectedObject + newObject`, preservado exatamente. `SELECT ... FOR UPDATE` + expected value evita lost update. F33 integra a boundary ao detalhe persistente sem ampliar authority PostgreSQL.
 
-### F34/F35 - criação mínima de item
+### F34/F35/F36 - criação mínima de item
 
-ADR-014 e F35 definem e implementam uma capability separada para adicionar item a contratação existente.
+ADR-014 e F35 definem e implementam capability separada para adicionar item a contratação existente. F36 integra essa operação ao detalhe persistente sem alterar a autoridade PostgreSQL.
 
-Payload server-only:
+Payload da boundary F35:
 
 ```text
 contractingId
@@ -74,6 +75,10 @@ catalogCode
 `quantity` é `string | null` até PostgreSQL `numeric`. Item UUID e event UUID são gerados server-side. Team, actor, membership, issuer, subject e ordinal nunca são authority do browser.
 
 A capability `compras_contracting_item_create_owner` permanece selada e sem UPDATE em `contractings`. Runtime normal recebe somente `EXECUTE` da primitive F35 por provisioning separado.
+
+A action F36 rejeita campos browser-facing fora do payload permitido, não executa SQL/DML próprio e revalida somente a rota local fixa após `created`. O readback acontece pelo read model protegido existente.
+
+Demo continua sem formulário de criação, inclusive quando estados de query são forjados.
 
 ## Allocator de ordinal F35
 
@@ -100,7 +105,7 @@ Gaps não são reutilizados. Contratações distintas usam rows distintas, sem l
 
 A suíte F35 provou 8 writers concorrentes na mesma contratação com ordinais únicos/sequenciais, ausência de bloqueio global entre contratações e revalidação de target após espera no allocator.
 
-## Semântica de dados F35
+## Semântica de dados F35/F36
 
 Não foi criada regra de:
 
@@ -113,7 +118,7 @@ Não foi criada regra de:
 - tamanho máximo;
 - pesquisa de preços.
 
-`description`, `unit` e `catalogCode` preservam texto exato. `quantity` não passa por `Number`/`parseFloat`. `NULL`, zero, negativo, fração e alta precisão válida foram provados. Cast inválido e overflow de ordinal falham fechados e sanitizados.
+`description`, `unit` e `catalogCode` preservam texto exato. `quantity` não passa por `Number`/`parseFloat`. Na UI F36, quantidade ausente ou literalmente vazia representa `null`; texto não vazio segue exato para F35/PostgreSQL. Cast inválido e overflow de ordinal falham fechados e sanitizados.
 
 Q-004 continua aberta. Q-009 continua aberta, portanto a escrita permanece pilot-only.
 
@@ -121,21 +126,21 @@ Q-004 continua aberta. Q-009 continua aberta, portanto a escrita permanece pilot
 
 A única `NEXT_ACTION` canônica está em `docs/ai/NEXT_ACTION.md`:
 
-`F36-PERSISTENT-CONTRACTING-ITEM-CREATE-DETAIL-UI-01 - Integrar criação persistente de item no detalhe`.
+`F37-PERSISTENT-CONTRACTING-ITEM-MUTATION-DESIGN-01 - Desenhar edição persistente mínima de item`.
 
-F36 deve:
+F37 deve, sem implementar:
 
-- adicionar somente Server Action/UI sobre F35;
-- manter `0001..0007`, grants, policies, capabilities e primitives imutáveis;
-- manter demo read-only;
-- encaminhar apenas `contractingId`, `description`, `quantity`, `unit`, `catalogCode`;
-- preservar strings exatas e quantity como string/null;
-- fazer readback pelo modelo protegido após `created`;
-- sanitizar `not-available`/`unavailable` sem oracle cross-team;
-- usar pending para reduzir double-submit acidental sem inventar idempotência persistente;
-- não adicionar update/reorder/retire de item nem pesquisa de preços.
+- definir payload mínimo para edição de `description`, `quantity`, `unit` e `catalog_code` de item existente;
+- definir optimistic concurrency suficiente contra lost update;
+- manter team/actor/membership/issuer/subject derivados no servidor/banco;
+- preservar `NULL`, texto exato e `numeric` sem coerção JavaScript indevida;
+- definir capability/primitive separadas e least privilege;
+- definir auditoria atômica e resultados sanitizados;
+- manter guard pilot-only enquanto Q-009 permanecer aberta;
+- excluir reorder, retire/restore, delete e pesquisa de preços do escopo;
+- produzir ADR nova e uma única SPEC de implementação subsequente.
 
-A SPEC está em `tasks/F36-PERSISTENT-CONTRACTING-ITEM-CREATE-DETAIL-UI-01/SPEC.md`.
+A SPEC está em `tasks/F37-PERSISTENT-CONTRACTING-ITEM-MUTATION-DESIGN-01/SPEC.md`.
 
 ## Modos da aplicação
 
@@ -175,6 +180,8 @@ Migrations imutáveis atualmente integradas:
 - `0007_contracting_item_create.sql`.
 
 Migration aplicada não é reescrita. Correção futura exige migration aditiva.
+
+F36 não alterou banco, grants, policies, capabilities nem primitives.
 
 ## Fonte de verdade
 

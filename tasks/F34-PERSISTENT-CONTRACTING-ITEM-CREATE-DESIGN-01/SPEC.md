@@ -1,15 +1,15 @@
 # F34-PERSISTENT-CONTRACTING-ITEM-CREATE-DESIGN-01 - Desenhar adição persistente mínima de item
 
 **Classe:** T2 - desenho arquitetural de escrita/autorização  
-**Estado:** COMPLETED / PASS  
+**Estado:** DESIGN COMPLETE / VERIFYING  
 **Dependências:** fundação `contracting_items`, F26, F29, F32, SECURITY, DATABASE e modelo de domínio  
 **Classificação permitida:** PUBLIC / FICTITIOUS ONLY
 
-## Resultado
+## Resultado do desenho
 
-F34 foi concluída como slice exclusivamente de desenho. A decisão arquitetural foi registrada em `docs/decisions/ADR-014-minimal-persistent-contracting-item-creation.md` e a implementação futura foi especificada em `tasks/F35-PERSISTENT-CONTRACTING-ITEM-CREATE-IMPLEMENT-01/SPEC.md`.
+F34 produziu `docs/decisions/ADR-014-minimal-persistent-contracting-item-creation.md` e `tasks/F35-PERSISTENT-CONTRACTING-ITEM-CREATE-IMPLEMENT-01/SPEC.md`.
 
-Nenhuma migration, primitive, policy, grant, adapter, Server Action ou UI operacional foi criada nesta slice. Migrations `0001..0006` permaneceram imutáveis. Q-004 e Q-009 permanecem abertas.
+Nenhuma migration, primitive, policy, grant, adapter, Server Action ou UI operacional foi criada nesta slice. Migrations `0001..0006` permanecem imutáveis. Q-004 e Q-009 permanecem abertas.
 
 ## Decisões fechadas
 
@@ -25,7 +25,7 @@ unit
 catalogCode
 ```
 
-`description` é string. `quantity` é transportada como `string | null` no adapter para não passar por `Number` JavaScript antes do PostgreSQL `numeric`. `unit` e `catalogCode` são `string | null`.
+`description` é string. `quantity` é `string | null` no adapter para não passar por `Number` JavaScript antes do PostgreSQL `numeric`. `unit` e `catalogCode` são `string | null`.
 
 Team, actor, membership, issuer, subject, ordinal, item UUID e event UUID não são authority do browser. Item UUID e event UUID são gerados server-side em cada tentativa.
 
@@ -52,24 +52,39 @@ Runtime normal continuará sem DML direto e receberá apenas `EXECUTE` explícit
 
 ### Ordinal e concorrência
 
-`ordinal` não é input do caller.
+O red-team identificou uma falha no primeiro rascunho: PostgreSQL exige privilégio `UPDATE` para locking clauses como `SELECT ... FOR UPDATE`. Portanto, bloquear a row de `contractings` contrariaria o objetivo de manter a capability de item create sem UPDATE na contratação pai.
 
-A primitive deve:
+A decisão final usa uma tabela técnica de allocator por contratação, equivalente a:
 
-1. autorizar e bloquear a contratação alvo com `SELECT ... FOR UPDATE`;
-2. após o lock, calcular `MAX(ordinal)` considerando todos os itens da contratação, inclusive retirados;
-3. usar `1` se não houver item, senão `MAX + 1`;
-4. não reutilizar gaps.
+```text
+contracting_item_ordinal_counters
+team_id uuid NOT NULL
+contracting_id uuid PRIMARY KEY
+last_ordinal integer NULL
+```
 
-Writers concorrentes na mesma contratação são serializados pela row pai. Contratações diferentes não usam lock global. A constraint `UNIQUE (contracting_id, ordinal)` permanece como backstop, sem retry cego como algoritmo primário.
+A F35 deverá:
+
+1. autorizar a contratação por leitura protegida;
+2. criar a row técnica com `ON CONFLICT DO NOTHING` somente após autorização;
+3. bloquear a row do allocator com `SELECT ... FOR UPDATE`;
+4. revalidar autorização após o lock;
+5. obter `MAX(ordinal)` de todos os itens, inclusive retirados;
+6. reconciliar `last_ordinal` com o máximo real;
+7. usar `1` quando ambos forem `NULL`, senão `maior + 1`;
+8. atualizar o allocator e criar item + evento na mesma transação.
+
+Gaps não são reutilizados. Writers da mesma contratação serializam na mesma row técnica. Contratações diferentes usam rows distintas e não sofrem lock global. Falha de item/evento reverte também o avanço do allocator.
+
+A capability recebe UPDATE somente de `last_ordinal` na tabela técnica, e zero UPDATE em `contractings`.
 
 ### Atomicidade e histórico
 
 Cada criação bem-sucedida gera exatamente um item e exatamente um evento `item_created` na mesma transação.
 
-O evento referencia `item_id`, deriva team/actor/contracting do banco e usa o mesmo instante de banco dos timestamps de criação do item. `field_key`, `old_value`, `new_value`, `note` e `related_identifier_id` ficam nulos.
+O evento referencia `item_id`, deriva team/actor/contracting do banco e usa o mesmo instante de banco dos timestamps definidos. `field_key`, `old_value`, `new_value`, `note` e `related_identifier_id` ficam nulos.
 
-Falha do evento reverte o item. Negação não cria item nem evento. `contractings.updated_at` não é alterado nesta operação.
+Falha do evento reverte item e allocator. Negação não cria allocator para target não autorizado, item ou evento. `contractings.updated_at` não é alterado.
 
 ### Resultados externos
 
@@ -83,11 +98,13 @@ Nenhum UUID interno, ordinal, team, actor, SQL, driver, claim ou connection stri
 
 ## Red-team F34
 
-O desenho foi rejeitado como PASS se permitisse qualquer uma das seguintes propriedades. Nenhuma permaneceu no desenho final:
+A revisão adversarial rejeita:
 
 - scope, actor, membership, ordinal ou UUIDs internos controlados pelo browser;
-- `MAX(ordinal) + 1` sem serialização pela contratação pai;
-- retry cego de unique violation como solução de corrida;
+- row lock na contratação pai que exija UPDATE desnecessário;
+- allocator criado antes de autorização ou sem revalidação após lock;
+- `MAX(ordinal) + 1` sem serialização por contratação;
+- retry cego de unique violation;
 - table lock ou advisory lock global;
 - reutilização automática de gaps;
 - retirada do item excluindo seu ordinal histórico do máximo;
@@ -95,27 +112,28 @@ O desenho foi rejeitado como PASS se permitisse qualquer uma das seguintes propr
 - ampliação das capabilities F26/F29/F32;
 - role de capability utilizável como login ou role privilegiada;
 - criação em contratação inexistente, cross-team, arquivada ou cancelada;
-- guard global da F29 copiado para uma row com team já conhecido;
+- guard global da F29 copiado para row com team conhecido;
 - regra de quantidade/unidade/catálogo inventada;
 - quantidade convertida por `Number`/`parseFloat`;
 - evento não atômico;
-- alteração desnecessária de `contractings.updated_at`;
-- deduplicação de item sem chave de negócio aprovada;
+- alteração de `contractings.updated_at`;
+- deduplicação sem chave de negócio aprovada;
 - resolução implícita de Q-004 ou Q-009;
-- provider hosted, secret ou dado real.
+- provider hosted, secret ou dado real;
+- reescrita das migrations `0001..0006`.
 
-## Verificação documental
+## Verificação
 
-Head de desenho validado antes do checkpoint: `cfb83dbe9510495016584acda837cbcae30db5e4`.
+O primeiro head de desenho `cfb83dbe9510495016584acda837cbcae30db5e4` passou:
 
-Gates executados nesse head:
+- CI `34970699468`;
+- F22 Private Preview Preflight `34970699518`;
+- F29 Contracting Create `34970699591`;
+- F32 Contracting Object Mutation `34970699549`.
 
-- CI `34970699468`: PASS;
-- F22 Private Preview Preflight `34970699518`: PASS;
-- F29 Contracting Create `34970699591`: PASS;
-- F32 Contracting Object Mutation `34970699549`: PASS.
+Esses gates automatizados não detectaram a exigência de privilégio PostgreSQL para o row lock da contratação pai. O red-team manual posterior detectou o problema e o desenho foi corrigido para allocator técnico dedicado.
 
-O diff validado antes do checkpoint continha somente ADR-014 e a SPEC F35. Não havia alteração de migration, código operacional, grant, policy, provider hosted, secret ou dado real.
+A F34 só pode ser promovida para `PASS` após o head corrigido e o checkpoint final repetirem todos os gates aplicáveis.
 
 ## Invariantes preservadas
 
@@ -128,8 +146,6 @@ O diff validado antes do checkpoint continha somente ADR-014 e a SPEC F35. Não 
 - runtime normal continua sem DML direto;
 - migrations aplicadas `0001..0006` permanecem imutáveis.
 
-## Encerramento
+## Encerramento esperado
 
-O critério de encerramento da F34 foi satisfeito. A arquitetura de criação mínima de item está fechada quanto a payload, autorização, UUIDs, ordinal concorrente, capability, atomicidade/auditoria, resultados sanitizados e matriz adversarial.
-
-A implementação correspondente está especificada na F35.
+F34 fecha quando o desenho corrigido da ADR-014 e o checkpoint passarem os gates finais, deixando F35 como única `NEXT_ACTION` canônica.

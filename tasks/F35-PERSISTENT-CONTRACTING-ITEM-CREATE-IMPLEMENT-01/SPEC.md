@@ -13,7 +13,7 @@ A implementação precisa provar least privilege, autorização pilot-only, ordi
 
 ## Resultado esperado
 
-Ao final da F35, uma camada server-only deve conseguir criar um único `contracting_item` em uma contratação autorizada por meio de uma primitive PostgreSQL estreita, recebendo somente:
+Ao final da F35, uma camada server-only deve conseguir criar um único `contracting_item` em uma contratação autorizada por primitive PostgreSQL estreita, recebendo somente:
 
 ```text
 contractingId
@@ -23,7 +23,7 @@ unit
 catalogCode
 ```
 
-A boundary gera item UUID e event UUID no servidor, deriva team/actor/membership exclusivamente do contexto confiável e banco, calcula `ordinal` no PostgreSQL e retorna somente estado sanitizado.
+A boundary gera item UUID e event UUID no servidor, deriva team/actor/membership exclusivamente do contexto confiável e banco, aloca `ordinal` por um allocator técnico escopado à contratação e retorna somente estado sanitizado.
 
 Não existe UI ou Server Action nesta slice.
 
@@ -31,11 +31,44 @@ Não existe UI ou Server Action nesta slice.
 
 ### Migration nova
 
-Criar somente uma nova migration ordenada, prevista como:
+Criar somente nova migration ordenada, prevista como:
 
 `database/migrations/0007_contracting_item_create.sql`
 
 Migrations `0001..0006` permanecem byte-for-byte imutáveis.
+
+A migration deve criar:
+
+- tabela técnica de allocator de ordinal;
+- capability dedicada;
+- RLS/policies específicas;
+- primitive de criação de item;
+- revogações/grants mínimos necessários.
+
+### Allocator técnico
+
+Criar tabela interna equivalente a:
+
+```text
+contracting_item_ordinal_counters
+team_id uuid NOT NULL
+contracting_id uuid PRIMARY KEY
+last_ordinal integer NULL
+FK (team_id, contracting_id) -> contractings(team_id, id)
+```
+
+O nome exato pode variar.
+
+Requisitos:
+
+- é infraestrutura técnica, não entidade de produto;
+- não entra no read model normal;
+- `ENABLE ROW LEVEL SECURITY` e `FORCE ROW LEVEL SECURITY`;
+- grants default-deny;
+- runtime normal sem SELECT/INSERT/UPDATE/DELETE direto;
+- capability F35 pode somente SELECT/INSERT/UPDATE de `last_ordinal` conforme policies específicas;
+- sem DELETE para a capability;
+- `last_ordinal` nullable, sem `CHECK` de positividade inventado.
 
 ### Capability dedicada
 
@@ -82,7 +115,7 @@ Requisitos:
 - `PUBLIC EXECUTE` revogado;
 - runtime recebe somente `EXECUTE` por provisioning separado;
 - team, actor, membership, issuer, subject e ordinal não existem na assinatura;
-- p_item_id/p_event_id existem apenas entre adapter server-only e primitive, nunca no contrato público do adapter.
+- `p_item_id`/`p_event_id` existem apenas entre adapter server-only e primitive, nunca no contrato público do adapter.
 
 ### Provisioning
 
@@ -137,8 +170,8 @@ O adapter deve:
 - não trimar `description`, `unit` ou `catalogCode`;
 - mapear primitive `created` para `created`;
 - mapear primitive `denied` para `not-available`;
-- mapear configuração/conexão/cast/driver/resultado impossível para `unavailable`;
-- nunca expor SQL, driver, claims, connection string ou UUID interno;
+- mapear configuração/conexão/cast/overflow/driver/resultado impossível para `unavailable`;
+- nunca expor SQL, driver, claims, connection string, UUID interno ou ordinal;
 - nunca cair para fixtures/demo.
 
 Resultado público do adapter:
@@ -151,15 +184,17 @@ Resultado público do adapter:
 
 A primitive segue o guard target-team de F26/F32.
 
-Ordem mínima:
+Ordem mínima antes de tocar o allocator:
 
 1. rejeitar argumentos estruturais impossíveis, como `contractingId`, `description`, item UUID ou event UUID nulos;
 2. resolver `current_app_user_id()`;
-3. localizar a contratação candidata ativa sob RLS e bloqueá-la com `FOR UPDATE`;
-4. derivar `team_id` da row bloqueada;
+3. localizar a contratação candidata ativa sob RLS por leitura, sem locking clause que exija UPDATE na tabela pai;
+4. derivar `team_id` da row autorizada;
 5. derivar a membership ativa do usuário nessa equipe;
 6. exigir exatamente uma membership `revoked_at IS NULL` na equipe alvo;
-7. somente depois calcular ordinal e inserir.
+7. somente então criar/bloquear a row do allocator.
+
+Após adquirir o lock do allocator, a primitive deve revalidar contratação ativa, identidade/membership e guard pilot-only antes de calcular/inserir.
 
 Segundo membro não revogado na equipe alvo bloqueia inclusive se seu `app_user` estiver desabilitado.
 
@@ -176,25 +211,36 @@ A capability pode receber somente:
 - `USAGE` no schema necessário;
 - SELECT mínimo em `app_users` para identity helper;
 - SELECT mínimo em `memberships` para guard;
-- SELECT mínimo em `contractings` para localizar/bloquear a row alvo;
-- SELECT mínimo em `contracting_items` para obter `id`, `team_id`, `contracting_id` e `ordinal` necessários ao cálculo/event policy;
+- SELECT mínimo em `contractings` para localizar/revalidar a row alvo;
+- zero `UPDATE` em `contractings`;
+- SELECT mínimo em `contracting_items` para obter ordinais e validar event policy;
 - INSERT coluna-a-coluna em `contracting_items` apenas para `id`, `team_id`, `contracting_id`, `ordinal`, `description`, `quantity`, `unit`, `catalog_code`, `created_at`, `updated_at`;
 - INSERT coluna-a-coluna em `contracting_events` apenas para `id`, `team_id`, `contracting_id`, `actor_membership_id`, `event_type`, `occurred_at`, `item_id`, `created_at`;
+- SELECT/INSERT e UPDATE somente de `last_ordinal` no allocator técnico;
 - EXECUTE somente nos identity helpers necessários.
 
-A capability não recebe `UPDATE` ou `DELETE` de item/evento/contratação.
+A capability não recebe `UPDATE` ou `DELETE` em `contracting_items`, `contractings` ou `contracting_events`.
+
+### Policy do allocator
+
+Criar policies específicas para a capability que exijam:
+
+- row `team_id + contracting_id` correspondente a contratação ativa;
+- membership do usuário corrente não revogada nessa equipe;
+- exatamente uma membership não revogada na equipe alvo;
+- update limitado à row do mesmo scope.
+
+Não criar allocator para target negado. Runtime normal não recebe grant direto nessa tabela.
 
 ### Policy de item insert
 
-Criar policy específica para a capability que exija:
+Criar policy específica que exija:
 
 - `retired_at IS NULL`;
 - contratação correspondente ativa;
 - item `team_id` igual ao team canônico da contratação;
 - membership do usuário corrente não revogada nessa equipe;
 - exatamente uma membership não revogada na equipe alvo.
-
-Não adicionar policy ampla para outras roles.
 
 ### Policy de evento insert
 
@@ -218,21 +264,29 @@ Eventos continuam sem UPDATE/DELETE.
 
 A implementação deve seguir ADR-014 exatamente.
 
-Depois de autorização e `FOR UPDATE` da contratação pai:
+### Algoritmo
 
-```text
-max_ordinal = MAX(contracting_items.ordinal) para o contracting_id, incluindo retired
-next_ordinal = 1 se não houver item
-next_ordinal = max_ordinal + 1 caso contrário
-```
+Após autorização inicial:
 
-Não reutilizar gaps e não receber ordinal do caller.
+1. `INSERT` da row do allocator para `team_id + contracting_id` com `last_ordinal = NULL`, usando `ON CONFLICT DO NOTHING`;
+2. `SELECT ... FOR UPDATE` somente da row do allocator;
+3. revalidar contratação ativa e guard pilot-only;
+4. obter `MAX(contracting_items.ordinal)` de todos os itens, incluindo retired;
+5. obter o maior entre `last_ordinal` e o máximo real, com semântica correta para `NULL`;
+6. se ambos forem `NULL`, alocar `1`; caso contrário, alocar `maior + 1`;
+7. `UPDATE` do allocator para esse ordinal;
+8. inserir item e evento;
+9. concluir tudo na mesma transação.
 
-A operação usa o fluxo transacional `READ COMMITTED` canônico de `withTrustedDatabaseMutationContext`. Não introduzir transaction isolation diferente nesta slice.
+Não receber ordinal do caller. Não reutilizar gaps.
 
 A constraint `UNIQUE (contracting_id, ordinal)` continua como backstop, mas o fluxo normal não pode depender de capturar unique violation e fazer retry cego.
 
-Concorrência na mesma contratação é serializada pelo lock da row pai. Contratações diferentes não usam lock global.
+Não usar row locking em `contractings`: PostgreSQL exige privilégio UPDATE para locking clauses, e ADR-014 deliberadamente preserva zero UPDATE da capability sobre a contratação pai.
+
+Concorrência na mesma contratação é serializada pela row do allocator. Contratações diferentes usam rows distintas e não dependem de table lock/advisory lock global.
+
+Se qualquer etapa posterior falhar, inclusive item/evento, o avanço de `last_ordinal` deve ser revertido pela mesma transação.
 
 ## Estado e auditoria
 
@@ -259,7 +313,7 @@ item_id = item recém-criado
 
 `contractings.updated_at` não é alterado.
 
-Falha do evento deve reverter integralmente o item. Negação não cria item nem evento.
+Falha do evento deve reverter integralmente item e allocator. Negação não cria item, evento ou allocator para target não autorizado.
 
 ## Semântica de dados
 
@@ -301,6 +355,8 @@ O adapter usa string para evitar float JS. A suite deve provar `NULL`, zero, neg
 
 Valor textual não convertível para PostgreSQL `numeric` deve resultar em rollback/ausência de item+evento e retorno `unavailable`, sem detalhe do cast.
 
+Overflow de ordinal inteiro também falha como `unavailable`, sem wraparound ou regra nova.
+
 ## Testes obrigatórios
 
 ### Unitários do adapter
@@ -321,30 +377,34 @@ Provar:
 Provar pelo menos:
 
 1. único membro autorizado cria item e um evento;
-2. primeira criação recebe ordinal 1;
+2. primeira criação sem itens recebe ordinal 1;
 3. sequenciais recebem ordinais crescentes;
 4. gap não é reutilizado;
 5. retired participa do máximo;
-6. team/actor/contracting/item são coerentes e derivados;
-7. UUIDs do item/evento não alteram scope;
-8. claims ausentes/malformados/desconhecidos negam;
-9. app_user desabilitado nega;
-10. membership ausente/revogada nega;
-11. segundo membro não revogado nega, inclusive app_user desabilitado;
-12. membership adicional do mesmo usuário em outra equipe não bloqueia a row alvo;
-13. cross-team e inexistente são externamente indistinguíveis;
-14. archived/cancelled negam;
-15. description vazio/espaços é exato;
-16. unit/catalog NULL/vazio/espaços é exato;
-17. quantity NULL/zero/negativo/fração/alta precisão válida persiste;
-18. exactly one event por create;
-19. event failure reverte item;
-20. denied não cria evento/item;
-21. contractings.updated_at permanece inalterado;
-22. capability não consegue UPDATE/DELETE/reorder/retire;
-23. runtime não tem DML direto;
-24. F26/F29/F32 não têm authority item-create;
-25. nova capability não tem authority F26/F29/F32.
+6. allocator criado sobre itens preexistentes começa após o maior ordinal real;
+7. allocator atrasado é reconciliado pelo máximo real após lock;
+8. team/actor/contracting/item são coerentes e derivados;
+9. UUIDs do item/evento não alteram scope;
+10. claims ausentes/malformados/desconhecidos negam;
+11. app_user desabilitado nega;
+12. membership ausente/revogada nega;
+13. segundo membro não revogado nega, inclusive app_user desabilitado;
+14. membership adicional do mesmo usuário em outra equipe não bloqueia a row alvo;
+15. cross-team e inexistente são externamente indistinguíveis;
+16. archived/cancelled negam antes do allocator;
+17. archived/cancelled ou guard alterado enquanto espera allocator é revalidado e nega antes do insert;
+18. description vazio/espaços é exato;
+19. unit/catalog NULL/vazio/espaços é exato;
+20. quantity NULL/zero/negativo/fração/alta precisão válida persiste;
+21. exactly one event por create;
+22. event failure reverte item e avanço do allocator;
+23. denied não cria item/evento/allocator em target não autorizado;
+24. `contractings.updated_at` permanece inalterado;
+25. capability não possui UPDATE em `contractings`;
+26. capability não consegue UPDATE/DELETE/reorder/retire de item;
+27. runtime não tem DML direto;
+28. F26/F29/F32 não têm authority item-create;
+29. nova capability não tem authority F26/F29/F32.
 
 ### Concorrência real
 
@@ -355,11 +415,11 @@ Resultado obrigatório:
 - 8 `created`;
 - 8 itens novos;
 - 8 eventos `item_created`;
-- ordinais únicos e sequenciais a partir do máximo anterior;
+- ordinais únicos e sequenciais a partir do maior valor anterior/allocator reconciliado;
 - nenhum unique violation exposto;
 - nenhum retry cego.
 
-Também provar com pelo menos duas contratações diferentes que não existe lock global da tabela/capability. O teste pode sincronizar writers para demonstrar independência de rows pai distintas.
+Também provar com pelo menos duas contratações diferentes que rows distintas do allocator não criam lock global.
 
 ## Preflight adversarial de role/capability
 
@@ -367,12 +427,12 @@ Workflow/testes devem rejeitar:
 
 - capability com LOGIN/SUPERUSER/BYPASSRLS/CREATEROLE/ownership indevido;
 - membership utilizável da capability;
-- runtime com INSERT/UPDATE/DELETE direto em `contracting_items` ou `contracting_events`;
-- runtime com UPDATE da contratação por causa da F35;
+- runtime com INSERT/UPDATE/DELETE direto no allocator, `contracting_items`, `contracting_events` ou `contractings`;
+- capability com UPDATE em `contractings`;
+- capability com UPDATE/DELETE de item/evento;
 - `PUBLIC EXECUTE` na primitive;
 - `search_path` inseguro;
 - SQL dinâmico controlável por caller;
-- grant de UPDATE/DELETE para capability;
 - F26/F29/F32 ampliadas.
 
 ## Workflow e regressão
@@ -402,20 +462,23 @@ Rejeitar PASS se:
 
 - browser/caller público puder controlar team, actor, membership, issuer, subject, ordinal, item UUID ou event UUID;
 - ordinal depender de input do cliente;
-- `MAX+1` ocorrer antes do lock da contratação;
+- capability precisar de UPDATE em `contractings` para serializar item create;
+- allocator for criado antes de autorização do target;
+- allocator não revalidar autorização após lock;
 - corrida for tratada por retry cego de unique violation;
-- table lock/global advisory lock serializar contratações diferentes;
+- table lock/advisory lock global serializar contratações diferentes;
 - gaps forem reutilizados;
-- retired for ignorado no máximo;
+- retired for ignorado no maior ordinal;
 - runtime ganhar DML direto;
-- capability ganhar UPDATE/DELETE ou authority das outras primitives;
+- capability ganhar UPDATE/DELETE de item/evento ou authority das outras primitives;
 - F26/F29/F32 forem ampliadas;
 - Q-004/Q-009 forem resolvidas implicitamente;
 - quantidade positiva/unidade obrigatória/catálogo obrigatório/trim/limite de tamanho forem inventados;
 - quantidade passar por JS Number;
 - item sobreviver à falha do evento;
+- allocator avançar após rollback do item/evento;
 - evento existir sem item;
-- parent `updated_at` for alterado sem decisão nova;
+- parent `updated_at` for alterado;
 - falha protegida cair para demo;
 - migrations `0001..0006` forem alteradas;
 - provider hosted, secret ou dado real forem usados.
@@ -444,4 +507,4 @@ Rejeitar PASS se:
 
 ## Critério de encerramento
 
-F35 fecha quando a criação mínima de item estiver implementada e provada em PostgreSQL 17 com capability dedicada, ordinal concorrente serializado por contratação, auditoria atômica, adapter server-only sanitizado e todas as regressões verdes, sem UI e sem ampliar as capabilities anteriores.
+F35 fecha quando a criação mínima de item estiver implementada e provada em PostgreSQL 17 com capability dedicada, allocator técnico por contratação, auditoria atômica, adapter server-only sanitizado e todas as regressões verdes, sem UI e sem ampliar as capabilities anteriores.

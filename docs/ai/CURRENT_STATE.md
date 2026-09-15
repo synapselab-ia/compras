@@ -1,12 +1,12 @@
 # Current State - Compras
 
-**PROJECT_STATUS:** F35_INTEGRATED_F36_READY  
-**CURRENT_PHASE:** F35 concluída, integrada e verificada; F36 READY; F21 ON HOLD  
+**PROJECT_STATUS:** F36_INTEGRATED_F37_READY  
+**CURRENT_PHASE:** F36 concluída, integrada e verificada; F37 READY; F21 ON HOLD  
 **REPO_VISIBILITY:** PUBLIC  
-**APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_SIGNIN_LIMITER_NEXT_ACTION_WRITE_CREATE_UI_OBJECT_MUTATION_OBJECT_DETAIL_UI_AND_ITEM_CREATE_SERVER_BOUNDARY_INTEGRATED  
-**DATABASE_STATUS:** PROTECTED_READ_MODEL_F26_F29_F32_F35_VALIDATED  
+**APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_SIGNIN_LIMITER_NEXT_ACTION_WRITE_CREATE_UI_OBJECT_MUTATION_OBJECT_DETAIL_UI_ITEM_CREATE_BOUNDARY_AND_ITEM_CREATE_DETAIL_UI_INTEGRATED  
+**DATABASE_STATUS:** PROTECTED_READ_MODEL_F26_F29_F32_F35_VALIDATED_NO_F36_DATABASE_CHANGE  
 **AUTH_STATUS:** SELF_HOSTED_BETTER_AUTH_AND_SIGNIN_LIMITER_INTEGRATED  
-**DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_NO_F35_HOSTED_WRITES  
+**DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_NO_F36_HOSTED_WRITES  
 **REAL_DATA_ALLOWED:** NO  
 **CONTEXT_STATUS:** VALID  
 **FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`  
@@ -25,77 +25,48 @@
 **F33_MERGE_COMMIT:** `c4c3d5416ecfd7f49c74ffd0a32425db8621958c`  
 **F33_CHECKPOINT_MERGE_COMMIT:** `bfa9a65fae06ef8c3cc29586287160be3ab29d31`  
 **F34_MERGE_COMMIT:** `51b02799e5994567ca144b38c4117271695ff7e2`  
-**F35_PR:** `#52`  
-**F35_FINAL_HEAD:** `aecbd46fcc9824abecd3f43656be37f0269841cf`  
 **F35_MERGE_COMMIT:** `879902c9e55c60ae514e0ce961f9246202c5c9f8`  
-**LAST_GOOD_COMMIT:** `879902c9e55c60ae514e0ce961f9246202c5c9f8`  
-**LAST_GOOD_CI_RUN:** `34986357314`  
+**F36_PR:** `#54`  
+**F36_FINAL_HEAD:** `7d0e317a25cc2ef9bbc83df3817238f61d5c0404`  
+**F36_MERGE_COMMIT:** `c177e7e8c1b3a46a5d5c3276b4945b81019c706a`  
+**LAST_GOOD_COMMIT:** `c177e7e8c1b3a46a5d5c3276b4945b81019c706a`  
+**LAST_GOOD_CI_RUN:** `34989894313`  
 **F21_STATE:** `ON HOLD / BLOCKED` - Vercel control-plane surface unavailable for required protection/env readback+CRUD  
 **F21_RESUME_WHEN:** sessão Vercel autenticada permitir readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch, sem exposição de valores  
 **ON_HOLD:** `F17-B2` histórico + `F21` conforme resume_when acima
 
 ## Recuperação e validação
 
-A sessão recuperou `main` inicialmente em `51b02799e5994567ca144b38c4117271695ff7e2`, localizou a frente ativa F35 na branch `f35-contracting-item-create-implement`, PR `#52`, e confirmou que ela estava baseada no mesmo `main` canônico.
+A sessão recuperou `main` em `73604d1d7310353e822ace07fc9202ae160f55d0`, confirmou ausência de PR ativa anterior e identificou F36 como a única `NEXT_ACTION` canônica deixada pelo checkpoint F35.
 
-O `CONTEXT_MANIFEST` foi revalidado contra a árvore canônica. PROJECT_DESIGN, DOMAIN_MODEL, BUSINESS_WORKFLOW, OPEN_QUESTIONS, ARCHITECTURE, SECURITY, DATABASE, DEFINITION_OF_DONE, SOURCE_OF_TRUTH e WORK_PROTOCOL permaneceram exatamente nos hashes declarados. `CONTEXT_STATUS = VALID`.
+O `CONTEXT_MANIFEST` foi revalidado contra a árvore canônica. PROJECT_DESIGN, DOMAIN_MODEL, BUSINESS_WORKFLOW, OPEN_QUESTIONS, ARCHITECTURE, SECURITY, DATABASE, DEFINITION_OF_DONE, SOURCE_OF_TRUTH e WORK_PROTOCOL permaneceram nos hashes declarados. `CONTEXT_STATUS = VALID`.
 
-F35 foi tratada como T2 por envolver nova migration, capability, RLS, primitive e escrita persistente. `REAL_DATA_ALLOWED = NO` permaneceu obrigatório.
+F36 foi tratada como T1 com impacto T2 por expor escrita persistente via Server Action, embora sem mudança de autoridade PostgreSQL. `REAL_DATA_ALLOWED = NO` permaneceu obrigatório.
 
-## F35 - criação persistente mínima de item integrada
+## F36 - criação de item integrada ao detalhe persistente
 
-F35 materializou ADR-014 sem UI/Server Action.
+F36 expôs exclusivamente a boundary F35 já integrada. Nenhuma migration, grant, policy, capability, primitive ou provisioning de banco foi alterado.
 
-### Schema e capability
+### Server Action e payload
 
-A migration aditiva `database/migrations/0007_contracting_item_create.sql` criou:
+A action persistente de criação de item:
 
-- `public.contracting_item_ordinal_counters` como estado técnico de allocator por contratação;
-- RLS habilitada e forçada no allocator;
-- capability dedicada `compras_contracting_item_create_owner`;
-- primitive `public.create_contracting_item(uuid,text,numeric,text,text,uuid,uuid)`.
+- funciona somente quando `persistent-read-mode` está válido;
+- aceita exatamente `contractingId`, `description`, `quantity`, `unit` e `catalogCode`, além de transporte interno `$ACTION_*` do framework que não é tratado como authority;
+- rejeita scalars duplicados;
+- rejeita campos extras controláveis pelo browser antes de alcançar F35;
+- não aceita team, actor, membership, issuer, subject, ordinal, item UUID, event UUID, callback ou redirect como authority;
+- não executa SQL/DML próprio;
+- chama `createPersistentContractingItem` e expõe somente `created`, `not-available` ou `unavailable`;
+- revalida apenas a rota local fixa após `created`, de modo que a lista é relida pelo read model protegido existente.
 
-A capability permanece `NOLOGIN`, `NOINHERIT`, `NOSUPERUSER`, `NOBYPASSRLS`, `NOCREATEDB`, `NOCREATEROLE`, `NOREPLICATION`, sem ownership de tabelas-base, sem membership utilizável e com `PUBLIC EXECUTE` revogado.
+`description`, `unit` e `catalogCode` permanecem textos exatos, inclusive vazio e espaços. Quantidade vazia ou ausente na UI representa `null`; qualquer texto não vazio segue como `string` exata para F35/PostgreSQL. Não há `Number`, `parseFloat`, trim ou normalização de negócio.
 
-Runtime normal não recebeu DML direto. O provisioning separado concede somente `EXECUTE` da primitive F35 ao runtime de domínio validado.
+### UI persistente
 
-F26, F29 e F32 não receberam item-create authority. A capability F35 não recebeu authority das primitives anteriores.
+O detalhe persistente passou a oferecer o formulário mínimo "Adicionar item" dentro do painel de itens ativos.
 
-### Autorização pilot-only
-
-A operação segue o guard por equipe alvo de F26/F32:
-
-- identidade interna ativa derivada de contexto confiável;
-- contratação candidata visível e ativa;
-- membership não revogada do usuário na equipe alvo;
-- exatamente uma membership não revogada na equipe alvo.
-
-Segundo membro não revogado bloqueia, inclusive se seu `app_user` estiver desabilitado. Outra membership do mesmo usuário em equipe diferente não bloqueia por si só. Q-009 permanece aberta.
-
-Cross-team, inexistente, usuário desabilitado, membership ausente/revogada, segundo membro, contratação arquivada e contratação cancelada colapsam para negação protegida.
-
-### Allocator e concorrência
-
-F35 mantém zero UPDATE em `contractings`.
-
-Após autorização inicial, a primitive:
-
-1. cria a row técnica do allocator se necessário;
-2. bloqueia somente essa row com `SELECT ... FOR UPDATE`;
-3. revalida identidade, contratação ativa e guard pilot-only após o lock;
-4. lê `MAX(contracting_items.ordinal)` incluindo itens retirados;
-5. reconcilia o máximo real com `last_ordinal`;
-6. aloca `1` quando ambos inexistem ou `maior + 1` nos demais casos;
-7. atualiza o allocator;
-8. insere item e evento na mesma transação.
-
-Gaps não são reutilizados. Contratações distintas usam rows de allocator distintas, sem lock global. Overflow de `integer` falha fechado sem wraparound.
-
-O teste PostgreSQL real provou 8 writers concorrentes na mesma contratação, todos `created`, com ordinais sequenciais e únicos, 8 eventos correspondentes e allocator reconciliado. Também provou que uma contratação diferente não bloqueia atrás de allocator alheio e que uma contratação arquivada enquanto o writer espera o lock é revalidada e negada antes do insert.
-
-### Payload e semântica
-
-O adapter server-only `createPersistentContractingItem` aceita somente:
+O formulário contém somente:
 
 ```text
 contractingId
@@ -105,82 +76,71 @@ unit
 catalogCode
 ```
 
-Item UUID e event UUID são gerados server-side. Team, actor, membership, issuer, subject e ordinal não vêm do browser.
+Quantidade usa input textual com dica decimal, não `type=number`, para não introduzir coerção de precisão no navegador. Nenhum input de authority, ordinal, UUID interno, reorder, retire, delete ou pesquisa de preços foi incluído.
 
-`description`, `unit` e `catalogCode` não sofrem trim/normalização. Vazio e espaços permanecem exatos conforme a nullability física. `quantity` permanece `string | null` até o cast PostgreSQL `numeric`, sem `Number` ou `parseFloat`.
+O botão reutiliza o componente com `useFormStatus`, ficando desabilitado durante pending para reduzir double-submit acidental sem inventar idempotência persistente.
 
-Quantidade `NULL`, zero, negativa, fracionária e de alta precisão tecnicamente válida foi provada. Texto não convertível para `numeric` falha como `unavailable` sanitizado, sem item/evento/resíduo.
+Demo permanece estritamente read-only. Estado de query forjado não faz formulário nem feedback de escrita aparecer em demo.
 
-Q-004 continua aberta. Nenhuma regra de positividade, unidade obrigatória, catálogo obrigatório, escala/precisão de negócio, tamanho ou pesquisa de preços foi inventada.
+### Feedback sanitizado
 
-### Atomicidade e auditoria
+A UI reconhece somente:
 
-Cada sucesso cria exatamente um item e um evento `item_created`, usando o mesmo `operation_at` para timestamps previstos. `contractings.updated_at` permanece inalterado.
+- `created` -> `Item adicionado.`;
+- `not-available` -> mensagem genérica de indisponibilidade para o registro;
+- `unavailable` -> mensagem genérica de falha temporária.
 
-Falha do evento reverte item e avanço do allocator. Targets negados não recebem allocator novo, item ou evento.
+Arrays, valores desconhecidos e detalhes técnicos não são refletidos. Cross-team/inexistente continua sem oracle na camada browser-facing.
 
-A boundary externa expõe somente:
+## Red-team F36
 
-- `created`;
-- `not-available`;
-- `unavailable`.
+Os testes e a revisão adversarial cobriram e rejeitaram:
 
-Nenhum detalhe de SQL, sessão, claims, team, actor, membership, ordinal ou UUID interno é retornado.
-
-## Red-team F35
-
-O red-team e as suites cobriram e rejeitaram:
-
-- capability com LOGIN, SUPERUSER, CREATEROLE ou BYPASSRLS;
-- membership SET-capable ou privilege escalation da capability;
-- DML direto no runtime;
-- UPDATE em `contractings`;
-- UPDATE/DELETE de item/evento pela capability;
-- ampliação de F26/F29/F32;
-- authority de browser sobre team/actor/membership/ordinal/item UUID/event UUID;
-- claims ausentes, malformados ou desconhecidos;
-- app_user desabilitado, membership revogada/ausente e segundo membro;
-- oracle cross-team/inexistente;
-- allocator criado para target negado;
-- gap reuse ou exclusão de retired do máximo;
-- falha de evento sem rollback integral;
-- conversão JS de `numeric`;
-- cast numérico inválido com resíduo;
-- overflow de ordinal com wraparound;
-- update de `contractings.updated_at`;
+- team, team_id, actor, membership, issuer e subject forjados;
+- ordinal, item UUID e event UUID controlados pelo browser;
+- callback, callbackURL e redirect controlados pelo browser;
+- scalar duplicado/ambíguo;
+- quantity convertida por JavaScript ou submetida como `type=number`;
+- trim ou empty-to-NULL indevido para campos textuais;
+- demo com qualquer write;
+- revalidação de rota fornecida pelo cliente;
+- feedback contendo conexão, SQL, claim ou detalhe de autorização;
+- alteração de migrations `0001..0007`, grants, policies, capabilities ou primitives;
 - provider hosted, secret ou dado real;
-- alteração das migrations `0001..0006`.
+- expansão para update/reorder/retire/delete de item ou pesquisa de preços.
 
-O primeiro workflow F35 encontrou um defeito real no uso qualificado de `GREATEST`; a implementação foi corrigida para comparação explícita com semântica de `NULL`. O head corrigido e posteriormente ampliado pelo red-team ficou totalmente verde.
+O primeiro head da F36 encontrou uma falha real na suíte ao importar estaticamente um módulo `server-only` da boundary F35 dentro do módulo compartilhado de actions. A correção manteve F35 isolada por import dinâmico somente no caminho de execução da action F36, evitando carregar a boundary server-only nos testes legados das actions F27/F33. O head corrigido ficou totalmente verde.
 
-## Verificação F35
+## Verificação F36
 
-Head final da PR `aecbd46fcc9824abecd3f43656be37f0269841cf`:
+Head final da PR `7d0e317a25cc2ef9bbc83df3817238f61d5c0404`:
 
-- CI `34981481674`: PASS;
-- F22 Private Preview Preflight `34981481259`: PASS;
-- F29 Contracting Create `34981481276`: PASS;
-- F32 Contracting Object Mutation `34981481384`: PASS;
-- F35 Contracting Item Create `34981481346`: PASS.
+- CI `34989649457`: PASS;
+- F22 Private Preview Preflight `34989650055`: PASS;
+- F29 Contracting Create `34989649664`: PASS;
+- F32 Contracting Object Mutation `34989649765`: PASS;
+- F35 Contracting Item Create `34989649584`: PASS.
 
-PR `#52` integrada por merge commit `879902c9e55c60ae514e0ce961f9246202c5c9f8`.
+PR `#54` integrada por merge commit `c177e7e8c1b3a46a5d5c3276b4945b81019c706a`.
 
 Pós-merge em `main`:
 
-- CI `34986357314`: PASS;
-- F22 Private Preview Preflight `34986357311`: PASS;
-- F29 Contracting Create `34986357632`: PASS;
-- F32 Contracting Object Mutation `34986357326`: PASS;
-- F35 Contracting Item Create `34986357430`: PASS.
+- CI `34989894313`: PASS;
+- F22 Private Preview Preflight `34989894397`: PASS;
+- F29 Contracting Create `34989894362`: PASS;
+- F32 Contracting Object Mutation `34989894237`: PASS;
+- F35 Contracting Item Create `34989894477`: PASS.
+
+O diff final da F36 alterou somente sete arquivos de application/tests. `database/`, migrations, workflows de authority, providers e arquivos de secret permaneceram fora do diff.
 
 ## Próxima ação
 
 Existe exatamente uma `NEXT_ACTION` canônica:
 
-`F36-PERSISTENT-CONTRACTING-ITEM-CREATE-DETAIL-UI-01 - Integrar criação persistente de item no detalhe`.
+`F37-PERSISTENT-CONTRACTING-ITEM-MUTATION-DESIGN-01 - Desenhar edição persistente mínima de item`.
 
-A SPEC está em `tasks/F36-PERSISTENT-CONTRACTING-ITEM-CREATE-DETAIL-UI-01/SPEC.md`.
+A SPEC está em `tasks/F37-PERSISTENT-CONTRACTING-ITEM-MUTATION-DESIGN-01/SPEC.md`.
 
-F36 deve integrar apenas Server Action/UI sobre F35, sem alterar PostgreSQL authority, migrations `0001..0007`, grants, policies ou capabilities. Demo permanece read-only. Q-004 e Q-009 permanecem abertas.
+F37 é exclusivamente de desenho T2. Deve definir payload, optimistic concurrency, autorização, capability, auditoria, semântica exata e resultados sanitizados para editar campos existentes de item, sem implementação operacional, sem reorder/retire e sem pesquisa de preços.
 
-F21 permanece `ON HOLD` até seu `resume_when` objetivo.
+F21 permanece `ON HOLD` até seu `resume_when` objetivo. Q-004 e Q-009 permanecem abertas.

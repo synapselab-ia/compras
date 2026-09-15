@@ -514,8 +514,10 @@ BEGIN
     base_ordinal := persisted_max_ordinal;
   ELSIF persisted_max_ordinal IS NULL THEN
     base_ordinal := allocator_last_ordinal;
+  ELSIF allocator_last_ordinal >= persisted_max_ordinal THEN
+    base_ordinal := allocator_last_ordinal;
   ELSE
-    base_ordinal := pg_catalog.greatest(allocator_last_ordinal, persisted_max_ordinal);
+    base_ordinal := persisted_max_ordinal;
   END IF;
 
   IF base_ordinal IS NULL THEN

@@ -47,7 +47,7 @@ describePostgres("F29 PostgreSQL contracting create concurrency boundary", () =>
     );
   });
 
-  beforeEach(async () => {
+  async function clearCandidate(): Promise<void> {
     await adminPool.query(
       "delete from public.contracting_events where contracting_id = $1::uuid",
       [TARGET_ID],
@@ -56,6 +56,10 @@ describePostgres("F29 PostgreSQL contracting create concurrency boundary", () =>
       "delete from public.contractings where id = $1::uuid",
       [TARGET_ID],
     );
+  }
+
+  beforeEach(async () => {
+    await clearCandidate();
   });
 
   afterAll(async () => {
@@ -92,13 +96,19 @@ describePostgres("F29 PostgreSQL contracting create concurrency boundary", () =>
     }
   }
 
-  it("collapses eight concurrent retries into one row and one creation event", async () => {
-    const outcomes = await Promise.all(
-      Array.from({ length: 8 }, (_, index) => create(index + 1)),
-    );
+  it("collapses repeated eight-way concurrent retries into one row and one creation event", async () => {
+    for (let round = 0; round < 5; round += 1) {
+      if (round > 0) {
+        await clearCandidate();
+      }
 
-    expect(outcomes.filter((outcome) => outcome === "created")).toHaveLength(1);
-    expect(outcomes.filter((outcome) => outcome === "already-created")).toHaveLength(7);
+      const outcomes = await Promise.all(
+        Array.from({ length: 8 }, (_, index) => create(round * 8 + index + 1)),
+      );
+
+      expect(outcomes.filter((outcome) => outcome === "created")).toHaveLength(1);
+      expect(outcomes.filter((outcome) => outcome === "already-created")).toHaveLength(7);
+    }
 
     const persisted = await adminPool.query<{
       object: string;

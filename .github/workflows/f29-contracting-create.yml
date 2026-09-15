@@ -103,6 +103,7 @@ jobs:
           PGUSER=compras_f29_migrator_ci PGPASSWORD='DEMO-F29-MIGRATOR-PASSWORD' PGDATABASE=compras_create_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0003_team_member_directory.sql
           PGUSER=compras_f29_migrator_ci PGPASSWORD='DEMO-F29-MIGRATOR-PASSWORD' PGDATABASE=compras_create_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0004_next_action_mutation.sql
           PGUSER=compras_f29_migrator_ci PGPASSWORD='DEMO-F29-MIGRATOR-PASSWORD' PGDATABASE=compras_create_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0005_contracting_create.sql
+          PGUSER=compras_f29_migrator_ci PGPASSWORD='DEMO-F29-MIGRATOR-PASSWORD' PGDATABASE=compras_create_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0008_contracting_create_concurrency_repair.sql
 
           PRE_GRANT_EXECUTE="$(PGDATABASE=compras_create_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_domain_runtime_f29_ci', 'public.create_contracting_minimal(uuid,text,uuid)', 'EXECUTE')")"
           AUTH_EXECUTE="$(PGDATABASE=compras_create_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_auth_runtime_f29_ci', 'public.create_contracting_minimal(uuid,text,uuid)', 'EXECUTE')")"

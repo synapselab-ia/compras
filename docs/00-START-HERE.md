@@ -18,11 +18,10 @@ A fundação já possui:
 - controle distribuído de abuso de sign-in;
 - capability persistente estreita para `contractings.next_action` e UI correspondente;
 - boundary persistente mínima de criação de `contractings`, pilot-only, auditável e idempotente, com jornada UI/Server Action integrada;
-- capability persistente separada para edição de `contractings.object`;
-- UI/Server Action persistente de edição de `Objeto` integrada sobre F32;
-- ADR-014 aceita e verificada para criação persistente mínima de `contracting_items`.
+- capability persistente separada para edição de `contractings.object` e UI correspondente;
+- boundary persistente mínima de criação de `contracting_items`, pilot-only, auditável e concorrente, ainda sem UI.
 
-F34 está concluída no desenho. A próxima e única frente canônica é F35, implementação PostgreSQL/server-only dessa boundary.
+F35 foi integrada pela PR `#52`, merge `879902c9e55c60ae514e0ce961f9246202c5c9f8`, com gates pós-merge verdes. A próxima e única frente canônica é F36, integração da criação mínima de item no detalhe persistente.
 
 F17 permanece `ON HOLD` histórico. F21 permanece `ON HOLD` antes de secrets até existir control plane Vercel capaz de readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch sem expor valores.
 
@@ -58,13 +57,11 @@ ADR-012 definiu capability separada para criação mínima de `contractings`. O 
 
 ADR-013 definiu capability própria para editar somente `contractings.object`. O payload é `contractingId + expectedObject + newObject`, preservado exatamente. `SELECT ... FOR UPDATE` + expected value evita lost update. F33 integra a boundary ao detalhe persistente sem ampliar authority PostgreSQL.
 
-F33 foi integrada pela PR `#49`, merge `c4c3d5416ecfd7f49c74ffd0a32425db8621958c`. O checkpoint seguinte foi integrado pela PR `#50`, merge `bfa9a65fae06ef8c3cc29586287160be3ab29d31`.
+### F34/F35 - criação mínima de item
 
-## F34 - desenho de criação persistente de item
+ADR-014 e F35 definem e implementam uma capability separada para adicionar item a contratação existente.
 
-A tabela física `contracting_items` existe desde `0001`, com `ordinal`, descrição, quantidade, unidade, catálogo e timestamps. F34 não implementou escrita; definiu a próxima boundary em ADR-014.
-
-### Payload futuro
+Payload server-only:
 
 ```text
 contractingId
@@ -74,30 +71,13 @@ unit
 catalogCode
 ```
 
-`quantity` será `string | null` no adapter até PostgreSQL `numeric`. Item UUID e event UUID nascem server-side. Team, actor, membership, issuer, subject e ordinal não são confiados ao browser.
+`quantity` é `string | null` até PostgreSQL `numeric`. Item UUID e event UUID são gerados server-side. Team, actor, membership, issuer, subject e ordinal nunca são authority do browser.
 
-Nenhuma regra de quantidade positiva, unidade obrigatória, catálogo obrigatório, trim, empty-to-NULL, limite de tamanho ou precisão de negócio foi inventada. Q-004 continua aberta.
+A capability `compras_contracting_item_create_owner` permanece selada e sem UPDATE em `contractings`. Runtime normal recebe somente `EXECUTE` da primitive F35 por provisioning separado.
 
-### Autorização
+## Allocator de ordinal F35
 
-A futura escrita seguirá o guard por equipe alvo de F26/F32:
-
-- identidade interna ativa;
-- contratação visível e ativa;
-- membership não revogada do usuário na equipe alvo;
-- exatamente uma membership não revogada na equipe alvo.
-
-Segundo membro não revogado bloqueia. Outra membership do mesmo usuário em equipe diferente não bloqueia por si só. Q-009 continua aberta.
-
-### Capability
-
-F35 deverá criar capability própria equivalente a `compras_contracting_item_create_owner`, sem ampliar F26/F29/F32. Runtime normal continuará sem DML direto e receberá somente `EXECUTE` da primitive F35.
-
-### Allocator de ordinal
-
-O red-team rejeitou o primeiro rascunho que usava row lock em `contractings`, pois locking clauses PostgreSQL exigem privilégio UPDATE. A decisão final mantém zero UPDATE na contratação pai.
-
-ADR-014 exige tabela técnica por contratação, equivalente a:
+A criação de item usa a tabela técnica:
 
 ```text
 contracting_item_ordinal_counters
@@ -106,27 +86,56 @@ contracting_id uuid PRIMARY KEY
 last_ordinal integer NULL
 ```
 
-A primitive deve autorizar primeiro, criar/bloquear somente essa row técnica, revalidar autorização após o lock, reconciliar `last_ordinal` com `MAX(ordinal)` real, inclusive retired, e então alocar o próximo ordinal.
+Fluxo:
 
-Gaps não são reutilizados. Contratações distintas usam rows distintas e não sofrem lock global. A capability terá UPDATE apenas de `last_ordinal` no allocator e zero UPDATE em `contractings`.
+1. autorizar a contratação por leitura protegida;
+2. criar a row do allocator somente após autorização;
+3. bloquear apenas a row do allocator;
+4. revalidar autorização após o lock;
+5. reconciliar `last_ordinal` com `MAX(contracting_items.ordinal)` real, incluindo retired;
+6. alocar `1` ou `maior + 1`;
+7. atualizar allocator e inserir item + evento `item_created` na mesma transação.
 
-### Atomicidade
+Gaps não são reutilizados. Contratações distintas usam rows distintas, sem lock global. Falha do evento reverte item e allocator. `contractings.updated_at` não é alterado.
 
-Uma criação bem-sucedida deverá inserir avanço do allocator, item e evento `item_created` na mesma transação. Falha do evento reverte tudo. `contractings.updated_at` não é alterado.
+A suíte F35 provou 8 writers concorrentes na mesma contratação com ordinais únicos/sequenciais, ausência de bloqueio global entre contratações e revalidação de target após espera no allocator.
 
-A futura boundary server-only expõe apenas `created`, `not-available` e `unavailable`.
+## Semântica de dados F35
 
-O desenho completo está em `docs/decisions/ADR-014-minimal-persistent-contracting-item-creation.md` e a implementação está especificada em `tasks/F35-PERSISTENT-CONTRACTING-ITEM-CREATE-IMPLEMENT-01/SPEC.md`.
+Não foi criada regra de:
+
+- trim;
+- descrição non-empty;
+- quantidade positiva;
+- unidade obrigatória;
+- catálogo obrigatório;
+- escala/precisão de negócio;
+- tamanho máximo;
+- pesquisa de preços.
+
+`description`, `unit` e `catalogCode` preservam texto exato. `quantity` não passa por `Number`/`parseFloat`. `NULL`, zero, negativo, fração e alta precisão válida foram provados. Cast inválido e overflow de ordinal falham fechados e sanitizados.
+
+Q-004 continua aberta. Q-009 continua aberta, portanto a escrita permanece pilot-only.
 
 ## Próxima frente
 
 A única `NEXT_ACTION` canônica está em `docs/ai/NEXT_ACTION.md`:
 
-`F35-PERSISTENT-CONTRACTING-ITEM-CREATE-IMPLEMENT-01 - Implementar criação persistente mínima de item`.
+`F36-PERSISTENT-CONTRACTING-ITEM-CREATE-DETAIL-UI-01 - Integrar criação persistente de item no detalhe`.
 
-F35 deve implementar exclusivamente ADR-014: migration `0007`, allocator técnico, capability própria, primitive, provisioning, adapter server-only, matriz PostgreSQL 17, teste real de concorrência e workflow dedicado.
+F36 deve:
 
-UI e Server Action de item permanecem fora dessa slice.
+- adicionar somente Server Action/UI sobre F35;
+- manter `0001..0007`, grants, policies, capabilities e primitives imutáveis;
+- manter demo read-only;
+- encaminhar apenas `contractingId`, `description`, `quantity`, `unit`, `catalogCode`;
+- preservar strings exatas e quantity como string/null;
+- fazer readback pelo modelo protegido após `created`;
+- sanitizar `not-available`/`unavailable` sem oracle cross-team;
+- usar pending para reduzir double-submit acidental sem inventar idempotência persistente;
+- não adicionar update/reorder/retire de item nem pesquisa de preços.
+
+A SPEC está em `tasks/F36-PERSISTENT-CONTRACTING-ITEM-CREATE-DETAIL-UI-01/SPEC.md`.
 
 ## Modos da aplicação
 
@@ -162,9 +171,10 @@ Migrations imutáveis atualmente integradas:
 - `0003_team_member_directory.sql`;
 - `0004_next_action_mutation.sql`;
 - `0005_contracting_create.sql`;
-- `0006_contracting_object_mutation.sql`.
+- `0006_contracting_object_mutation.sql`;
+- `0007_contracting_item_create.sql`.
 
-Migration aplicada não é reescrita. F35 deverá acrescentar `0007`.
+Migration aplicada não é reescrita. Correção futura exige migration aditiva.
 
 ## Fonte de verdade
 

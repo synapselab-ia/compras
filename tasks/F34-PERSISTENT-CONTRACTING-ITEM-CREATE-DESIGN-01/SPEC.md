@@ -1,17 +1,22 @@
 # F34-PERSISTENT-CONTRACTING-ITEM-CREATE-DESIGN-01 - Desenhar adição persistente mínima de item
 
 **Classe:** T2 - desenho arquitetural de escrita/autorização  
-**Estado:** DESIGN COMPLETE / VERIFYING  
+**Estado:** COMPLETED / PASS  
 **Dependências:** fundação `contracting_items`, F26, F29, F32, SECURITY, DATABASE e modelo de domínio  
 **Classificação permitida:** PUBLIC / FICTITIOUS ONLY
 
-## Resultado do desenho
+## Resultado
 
-F34 produziu `docs/decisions/ADR-014-minimal-persistent-contracting-item-creation.md` e `tasks/F35-PERSISTENT-CONTRACTING-ITEM-CREATE-IMPLEMENT-01/SPEC.md`.
+F34 foi concluída como slice exclusivamente de desenho.
 
-Nenhuma migration, primitive, policy, grant, adapter, Server Action ou UI operacional foi criada nesta slice. Migrations `0001..0006` permanecem imutáveis. Q-004 e Q-009 permanecem abertas.
+Artefatos produzidos:
 
-## Decisões fechadas
+- `docs/decisions/ADR-014-minimal-persistent-contracting-item-creation.md`;
+- `tasks/F35-PERSISTENT-CONTRACTING-ITEM-CREATE-IMPLEMENT-01/SPEC.md`.
+
+Nenhuma migration, primitive, policy, grant, adapter, Server Action ou UI operacional foi criada. Migrations `0001..0006` permaneceram imutáveis. Q-004 e Q-009 permanecem abertas.
+
+## Decisões finais
 
 ### Payload e confiança
 
@@ -25,15 +30,13 @@ unit
 catalogCode
 ```
 
-`description` é string. `quantity` é `string | null` no adapter para não passar por `Number` JavaScript antes do PostgreSQL `numeric`. `unit` e `catalogCode` são `string | null`.
+`quantity` é `string | null` no adapter para evitar `Number` JavaScript antes do PostgreSQL `numeric`. Team, actor, membership, issuer, subject, ordinal, item UUID e event UUID ficam fora da authority do browser. Item UUID e event UUID são gerados server-side.
 
-Team, actor, membership, issuer, subject, ordinal, item UUID e event UUID não são authority do browser. Item UUID e event UUID são gerados server-side em cada tentativa.
-
-O desenho não cria trim, empty-to-NULL, descrição non-empty, quantidade positiva, unidade obrigatória, catálogo obrigatório, limite de tamanho ou precisão/escala de negócio.
+Não foram criadas regras de trim, empty-to-NULL, descrição non-empty, quantidade positiva, unidade obrigatória, catálogo obrigatório, limite de tamanho ou precisão/escala de negócio.
 
 ### Autorização pilot-only
 
-A autorização segue F26/F32 por equipe alvo, porque a contratação existente já define o `team_id` canônico:
+A autorização segue F26/F32 por equipe alvo:
 
 - identidade interna ativa;
 - contratação alvo visível, não arquivada e não cancelada;
@@ -44,17 +47,17 @@ Segundo membro não revogado bloqueia, inclusive quando seu `app_user` estiver d
 
 ### Capability
 
-A implementação F35 usará capability própria equivalente a `compras_contracting_item_create_owner`, separada de F26/F29/F32.
+F35 usará capability própria equivalente a `compras_contracting_item_create_owner`, separada de F26/F29/F32.
 
 A role será `NOLOGIN`, `NOINHERIT`, não privilegiada, sem `BYPASSRLS`, sem ownership de tabelas-base e sem membership utilizável. A primitive será `SECURITY DEFINER`, com `search_path = pg_catalog`, SQL estático e `PUBLIC EXECUTE` revogado.
 
-Runtime normal continuará sem DML direto e receberá apenas `EXECUTE` explícito da primitive F35 por provisionamento separado.
+Runtime normal continuará sem DML direto e receberá apenas `EXECUTE` explícito por provisionamento separado.
 
-### Ordinal e concorrência
+### Allocator de ordinal
 
-O red-team identificou uma falha no primeiro rascunho: PostgreSQL exige privilégio `UPDATE` para locking clauses como `SELECT ... FOR UPDATE`. Portanto, bloquear a row de `contractings` contrariaria o objetivo de manter a capability de item create sem UPDATE na contratação pai.
+O red-team rejeitou o primeiro rascunho que usava `SELECT ... FOR UPDATE` na contratação pai, porque PostgreSQL exige privilégio `UPDATE` para locking clauses. Isso ampliaria authority sobre `contractings` sem necessidade funcional.
 
-A decisão final usa uma tabela técnica de allocator por contratação, equivalente a:
+A decisão final usa tabela técnica por contratação, equivalente a:
 
 ```text
 contracting_item_ordinal_counters
@@ -63,56 +66,42 @@ contracting_id uuid PRIMARY KEY
 last_ordinal integer NULL
 ```
 
-A F35 deverá:
+Fluxo final da F35:
 
 1. autorizar a contratação por leitura protegida;
-2. criar a row técnica com `ON CONFLICT DO NOTHING` somente após autorização;
-3. bloquear a row do allocator com `SELECT ... FOR UPDATE`;
+2. criar a row do allocator somente após autorização;
+3. bloquear a row do allocator;
 4. revalidar autorização após o lock;
-5. obter `MAX(ordinal)` de todos os itens, inclusive retirados;
-6. reconciliar `last_ordinal` com o máximo real;
-7. usar `1` quando ambos forem `NULL`, senão `maior + 1`;
-8. atualizar o allocator e criar item + evento na mesma transação.
+5. reconciliar `last_ordinal` com `MAX(ordinal)` real, incluindo itens retirados;
+6. usar `1` quando não houver valor ou `maior + 1` caso contrário;
+7. atualizar allocator e inserir item + evento na mesma transação.
 
-Gaps não são reutilizados. Writers da mesma contratação serializam na mesma row técnica. Contratações diferentes usam rows distintas e não sofrem lock global. Falha de item/evento reverte também o avanço do allocator.
+Gaps não são reutilizados. Writers da mesma contratação serializam na mesma row técnica. Contratações diferentes usam rows distintas e não sofrem lock global. A capability recebe UPDATE somente de `last_ordinal` e zero UPDATE em `contractings`.
 
-A capability recebe UPDATE somente de `last_ordinal` na tabela técnica, e zero UPDATE em `contractings`.
+### Atomicidade e resultados
 
-### Atomicidade e histórico
+Cada criação bem-sucedida gera exatamente um item e um evento `item_created` na mesma transação. Falha do evento reverte item e allocator. `contractings.updated_at` não é alterado.
 
-Cada criação bem-sucedida gera exatamente um item e exatamente um evento `item_created` na mesma transação.
-
-O evento referencia `item_id`, deriva team/actor/contracting do banco e usa o mesmo instante de banco dos timestamps definidos. `field_key`, `old_value`, `new_value`, `note` e `related_identifier_id` ficam nulos.
-
-Falha do evento reverte item e allocator. Negação não cria allocator para target não autorizado, item ou evento. `contractings.updated_at` não é alterado.
-
-### Resultados externos
-
-A futura primitive distingue internamente somente `created` e `denied`. O adapter expõe apenas:
+A futura boundary expõe somente:
 
 - `created`;
 - `not-available`;
 - `unavailable`.
 
-Nenhum UUID interno, ordinal, team, actor, SQL, driver, claim ou connection string é retornado. Falha protegida nunca cai para demo.
-
 ## Red-team F34
 
-A revisão adversarial rejeita:
+A revisão adversarial rejeitou e o desenho final não contém:
 
 - scope, actor, membership, ordinal ou UUIDs internos controlados pelo browser;
-- row lock na contratação pai que exija UPDATE desnecessário;
+- UPDATE em `contractings` concedido somente para obter row lock;
 - allocator criado antes de autorização ou sem revalidação após lock;
-- `MAX(ordinal) + 1` sem serialização por contratação;
+- `MAX + 1` sem serialização por contratação;
 - retry cego de unique violation;
-- table lock ou advisory lock global;
+- lock global;
 - reutilização automática de gaps;
-- retirada do item excluindo seu ordinal histórico do máximo;
 - DML direto para runtime;
-- ampliação das capabilities F26/F29/F32;
-- role de capability utilizável como login ou role privilegiada;
-- criação em contratação inexistente, cross-team, arquivada ou cancelada;
-- guard global da F29 copiado para row com team conhecido;
+- ampliação de F26/F29/F32;
+- capability utilizável como login ou privilegiada;
 - regra de quantidade/unidade/catálogo inventada;
 - quantidade convertida por `Number`/`parseFloat`;
 - evento não atômico;
@@ -124,16 +113,16 @@ A revisão adversarial rejeita:
 
 ## Verificação
 
-O primeiro head de desenho `cfb83dbe9510495016584acda837cbcae30db5e4` passou:
+O primeiro head `cfb83dbe9510495016584acda837cbcae30db5e4` passou os gates automatizados, mas o red-team manual posterior encontrou a exigência de `UPDATE` para locking clauses PostgreSQL e bloqueou a promoção desse desenho.
 
-- CI `34970699468`;
-- F22 Private Preview Preflight `34970699518`;
-- F29 Contracting Create `34970699591`;
-- F32 Contracting Object Mutation `34970699549`.
+Após a correção para allocator técnico, o head `86d1ca411ee2a74af322aae43693255651d1d0c3` passou:
 
-Esses gates automatizados não detectaram a exigência de privilégio PostgreSQL para o row lock da contratação pai. O red-team manual posterior detectou o problema e o desenho foi corrigido para allocator técnico dedicado.
+- CI `34971780173`: PASS;
+- F22 Private Preview Preflight `34971780249`: PASS;
+- F29 Contracting Create `34971780144`: PASS;
+- F32 Contracting Object Mutation `34971780237`: PASS.
 
-A F34 só pode ser promovida para `PASS` após o head corrigido e o checkpoint final repetirem todos os gates aplicáveis.
+O diff corrigido permanece exclusivamente documental. Nenhuma migration `0001..0006`, código operacional, grant, policy, provider hosted, secret ou dado real foi alterado.
 
 ## Invariantes preservadas
 
@@ -146,6 +135,6 @@ A F34 só pode ser promovida para `PASS` após o head corrigido e o checkpoint f
 - runtime normal continua sem DML direto;
 - migrations aplicadas `0001..0006` permanecem imutáveis.
 
-## Encerramento esperado
+## Encerramento
 
-F34 fecha quando o desenho corrigido da ADR-014 e o checkpoint passarem os gates finais, deixando F35 como única `NEXT_ACTION` canônica.
+O critério de encerramento da F34 foi satisfeito. A implementação correspondente está especificada na F35.

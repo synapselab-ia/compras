@@ -15,27 +15,24 @@ A fundação possui:
 - identidade confiável `issuer + subject` estabelecida no servidor;
 - leituras persistentes protegidas e diretório mínimo da equipe;
 - Better Auth self-hosted com signup normal fechado;
-- controle distribuído de abuso de sign-in;
-- capability estreita para `contractings.next_action` e UI correspondente;
-- criação mínima persistente de `contractings`, pilot-only, auditável e idempotente, com UI/Server Action integrada;
-- capability separada para edição de `contractings.object` e UI correspondente;
-- criação mínima persistente de `contracting_items`, com allocator concorrente por contratação e UI correspondente;
-- correção aditiva da idempotência concorrente F29 em migration `0008`;
-- ADR-015 integrada para a primeira edição persistente de item, ainda sem implementation F38.
+- limiter distribuído de sign-in;
+- edição persistente de `contractings.next_action` e UI correspondente;
+- criação mínima persistente de `contractings`, auditável e idempotente, com UI correspondente;
+- edição persistente de `contractings.object` e UI correspondente;
+- criação mínima persistente de `contracting_items`, com allocator concorrente e UI correspondente;
+- edição persistente server-side dos quatro campos de item, ainda sem UI;
+- correção aditiva da concorrência F29 em migration `0008`;
+- migrations de domínio `0001..0009` integradas e imutáveis.
 
-F36 foi integrada pela PR `#54`, merge `c177e7e8c1b3a46a5d5c3276b4945b81019c706a`.
-
-A regressão concorrencial F29 foi corrigida pela PR `#56`, merge `738666901fae43ce25dd11398904735e15c85da1`, usando somente a migration aditiva `0008_contracting_create_concurrency_repair.sql`.
-
-F37 foi integrada pela PR `#57`, merge `88d7d43f06afe8a9eef4d446331c173a8d238856`, com CI, F22, F29, F32 e F35 verdes no head final e após o merge.
+F38 foi integrada pela PR `#59`, merge `38850c8c8e4ceb41c7d1a4d0c83ba158aa20c597`, com CI, F22, F29, F32, F35 e o novo gate F38 verdes no head final e após o merge.
 
 A próxima e única frente canônica é:
 
-`F38-PERSISTENT-CONTRACTING-ITEM-MUTATION-IMPLEMENT-01 - Implementar edição persistente mínima de item`.
+`F39-PERSISTENT-CONTRACTING-ITEM-MUTATION-DETAIL-UI-01 - Integrar edição persistente de item no detalhe`.
 
 F17 permanece `ON HOLD` histórico. F21 permanece `ON HOLD` até existir control plane Vercel capaz de readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch sem expor valores.
 
-A faixa F18 de demonstração continua exclusivamente fictícia e sem write persistente.
+Q-004 sobre pesquisa de preços e Q-009 sobre política multiusuário continuam abertas. Enquanto Q-009 estiver aberta, as boundaries de escrita permanecem pilot-only.
 
 ## Auth e sign-in
 
@@ -49,39 +46,27 @@ O runtime privado usa Better Auth self-hosted com PostgreSQL:
 - `/api/auth/[...path]` permanece deny-all para superfícies genéricas não usadas;
 - sign-in/sign-out passam por Server Actions estreitas.
 
-Migrations Auth ficam em `database/auth/migrations/`. Auth runtime e domain runtime permanecem separados e não privilegiados.
-
-F24 adicionou limiter distribuído PostgreSQL para sign-in. Falha de limiter/configuração/store fecha o acesso; não existe fallback permissivo.
+Auth runtime e domain runtime permanecem separados e não privilegiados. Falha de limiter/configuração/store fecha o acesso; não há fallback permissivo.
 
 ## Boundaries persistentes integradas
 
 ### F26/F27 - próxima ação
 
-ADR-011 definiu primitive PostgreSQL específica para `contractings.next_action`. Runtime recebe apenas `EXECUTE`, sem DML direto. A escrita é pilot-only, auditável e usa optimistic concurrency. F27 expõe a operação por Server Action/UI estreita.
+ADR-011 define primitive específica para `contractings.next_action`. Runtime recebe apenas `EXECUTE`, sem DML direto. A operação é auditável, pilot-only e usa optimistic concurrency. F27 expõe a boundary no detalhe.
 
 ### F28/F29/F30 - criação de contratação
 
-ADR-012 definiu capability separada para criação mínima de `contractings`. O payload público é somente `contractingId + object`; team/actor/creator são derivados do banco. A row e `contracting_created` são atômicos e a operação possui replay idempotente pelo candidate UUID preparado server-side.
+ADR-012 define capability separada para criação mínima de `contractings`. O browser fornece somente candidato `contractingId + object`; team/actor/creator são derivados no banco. Row e evento `contracting_created` são atômicos.
 
-A migration original `0005_contracting_create.sql` permanece imutável.
-
-#### Reparo concorrencial 0008
-
-`contractings` possui PK em `id` e unique composta `(team_id, id)`. Sob retries simultâneos, `ON CONFLICT (id) DO NOTHING` podia perder a corrida primeiro na unique composta e lançar `23505`.
-
-A migration aditiva `0008_contracting_create_concurrency_repair.sql` substitui somente o corpo da primitive para usar `ON CONFLICT DO NOTHING` e depois exige a mesma correspondência exata e autorizada antes de reconhecer `already-created`.
-
-O owner selado recebe `CREATE` no schema apenas dentro da transaction da migration. Esse privilege é revogado antes do postflight e o postflight prova que não permaneceu. A suíte F29 executa múltiplas rodadas de oito writers concorrentes.
+A migration `0008_contracting_create_concurrency_repair.sql` corrigiu, de forma aditiva, a corrida entre a PK `id` e a unique `(team_id,id)`. `0005_contracting_create.sql` permaneceu imutável. O replay só é reconhecido depois da prova exata e autorizada da row existente.
 
 ### F31/F32/F33 - edição de objeto
 
-ADR-013 definiu capability própria para editar somente `contractings.object`. O payload é `contractingId + expectedObject + newObject`, preservado exatamente. `SELECT ... FOR UPDATE` + expected value evita lost update. F33 integra a boundary ao detalhe persistente sem ampliar authority PostgreSQL.
+ADR-013 define capability própria para editar somente `contractings.object`. O contrato é `contractingId + expectedObject + newObject`; `SELECT ... FOR UPDATE` e expected value impedem lost update. F33 integra a boundary ao detalhe.
 
 ### F34/F35/F36 - criação mínima de item
 
-ADR-014 e F35 definem e implementam capability separada para adicionar item a contratação existente. F36 integra essa operação ao detalhe persistente sem alterar a autoridade PostgreSQL.
-
-Payload público F35:
+ADR-014/F35 implementam criação de `contracting_items` por capability dedicada. O payload server-only é:
 
 ```text
 contractingId
@@ -91,15 +76,9 @@ unit
 catalogCode
 ```
 
-`quantity` é `string | null` até PostgreSQL `numeric`. Item UUID e event UUID são gerados server-side. Team, actor, membership, issuer, subject e ordinal nunca são authority do browser.
+`quantity` é `string | null` até PostgreSQL `numeric`. Item/event UUIDs e ordinal são gerados/derivados internamente. F36 integra a criação ao detalhe persistente. Demo permanece read-only.
 
-A capability `compras_contracting_item_create_owner` permanece selada e sem UPDATE em `contractings`. Runtime normal recebe somente `EXECUTE` da primitive F35 por provisioning separado.
-
-Demo continua sem formulário de criação, inclusive quando estados de query são forjados.
-
-## Allocator de ordinal F35
-
-A criação de item usa a tabela técnica:
+O allocator técnico por contratação serializa writers sem conceder UPDATE em `contractings`:
 
 ```text
 contracting_item_ordinal_counters
@@ -108,42 +87,13 @@ contracting_id uuid PRIMARY KEY
 last_ordinal integer NULL
 ```
 
-Fluxo:
+Gaps não são reutilizados. Falha de item/evento reverte também o avanço do allocator.
 
-1. autorizar a contratação por leitura protegida;
-2. criar a row do allocator somente após autorização;
-3. bloquear apenas a row do allocator;
-4. revalidar autorização após o lock;
-5. reconciliar `last_ordinal` com `MAX(contracting_items.ordinal)` real, incluindo retired;
-6. alocar `1` ou `maior + 1`;
-7. atualizar allocator e inserir item + evento `item_created` na mesma transação.
+### F37/F38 - edição mínima de item
 
-Gaps não são reutilizados. Contratações distintas usam rows distintas. Falha do evento reverte item e allocator. `contractings.updated_at` não é alterado.
+ADR-015 e F38 definem e implementam a primeira mutation persistente de item.
 
-A suíte F35 provou oito writers concorrentes na mesma contratação com ordinais únicos/sequenciais, ausência de bloqueio global entre contratações e revalidação de target após espera no allocator.
-
-## Semântica de dados de item
-
-Não existe regra de:
-
-- trim;
-- descrição non-empty;
-- quantidade positiva;
-- unidade obrigatória;
-- catálogo obrigatório;
-- escala/precisão de negócio;
-- tamanho máximo;
-- pesquisa de preços.
-
-`description`, `unit` e `catalogCode` preservam texto exato. `quantity` não passa por `Number`/`parseFloat`. No read model persistente, `quantity` é lida por `numeric::text`.
-
-Q-004 continua aberta. Q-009 continua aberta, portanto as boundaries de escrita seguem pilot-only.
-
-## ADR-015 - edição persistente mínima de item
-
-F37 integrou apenas o desenho. F38 implementará a boundary.
-
-Campos editáveis definidos:
+Campos alteráveis:
 
 ```text
 description
@@ -152,18 +102,7 @@ unit
 catalog_code
 ```
 
-Campos fora dessa authority:
-
-```text
-id
-team_id
-contracting_id
-ordinal
-created_at
-retired_at
-```
-
-O adapter F38 receberá:
+Contrato server-only:
 
 ```text
 contractingId
@@ -178,40 +117,9 @@ newUnit
 newCatalogCode
 ```
 
-IDs de evento serão gerados somente no servidor.
+Team, actor, membership, issuer, subject, ordinal, retired state, timestamps e event UUIDs não são authority do caller público. Quatro event UUIDs são gerados server-side.
 
-### Concorrência
-
-A futura primitive bloqueará somente a row do item com `SELECT ... FOR UPDATE`.
-
-Todos os quatro expected values formam uma precondição única. Se qualquer campo estiver stale, o resultado é `conflict` antes de avaliar no-op. Isso impede overwrite silencioso de mudança concorrente em outro campo.
-
-Com expected atual:
-
-- new snapshot idêntico: `unchanged`, sem timestamp/evento;
-- mudança real: `updated`.
-
-Retry pós-sucesso retorna `conflict`, não replay-success.
-
-### Autorização
-
-O guard segue target-team de F26/F32/F35:
-
-- identidade interna ativa;
-- item vinculado ao `contractingId` candidato e não retired;
-- parent ativo no mesmo team;
-- membership não revogada do usuário no team;
-- exatamente uma membership não revogada no team.
-
-Segundo membro não revogado bloqueia, inclusive quando seu app_user está desabilitado. Outra membership do mesmo usuário em outro team não bloqueia por si só.
-
-Cross-team, inexistente, retired, parent mismatch e parent inativo permanecem indistinguíveis externamente.
-
-### Least privilege
-
-F38 criará owner dedicado equivalente a `compras_contracting_item_mutation_owner`.
-
-Authority máxima de UPDATE:
+A capability `compras_contracting_item_mutation_owner` pode atualizar somente:
 
 ```text
 description
@@ -221,54 +129,57 @@ catalog_code
 updated_at
 ```
 
-A capability não poderá:
+Ela não pode criar/deletar item, alterar ordinal/retired/scope, atualizar `contractings`, tocar allocator nem atualizar/deletar eventos. Runtime normal recebe somente EXECUTE da primitive F38 por provisioning separado.
 
-- criar ou deletar item;
-- alterar ordinal, retired state, scope ou created_at;
-- tocar o allocator F35;
-- atualizar `contractings`;
-- atualizar/deletar eventos;
-- reutilizar authority de F26/F29/F32/F35.
+A primitive bloqueia somente a row do item, revalida parent/membership depois do lock e exige snapshot esperado dos quatro campos. Se qualquer expected estiver stale, retorna `conflict` antes de no-op. Com expected atual e new igual ao current, retorna `unchanged` sem timestamp/evento. Mudança real retorna `updated`.
 
-Runtime normal continuará sem DML direto e receberá somente `EXECUTE` explícito da primitive F38.
+A auditoria gera um `item_changed` por campo efetivamente alterado, com old/new escalares, mesmo `operation_at` e rollback integral se qualquer evento falhar.
 
-### Auditoria
+A suíte F38 prova oito writers concorrentes com o mesmo snapshot: exatamente um `updated`, sete `conflict` e somente o histórico do vencedor.
 
-Cada campo realmente alterado gera um evento escalar `item_changed` com:
+Resultado e verificação completos: `tasks/F38-PERSISTENT-CONTRACTING-ITEM-MUTATION-IMPLEMENT-01/RESULT.md`.
 
-- `item_id` do item;
-- `field_key` em `description`, `quantity`, `unit`, `catalog_code`;
-- old/new correspondentes;
-- actor/team/contracting derivados;
-- mesmo `operation_at` do `updated_at`.
+## Semântica de item
 
-Mudança de N campos gera exatamente N eventos. Quantity é registrada a partir de `numeric::text` no banco. No-op gera zero eventos. Falha de qualquer evento reverte toda a tentativa.
+Não foi criada regra de:
 
-Não foi inventado blob JSON de before/after.
+- trim;
+- descrição non-empty;
+- quantidade positiva;
+- unidade obrigatória;
+- catálogo obrigatório;
+- escala/precisão de negócio;
+- tamanho máximo;
+- pesquisa de preços.
 
-## Próxima frente
+`description`, `unit` e `catalogCode` preservam texto exato. `unit` e `catalogCode` distinguem `NULL`, `''` e espaços. `quantity` não passa por `Number`/`parseFloat`; no read model é obtida por `numeric::text`.
+
+Numeric inválido falha fechado e é sanitizado como `unavailable` na boundary server-only.
+
+## Próxima frente F39
 
 A única `NEXT_ACTION` canônica está em `docs/ai/NEXT_ACTION.md`:
 
-`F38-PERSISTENT-CONTRACTING-ITEM-MUTATION-IMPLEMENT-01 - Implementar edição persistente mínima de item`.
+`F39-PERSISTENT-CONTRACTING-ITEM-MUTATION-DETAIL-UI-01 - Integrar edição persistente de item no detalhe`.
 
-F38 deve:
+F39 deve integrar somente a boundary F38, sem alterar authority PostgreSQL.
 
-- preservar migrations `0001..0008` byte-for-byte;
-- criar `database/migrations/0009_contracting_item_mutation.sql`;
-- criar capability/RLS/primitive dedicadas da ADR-015;
-- criar provisioning de EXECUTE isolado;
-- criar adapter server-only `persistent-item-mutation.ts`;
-- preservar texto/NULL/numeric exatamente;
-- implementar snapshot concurrency completo;
-- gerar um evento por campo alterado;
-- provar rollback e least privilege;
-- provar concorrência com oito writers;
-- manter F26/F29/F32/F35 sem authority adicional;
-- não implementar Server Action/UI;
-- não incluir reorder, retire/restore, delete ou pesquisa de preços.
+Pontos obrigatórios:
 
-A SPEC está em `tasks/F38-PERSISTENT-CONTRACTING-ITEM-MUTATION-IMPLEMENT-01/SPEC.md`.
+- o read model protegido deve fornecer snapshot bruto de `description`, `quantity`, `unit`, `catalogCode` para cada item editável;
+- é proibido reconstruir expected de `label`, `note`, ordinal, timestamp ou DOM;
+- a Server Action deve enviar sempre os quatro expected values e os quatro new values para F38;
+- unit/catalog precisam de codificação explícita `text` versus `NULL`, pois vazio é um valor textual distinto;
+- quantity permanece input textual e `string | null`;
+- action não executa SQL/DML e não aceita authority de team/actor/membership/event UUID;
+- `conflict` não gera retry automático;
+- feedback/navegação permanecem sanitizados e locais;
+- pending reduz double-submit acidental;
+- demo permanece read-only;
+- migrations `0001..0009` permanecem imutáveis;
+- reorder, retire/restore, delete e pesquisa de preços ficam fora de escopo.
+
+A SPEC está em `tasks/F39-PERSISTENT-CONTRACTING-ITEM-MUTATION-DETAIL-UI-01/SPEC.md`.
 
 ## Modos da aplicação
 
@@ -278,7 +189,8 @@ Quando `COMPRAS_PERSISTENT_READ_ENABLED` está ausente ou `false`:
 
 - somente fixtures fictícias;
 - nenhuma consulta/mutação operacional;
-- banner explícito de protótipo.
+- banner explícito de protótipo;
+- nenhuma UI de escrita persistente deve ser renderizada.
 
 ### Persistente
 
@@ -297,7 +209,7 @@ Falha protegida nunca vira demo silenciosamente.
 
 ## Banco canônico
 
-Migrations imutáveis atualmente integradas:
+Migrations de domínio integradas e imutáveis:
 
 - `0001_core_foundation.sql`;
 - `0002_trusted_identity_read_policies.sql`;
@@ -306,11 +218,10 @@ Migrations imutáveis atualmente integradas:
 - `0005_contracting_create.sql`;
 - `0006_contracting_object_mutation.sql`;
 - `0007_contracting_item_create.sql`;
-- `0008_contracting_create_concurrency_repair.sql`.
+- `0008_contracting_create_concurrency_repair.sql`;
+- `0009_contracting_item_mutation.sql`.
 
-Migration aplicada não é reescrita. Correção futura exige migration aditiva. F38 começa em `0009`.
-
-F37 não alterou banco, grants, policies, capabilities, primitives ou aplicação operacional.
+Migration aplicada não é reescrita. Correção futura exige migration aditiva.
 
 ## Fonte de verdade
 
@@ -326,11 +237,9 @@ Startup mínimo:
 6. validar `docs/ai/CONTEXT_MANIFEST.md`;
 7. abrir SPEC/ADR/código exigidos pela tarefa ativa.
 
-## Fontes principais
+Fontes de produto: `PROJECT_DESIGN.md`, `DOMAIN_MODEL.md`, `BUSINESS_WORKFLOW.md`, `OPEN_QUESTIONS.md`.
 
-Produto: `PROJECT_DESIGN.md`, `DOMAIN_MODEL.md`, `BUSINESS_WORKFLOW.md`, `OPEN_QUESTIONS.md`.
-
-Arquitetura: `ARCHITECTURE.md`, `SECURITY.md`, `DATABASE.md`, ADR-003, ADR-005, ADR-009, ADR-010, ADR-011, ADR-012, ADR-013, ADR-014, ADR-015.
+Fontes de arquitetura: `ARCHITECTURE.md`, `SECURITY.md`, `DATABASE.md`, ADR-003, ADR-005, ADR-009 a ADR-015.
 
 Operação por IA: `SOURCE_OF_TRUTH.md`, `WORK_PROTOCOL.md`, `CONTEXT_MANIFEST.md`, `CURRENT_STATE.md`, `NEXT_ACTION.md`.
 

@@ -1,81 +1,70 @@
 # Next Action - Compras
 
-## F38-PERSISTENT-CONTRACTING-ITEM-MUTATION-IMPLEMENT-01 - Implementar edição persistente mínima de item
+## F39-PERSISTENT-CONTRACTING-ITEM-MUTATION-DETAIL-UI-01 - Integrar edição persistente de item no detalhe
 
-**Classe:** T2 - banco, autorização e escrita server-side  
-**Estado:** READY após promoção da F37  
-**Objetivo:** implementar a boundary definida pela ADR-015 para editar somente `description`, `quantity`, `unit` e `catalog_code` de item ativo, com snapshot optimistic concurrency, auditoria escalar atômica, autorização target-team, semântica exata de texto/numeric e least privilege.
+**Classe:** T1 - feature normal, com impacto T2 - autorização/escrita server-side  
+**Estado:** READY após integração da F38  
+**Objetivo:** integrar a boundary F38 ao detalhe persistente com snapshot bruto protegido, Server Action estreita, semântica exata de `NULL`/texto/numeric, feedback sanitizado e demo read-only.
 
 Esta é a única `NEXT_ACTION` canônica.
 
 ## Por que esta ação agora
 
-F37 fechou o desenho da primeira edição persistente de `contracting_items` sem implementar código operacional. ADR-015 definiu contrato, concorrência, autorização, capability, auditoria e resultados sanitizados. A próxima slice deve materializar exatamente essa decisão antes de qualquer integração de UI.
+F38 integrou migration `0009`, capability, RLS, primitive, provisioning, adapter server-only e gate dedicado para editar somente `description`, `quantity`, `unit` e `catalog_code` de item ativo. A boundary está verde no head final e no pós-merge, mas ainda não existe jornada UI/Server Action correspondente.
 
-A correção concorrencial F29 foi integrada pela migration `0008_contracting_create_concurrency_repair.sql`. Portanto migrations `0001..0008` são histórico aplicado imutável e a implementação F38 começa em `0009`.
+O padrão canônico já usado em F31/F32/F33 e F34/F35/F36 separa desenho, implementação da boundary e integração UI. F39 é a terceira slice desse ciclo para ADR-015.
 
-Q-004 sobre pesquisa de preços e Q-009 sobre política multiusuário permanecem abertas. F21 continua `ON HOLD` sob seu `resume_when` externo e não é dependência da F38.
+Q-004 sobre pesquisa de preços e Q-009 sobre política multiusuário permanecem abertas. F21 continua `ON HOLD` sob seu `resume_when` externo e não é dependência da F39.
 
 ## Execução obrigatória
 
-1. recuperar `main` real após a promoção da F37 e revalidar `CONTEXT_MANIFEST`;
-2. ler ADR-015 e `tasks/F38-PERSISTENT-CONTRACTING-ITEM-MUTATION-IMPLEMENT-01/SPEC.md`;
-3. inspecionar ADR-013/014, migrations/provisioning/tests F32 e F35, `withTrustedDatabaseMutationContext` e read model protegido de itens;
-4. manter migrations `0001..0008` byte-for-byte imutáveis;
-5. criar `database/migrations/0009_contracting_item_mutation.sql` com capability dedicada equivalente a `compras_contracting_item_mutation_owner`;
-6. manter owner `NOLOGIN`, `NOINHERIT`, não privilegiado, sem ownership de tabelas-base e sem membership utilizável;
-7. criar primitive `SECURITY DEFINER` equivalente a `mutate_contracting_item_fields(...)`, com `search_path = pg_catalog`, SQL estático e `PUBLIC EXECUTE` revogado;
-8. receber internamente `contractingId`, `itemId`, snapshot esperado dos quatro campos, snapshot novo dos quatro campos e quatro event UUIDs gerados server-side;
-9. nunca aceitar team, actor, membership, issuer, subject, ordinal, retired state, timestamps ou event UUIDs como authority do browser/caller público;
-10. usar `SELECT ... FOR UPDATE` somente na row do item e vincular `itemId` ao `contractingId` candidato;
-11. exigir item não retired, parent ativo, membership corrente no team e exatamente uma membership não revogada no team;
-12. revalidar parent/membership depois do lock e manter RLS como enforcement final;
-13. comparar todos os quatro expected com o estado atual usando semântica null-safe;
-14. avaliar `conflict` antes de `unchanged`;
-15. atualizar somente `description`, `quantity`, `unit`, `catalog_code` e `updated_at`;
-16. preservar `description`, `unit` e `catalog_code` exatamente, sem trim, normalização ou empty-to-NULL;
-17. transportar `quantity` como `string | null` até PostgreSQL `numeric`, sem `Number` ou `parseFloat`;
-18. inserir um evento `item_changed` por campo realmente alterado, com old/new escalares, `item_id` e mesmo `operation_at`;
-19. gerar quatro event UUIDs no adapter server-only, mapeados fixamente aos quatro campos e nunca expostos como input público;
-20. fazer falha de qualquer evento reverter update, timestamp e eventos anteriores da tentativa;
-21. não alterar `contractings.updated_at`;
-22. criar provisioning separado que conceda somente EXECUTE da primitive ao runtime explícito e seguro;
-23. criar adapter `src/features/contracting-detail/persistent-item-mutation.ts` usando `withTrustedDatabaseMutationContext` e resultados sanitizados;
-24. mapear somente `updated`, `unchanged`, `conflict`, `not-available` e `unavailable` externamente;
-25. garantir que `conflict`/`unchanged` só sejam observáveis após autorização;
-26. provar por grants/postflight que a capability não pode criar/deletar/reorder/retire item, tocar allocator ou atualizar `contractings`;
-27. provar que runtime normal continua sem DML direto e que Auth/read-only não recebem EXECUTE;
-28. provar que F26/F29/F32/F35 não ganham authority F38 e que F38 não ganha authority dessas boundaries;
-29. executar matriz PostgreSQL 17 da SPEC, incluindo 8 writers concorrentes com mesmo expected;
-30. provar rollback quando o primeiro, um intermediário e o último evento falham;
-31. executar lint, typecheck, testes, build, CI database/Auth, F22, F29, F32 e F35;
-32. revisar integralmente diff, grants, policies e resultados antes de promover;
-33. não implementar Server Action/UI na F38;
-34. não incluir reorder, retire/restore, delete ou pesquisa de preços;
-35. atualizar checkpoint somente depois de todos os gates e red-team ficarem verdes;
-36. deixar exatamente uma nova NEXT_ACTION somente após a F38 estar integralmente verificada.
+1. recuperar `main` real após F38 e confirmar PR #59 integrada;
+2. revalidar `CONTEXT_MANIFEST`;
+3. ler ADR-015, `tasks/F38-PERSISTENT-CONTRACTING-ITEM-MUTATION-IMPLEMENT-01/RESULT.md` e a SPEC F39;
+4. inspecionar F33/F36, `persistent-read.ts`, `types.ts`, actions, feedbacks e detalhe atuais;
+5. manter migrations `0001..0009` byte-for-byte imutáveis;
+6. não alterar grants, policies, capability, primitive ou provisioning F38;
+7. estender o read model protegido para fornecer o snapshot bruto de item necessário à optimistic concurrency, sem parse de `label`/`note`;
+8. preservar `description`, `quantity`, `unit` e `catalogCode` exatamente, incluindo distinção de `NULL`, vazio e espaços;
+9. manter `quantity` como `string | null`, lida por `numeric::text`, sem `Number`, `parseFloat` ou `type=number`;
+10. criar Server Action dedicada que aceite somente os campos de transporte definidos na SPEC e rejeite duplicados/campos extras;
+11. nunca aceitar team, actor, membership, issuer, subject, ordinal, retired state, timestamps ou event UUIDs como authority do browser;
+12. nunca aceitar callback/redirect arbitrário;
+13. chamar exclusivamente `mutatePersistentContractingItem`, sem SQL/DML próprio;
+14. transportar sempre os quatro expected values do snapshot protegido, não expected parcial;
+15. codificar `unit` e `catalogCode` com escolha explícita `text` versus `null`, para não colapsar `NULL` em `''`;
+16. interpretar somente quantity literalmente vazia como `null`; qualquer texto não vazio segue exato para F38/PostgreSQL;
+17. renderizar editor somente em persistent mode válido e para item com snapshot protegido;
+18. manter demo estritamente read-only e sem hidden snapshot operacional;
+19. mapear somente `updated`, `unchanged`, `conflict`, `not-available` e `unavailable` para feedback fixo sanitizado;
+20. `updated` revalida somente a rota local fixa e relê pelo read model protegido;
+21. `conflict` não faz retry automático nem expõe current protegido na URL;
+22. `not-available` não distingue cross-team, inexistente, retired, parent inativo ou membership;
+23. desabilitar nova submissão enquanto pending;
+24. não criar reorder, retire/restore, delete ou pesquisa de preços;
+25. executar lint, typecheck, unit/component tests, build, CI database/Auth, F22, F29, F32, F35 e F38;
+26. fazer red-team integral de forged payload, null/empty, concurrency snapshot, demo e navegação;
+27. atualizar checkpoint somente depois de todos os gates ficarem verdes;
+28. deixar exatamente uma nova NEXT_ACTION somente após F39 ser integralmente verificada.
 
-## Matriz adversarial mínima
+## Red-team mínimo
 
-A F38 deve provar pelo menos:
+Rejeitar PASS se:
 
-- cada campo isolado e os quatro campos juntos podem ser alterados por caller autorizado;
-- N campos alterados geram exatamente N eventos;
-- no-op não altera timestamp nem cria evento;
-- stale expected em qualquer campo retorna `conflict` sem write;
-- stale expected continua `conflict` mesmo quando new coincide com current;
-- 8 writers concorrentes com mesmo expected resultam em exatamente um `updated` e os demais `conflict`;
-- retry pós-sucesso não duplica evento;
-- falha do primeiro, intermediário ou último evento reverte tudo;
-- description vazio/espaços e unit/catalog `NULL`/vazio/espaços permanecem exatos;
-- quantity `NULL`, zero, negativo, fração e alta precisão válida não passam por float JavaScript;
-- numeric inválido produz somente `unavailable` e zero write;
-- claims inválidos, identidade desconhecida/desabilitada, membership ausente/revogada e segundo membro negam;
-- outra membership do mesmo usuário em outro team não bloqueia a equipe alvo por si só;
-- cross-team, inexistente, parent mismatch, retired e parent inativo são externamente indistinguíveis;
-- capability não possui authority além da ADR-015;
-- runtime normal não possui DML direto;
-- migrations `0001..0008` permanecem imutáveis.
+- expected snapshot for reconstruído de `label`, `note`, DOM, ordinal ou timestamp;
+- expected for parcial;
+- unit/catalog `NULL` virar vazio implicitamente;
+- quantity sofrer coerção floating-point no navegador/JavaScript;
+- action executar SQL/DML ou contornar F38;
+- browser puder fornecer scope/actor/event IDs como authority;
+- callback/redirect externo controlar navegação;
+- conflito for convertido em retry automático;
+- feedback criar oracle de existência/scope/retired state;
+- demo/configuração inválida puder gravar;
+- falha protegida cair para fixture/demo;
+- migrations `0001..0009`, grants, policies, capability ou primitive F38 forem alterados;
+- escopo expandir para reorder/retire/delete/preço;
+- provider hosted, secret ou dado real for necessário.
 
 ## Invariantes
 
@@ -83,19 +72,19 @@ A F38 deve provar pelo menos:
 - somente dados/identidades fictícios;
 - nenhum provider hosted write;
 - F21 permanece `ON HOLD` até seu `resume_when` objetivo;
-- Q-001/Q-002/Q-003/Q-004/Q-006/Q-009 continuam abertas;
+- Q-004 e Q-009 continuam abertas;
 - autenticação não é autorização;
 - RLS/capabilities permanecem autoritativas;
 - runtime normal continua sem DML direto;
 - F35 continua exclusiva da criação de item;
-- migrations aplicadas `0001..0008` permanecem imutáveis;
-- falha protegida nunca vira demo fallback nem expõe detalhe interno;
-- F38 não implementa UI.
+- F38 continua exclusiva da edição dos quatro campos de item;
+- migrations aplicadas `0001..0009` permanecem imutáveis;
+- falha protegida nunca vira demo fallback nem expõe detalhe interno.
 
 ## Fonte da tarefa
 
-Executar `tasks/F38-PERSISTENT-CONTRACTING-ITEM-MUTATION-IMPLEMENT-01/SPEC.md` seguindo ADR-015 e os precedentes ADR-013/014, F32 e F35.
+Executar `tasks/F39-PERSISTENT-CONTRACTING-ITEM-MUTATION-DETAIL-UI-01/SPEC.md` seguindo ADR-015 e os precedentes F33/F36.
 
 ## Critério de encerramento
 
-F38 fecha quando migration 0009, capability, RLS, primitive, provisioning, adapter server-only e matriz adversarial estiverem implementados e verificados em PostgreSQL 17, com snapshot concurrency, auditoria atômica, rollback, exact text/numeric semantics e least privilege provados, sem UI e com todos os gates verdes.
+F39 fecha quando o detalhe persistente editar item exclusivamente por F38, com snapshot bruto protegido dos quatro campos, optimistic concurrency completo, semântica exata de `NULL`/texto/numeric, feedback e navegação sanitizados, demo read-only e todos os gates/adversariais verdes.

@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import {
   createPersistentContractingItemAction,
+  updatePersistentContractingItemAction,
   updatePersistentNextActionAction,
   updatePersistentObjectAction,
 } from "../actions";
@@ -9,6 +10,10 @@ import {
   getItemCreationFeedback,
   type ItemCreationUiState,
 } from "../item-create-feedback";
+import {
+  getItemMutationFeedback,
+  type ItemMutationUiState,
+} from "../item-mutation-feedback";
 import {
   getNextActionMutationFeedback,
   type NextActionMutationUiState,
@@ -20,6 +25,7 @@ import {
 import type {
   ContractingDetailPresentation,
   ContractingDetailSource,
+  ContractingItemPresentation,
 } from "../types";
 import { NextActionSubmitButton } from "./next-action-submit-button";
 
@@ -29,7 +35,132 @@ type ContractingDetailProps = Readonly<{
   mutationState?: NextActionMutationUiState | null;
   objectMutationState?: ObjectMutationUiState | null;
   itemCreationState?: ItemCreationUiState | null;
+  itemMutationState?: ItemMutationUiState | null;
 }>;
+
+type ItemMutationEditorProps = Readonly<{
+  contractingId: string;
+  item: ContractingItemPresentation;
+}>;
+
+function ItemMutationEditor({ contractingId, item }: ItemMutationEditorProps) {
+  const snapshot = item.mutationSnapshot;
+
+  if (!snapshot) {
+    return null;
+  }
+
+  const editorId = `item-mutation-${item.id}`;
+  const descriptionId = `${editorId}-description`;
+  const quantityId = `${editorId}-quantity`;
+  const unitKindId = `${editorId}-unit-kind`;
+  const unitId = `${editorId}-unit`;
+  const catalogKindId = `${editorId}-catalog-kind`;
+  const catalogId = `${editorId}-catalog`;
+  const helpId = `${editorId}-help`;
+
+  return (
+    <div className="item-create-editor" aria-labelledby={`${editorId}-title`}>
+      <h3 id={`${editorId}-title`} className="item-create-title">Editar item</h3>
+      <form action={updatePersistentContractingItemAction} className="next-action-form">
+        <input type="hidden" name="contractingId" value={contractingId} />
+        <input type="hidden" name="itemId" value={item.id} />
+        <input
+          type="hidden"
+          name="expectedDescription"
+          value={snapshot.description}
+        />
+        {snapshot.quantity !== null ? (
+          <input type="hidden" name="expectedQuantity" value={snapshot.quantity} />
+        ) : null}
+        <input
+          type="hidden"
+          name="expectedUnitKind"
+          value={snapshot.unit === null ? "null" : "text"}
+        />
+        <input type="hidden" name="expectedUnit" value={snapshot.unit ?? ""} />
+        <input
+          type="hidden"
+          name="expectedCatalogCodeKind"
+          value={snapshot.catalogCode === null ? "null" : "text"}
+        />
+        <input
+          type="hidden"
+          name="expectedCatalogCode"
+          value={snapshot.catalogCode ?? ""}
+        />
+
+        <label htmlFor={descriptionId}>Descrição</label>
+        <textarea
+          id={descriptionId}
+          name="newDescription"
+          rows={3}
+          defaultValue={snapshot.description}
+          aria-describedby={helpId}
+        />
+
+        <label htmlFor={quantityId}>Quantidade opcional</label>
+        <input
+          id={quantityId}
+          name="newQuantity"
+          type="text"
+          inputMode="decimal"
+          autoComplete="off"
+          defaultValue={snapshot.quantity ?? ""}
+        />
+
+        <label htmlFor={unitKindId}>Estado da unidade</label>
+        <select
+          id={unitKindId}
+          name="newUnitKind"
+          defaultValue={snapshot.unit === null ? "null" : "text"}
+        >
+          <option value="text">Texto</option>
+          <option value="null">Ausente (NULL)</option>
+        </select>
+
+        <label htmlFor={unitId}>Unidade</label>
+        <input
+          id={unitId}
+          name="newUnit"
+          type="text"
+          autoComplete="off"
+          defaultValue={snapshot.unit ?? ""}
+        />
+
+        <label htmlFor={catalogKindId}>Estado do código de catálogo</label>
+        <select
+          id={catalogKindId}
+          name="newCatalogCodeKind"
+          defaultValue={snapshot.catalogCode === null ? "null" : "text"}
+        >
+          <option value="text">Texto</option>
+          <option value="null">Ausente (NULL)</option>
+        </select>
+
+        <label htmlFor={catalogId}>Código de catálogo</label>
+        <input
+          id={catalogId}
+          name="newCatalogCode"
+          type="text"
+          autoComplete="off"
+          defaultValue={snapshot.catalogCode ?? ""}
+        />
+
+        <p id={helpId} className="next-action-help">
+          O snapshot completo é conferido antes da gravação. Texto e NULL são estados distintos para unidade e código; quantidade vazia representa ausência sem conversão numérica no navegador.
+        </p>
+
+        <div className="next-action-actions">
+          <NextActionSubmitButton
+            label="Salvar item"
+            pendingLabel="Salvando item…"
+          />
+        </div>
+      </form>
+    </div>
+  );
+}
 
 export function ContractingDetail({
   detail,
@@ -37,11 +168,13 @@ export function ContractingDetail({
   mutationState = null,
   objectMutationState = null,
   itemCreationState = null,
+  itemMutationState = null,
 }: ContractingDetailProps) {
   const isDemo = source === "demo";
   const feedback = isDemo ? null : getNextActionMutationFeedback(mutationState);
   const objectFeedback = isDemo ? null : getObjectMutationFeedback(objectMutationState);
   const itemCreationFeedback = isDemo ? null : getItemCreationFeedback(itemCreationState);
+  const itemMutationFeedback = isDemo ? null : getItemMutationFeedback(itemMutationState);
   const editorId = `next-action-${detail.id}`;
   const editorHelpId = `${editorId}-help`;
   const feedbackId = `${editorId}-feedback`;
@@ -59,6 +192,7 @@ export function ContractingDetail({
   const itemCatalogCodeId = `${itemEditorId}-catalog-code`;
   const itemHelpId = `${itemEditorId}-help`;
   const itemFeedbackId = `${itemEditorId}-feedback`;
+  const itemMutationFeedbackId = `item-mutation-${detail.id}-feedback`;
   const itemDescriptionDescribedBy = itemCreationFeedback
     ? `${itemHelpId} ${itemFeedbackId}`
     : itemHelpId;
@@ -74,7 +208,7 @@ export function ContractingDetail({
         ) : (
           <>
             <strong>Dados persistentes autorizados.</strong>
-            <span>Objeto, próxima ação e inclusão de item possuem operações restritas nesta etapa; autorização e histórico permanecem no servidor e no banco.</span>
+            <span>Objeto, próxima ação, inclusão e edição de item possuem operações restritas; autorização e histórico permanecem no servidor e no banco.</span>
           </>
         )}
       </section>
@@ -289,6 +423,17 @@ export function ContractingDetail({
             </div>
           </div>
 
+          {itemMutationFeedback ? (
+            <p
+              id={itemMutationFeedbackId}
+              className={`next-action-feedback next-action-feedback-${itemMutationFeedback.state}`}
+              role={itemMutationFeedback.role}
+              aria-live="polite"
+            >
+              {itemMutationFeedback.message}
+            </p>
+          ) : null}
+
           {!isDemo ? (
             <div className="item-create-editor" aria-labelledby={`${itemEditorId}-title`}>
               <h3 id={`${itemEditorId}-title`} className="item-create-title">Adicionar item</h3>
@@ -361,6 +506,9 @@ export function ContractingDetail({
                   <p className="demo-item-id">{item.id}</p>
                   <strong>{item.label}</strong>
                   <span>{item.note}</span>
+                  {!isDemo && item.mutationSnapshot ? (
+                    <ItemMutationEditor contractingId={detail.id} item={item} />
+                  ) : null}
                 </li>
               ))}
             </ul>

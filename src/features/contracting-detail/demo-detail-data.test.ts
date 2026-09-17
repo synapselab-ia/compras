@@ -15,6 +15,7 @@ describe("demo contracting detail lookup", () => {
     expect(detail?.nextActionValue).toBe(detail?.nextAction);
     expect(detail?.relatedIdentifiers.length).toBeGreaterThan(0);
     expect(detail?.items.length).toBeGreaterThan(0);
+    expect(detail?.items.every((item) => item.mutationSnapshot === null)).toBe(true);
     expect(detail?.activity.length).toBeGreaterThan(0);
   });
 

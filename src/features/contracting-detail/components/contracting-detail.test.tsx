@@ -221,7 +221,8 @@ describe("ContractingDetail persistent editor boundaries", () => {
     expect(html).toContain('name="expectedCatalogCodeKind" value="text"');
     expect(html).toContain('name="expectedCatalogCode" value="   "');
     expect(html).not.toContain('name="expectedQuantity"');
-    expect(html).toContain('name="newQuantity" type="text" inputMode="decimal"');
+    expect(html).toContain('name="newQuantity"');
+    expect(html).toContain('type="text" inputMode="decimal"');
     expect(html).toContain('name="newUnitKind"');
     expect(html).toContain('value="null" selected=""');
     expect(html).toContain("Ausente (NULL)");

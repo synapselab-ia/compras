@@ -208,6 +208,12 @@ async function queryPersistentContractingDetail(
       id: row.id,
       label: `${row.ordinal}. ${row.description}`,
       note: formatItemNote(row),
+      mutationSnapshot: {
+        description: row.description,
+        quantity: row.quantity,
+        unit: row.unit,
+        catalogCode: row.catalog_code,
+      },
     })),
     activity: eventsResult.rows.map((row) => ({
       id: row.id,

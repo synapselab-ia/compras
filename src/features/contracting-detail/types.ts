@@ -9,10 +9,23 @@ export type ContractingRelatedIdentifier = {
   note: string | null;
 };
 
+export type ContractingItemMutationSnapshot = Readonly<{
+  description: string;
+  quantity: string | null;
+  unit: string | null;
+  catalogCode: string | null;
+}>;
+
 export type ContractingItemPresentation = {
   id: string;
   label: string;
   note: string;
+  /**
+   * Raw values from the protected persistent read. This is only an optimistic
+   * concurrency precondition for F38. It never defines team scope or actor
+   * authority. Demo items deliberately carry null here.
+   */
+  mutationSnapshot: ContractingItemMutationSnapshot | null;
 };
 
 export type ContractingActivityPresentation = {

@@ -1,0 +1,213 @@
+name: F38 Contracting Item Mutation
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  contracting-item-mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Use Node.js 24 LTS
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24.x"
+          cache: npm
+
+      - name: Install dependencies from lockfile
+        run: npm ci
+
+      - name: Red-team F38 item mutation capability preflight
+        run: |
+          set -euo pipefail
+
+          createdb compras_f38_preflight_ci
+          for migration in \
+            0001_core_foundation.sql \
+            0002_trusted_identity_read_policies.sql \
+            0003_team_member_directory.sql \
+            0004_next_action_mutation.sql \
+            0005_contracting_create.sql \
+            0006_contracting_object_mutation.sql \
+            0007_contracting_item_create.sql \
+            0008_contracting_create_concurrency_repair.sql; do
+            PGDATABASE=compras_f38_preflight_ci psql -v ON_ERROR_STOP=1 -f "database/migrations/$migration"
+          done
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_contracting_item_mutation_owner LOGIN;"
+          if PGDATABASE=compras_f38_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0009_contracting_item_mutation.sql; then
+            echo "unsafe LOGIN item mutation capability was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_item_mutation_owner;"
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_contracting_item_mutation_owner NOLOGIN NOINHERIT SUPERUSER;"
+          if PGDATABASE=compras_f38_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0009_contracting_item_mutation.sql; then
+            echo "unsafe SUPERUSER item mutation capability was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_item_mutation_owner;"
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_contracting_item_mutation_owner NOLOGIN NOINHERIT CREATEROLE NOBYPASSRLS;"
+          if PGDATABASE=compras_f38_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0009_contracting_item_mutation.sql; then
+            echo "unsafe CREATEROLE item mutation capability was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_item_mutation_owner;"
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_contracting_item_mutation_owner NOLOGIN NOINHERIT BYPASSRLS;"
+          if PGDATABASE=compras_f38_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0009_contracting_item_mutation.sql; then
+            echo "unsafe BYPASSRLS item mutation capability was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_item_mutation_owner;"
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_contracting_item_mutation_owner NOLOGIN NOINHERIT NOBYPASSRLS;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_f38_preflight_member NOLOGIN;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "GRANT compras_contracting_item_mutation_owner TO compras_f38_preflight_member WITH INHERIT FALSE, SET TRUE;"
+          if PGDATABASE=compras_f38_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0009_contracting_item_mutation.sql; then
+            echo "SET-capable item mutation capability membership was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "REVOKE compras_contracting_item_mutation_owner FROM compras_f38_preflight_member;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_f38_preflight_member;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_item_mutation_owner;"
+
+          dropdb compras_f38_preflight_ci
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_item_create_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_object_mutation_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_create_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_next_action_mutation_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_team_directory_view_owner;"
+
+      - name: Verify F38 persistent item mutation boundary
+        run: |
+          set -euo pipefail
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_f38_migrator_ci LOGIN CREATEROLE NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOREPLICATION PASSWORD 'DEMO-F38-MIGRATOR-PASSWORD';"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_domain_runtime_f38_ci LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD 'DEMO-F38-DOMAIN-RUNTIME-PASSWORD';"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_auth_runtime_f38_ci LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD 'DEMO-F38-AUTH-RUNTIME-PASSWORD';"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_readonly_runtime_f38_ci LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD 'DEMO-F38-READONLY-RUNTIME-PASSWORD';"
+          createdb -O compras_f38_migrator_ci compras_item_mutation_ci
+
+          for migration in \
+            0001_core_foundation.sql \
+            0002_trusted_identity_read_policies.sql \
+            0003_team_member_directory.sql \
+            0004_next_action_mutation.sql \
+            0005_contracting_create.sql \
+            0006_contracting_object_mutation.sql \
+            0007_contracting_item_create.sql \
+            0008_contracting_create_concurrency_repair.sql \
+            0009_contracting_item_mutation.sql; do
+            PGUSER=compras_f38_migrator_ci PGPASSWORD='DEMO-F38-MIGRATOR-PASSWORD' PGDATABASE=compras_item_mutation_ci \
+              psql -v ON_ERROR_STOP=1 -f "database/migrations/$migration"
+          done
+
+          FUNCTION_SIG='public.mutate_contracting_item_fields(uuid,uuid,text,numeric,text,text,text,numeric,text,text,uuid,uuid,uuid,uuid)'
+          DOMAIN_PRE="$(PGDATABASE=compras_item_mutation_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_domain_runtime_f38_ci', '$FUNCTION_SIG', 'EXECUTE')")"
+          AUTH_PRE="$(PGDATABASE=compras_item_mutation_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_auth_runtime_f38_ci', '$FUNCTION_SIG', 'EXECUTE')")"
+          READONLY_PRE="$(PGDATABASE=compras_item_mutation_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_readonly_runtime_f38_ci', '$FUNCTION_SIG', 'EXECUTE')")"
+          if [[ "$DOMAIN_PRE" != "f" || "$AUTH_PRE" != "f" || "$READONLY_PRE" != "f" ]]; then
+            echo "F38 item mutation EXECUTE leaked before explicit provisioning" >&2
+            exit 1
+          fi
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_f38_unsafe_inherit LOGIN INHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;"
+          if PGUSER=compras_f38_migrator_ci PGPASSWORD='DEMO-F38-MIGRATOR-PASSWORD' PGDATABASE=compras_item_mutation_ci \
+            psql -v ON_ERROR_STOP=1 -v runtime_role='compras_f38_unsafe_inherit' -f database/provisioning/grant_contracting_item_mutation_runtime.sql; then
+            echo "unsafe INHERIT runtime was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_f38_unsafe_inherit;"
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_f38_unsafe_dml LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;"
+          PGUSER=compras_f38_migrator_ci PGPASSWORD='DEMO-F38-MIGRATOR-PASSWORD' PGDATABASE=compras_item_mutation_ci \
+            psql -v ON_ERROR_STOP=1 -c "GRANT UPDATE (description) ON public.contracting_items TO compras_f38_unsafe_dml;"
+          if PGUSER=compras_f38_migrator_ci PGPASSWORD='DEMO-F38-MIGRATOR-PASSWORD' PGDATABASE=compras_item_mutation_ci \
+            psql -v ON_ERROR_STOP=1 -v runtime_role='compras_f38_unsafe_dml' -f database/provisioning/grant_contracting_item_mutation_runtime.sql; then
+            echo "runtime with direct domain DML was accepted" >&2
+            exit 1
+          fi
+          PGUSER=compras_f38_migrator_ci PGPASSWORD='DEMO-F38-MIGRATOR-PASSWORD' PGDATABASE=compras_item_mutation_ci \
+            psql -v ON_ERROR_STOP=1 -c "REVOKE UPDATE (description) ON public.contracting_items FROM compras_f38_unsafe_dml;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_f38_unsafe_dml;"
+
+          PGUSER=compras_f38_migrator_ci PGPASSWORD='DEMO-F38-MIGRATOR-PASSWORD' PGDATABASE=compras_item_mutation_ci \
+            psql -v ON_ERROR_STOP=1 -v runtime_role='compras_domain_runtime_f38_ci' \
+              -f database/provisioning/grant_contracting_item_mutation_runtime.sql
+
+          DOMAIN_POST="$(PGDATABASE=compras_item_mutation_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_domain_runtime_f38_ci', '$FUNCTION_SIG', 'EXECUTE')")"
+          AUTH_POST="$(PGDATABASE=compras_item_mutation_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_auth_runtime_f38_ci', '$FUNCTION_SIG', 'EXECUTE')")"
+          READONLY_POST="$(PGDATABASE=compras_item_mutation_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_readonly_runtime_f38_ci', '$FUNCTION_SIG', 'EXECUTE')")"
+          if [[ "$DOMAIN_POST" != "t" || "$AUTH_POST" != "f" || "$READONLY_POST" != "f" ]]; then
+            echo "F38 runtime provisioning did not remain isolated" >&2
+            exit 1
+          fi
+
+          PGUSER=compras_f38_migrator_ci PGPASSWORD='DEMO-F38-MIGRATOR-PASSWORD' PGDATABASE=compras_item_mutation_ci psql -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT USAGE ON SCHEMA public TO compras_domain_runtime_f38_ci;
+          GRANT SELECT ON TABLE
+            public.app_users,
+            public.memberships,
+            public.teams,
+            public.contractings,
+            public.related_identifiers,
+            public.contracting_items,
+            public.contracting_events
+            TO compras_domain_runtime_f38_ci;
+          GRANT EXECUTE ON FUNCTION public.current_auth_issuer() TO compras_domain_runtime_f38_ci;
+          GRANT EXECUTE ON FUNCTION public.current_auth_subject() TO compras_domain_runtime_f38_ci;
+          GRANT EXECUTE ON FUNCTION public.current_app_user_id() TO compras_domain_runtime_f38_ci;
+          SQL
+
+          PGDATABASE=compras_item_mutation_ci psql -v ON_ERROR_STOP=1 -f database/tests/contracting_item_mutation.sql
+
+          F38_CONTRACTING_ITEM_MUTATION_POSTGRES_TEST=1 \
+          F38_DOMAIN_RUNTIME_DATABASE_URL='postgresql://compras_domain_runtime_f38_ci:DEMO-F38-DOMAIN-RUNTIME-PASSWORD@localhost:5432/compras_item_mutation_ci' \
+          F38_ADMIN_DATABASE_URL='postgresql://postgres:postgres@localhost:5432/compras_item_mutation_ci' \
+            npx vitest run src/features/contracting-detail/persistent-item-mutation.postgres.test.ts
+
+          dropdb compras_item_mutation_ci
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_item_mutation_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_item_create_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_object_mutation_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_create_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_next_action_mutation_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_team_directory_view_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_domain_runtime_f38_ci;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_auth_runtime_f38_ci;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_readonly_runtime_f38_ci;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_f38_migrator_ci;"

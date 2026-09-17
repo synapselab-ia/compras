@@ -33,7 +33,7 @@ describe("readPersistentContractingDetail", () => {
     expect(query).not.toHaveBeenCalled();
   });
 
-  it("uses the route UUID only as a bind parameter and preserves the raw next action", async () => {
+  it("uses the route UUID only as a bind parameter and exposes the raw protected item snapshot", async () => {
     const id = "00000000-0000-4000-8000-000000000901";
     query
       .mockResolvedValueOnce({
@@ -65,9 +65,9 @@ describe("readPersistentContractingDetail", () => {
         rows: [{
           id: "00000000-0000-4000-8000-000000000904",
           ordinal: 1,
-          description: "Item fictício",
-          quantity: "3",
-          unit: "UN",
+          description: "  Item fictício exato  ",
+          quantity: "3.1250000000000000001",
+          unit: "  UN  ",
           catalog_code: null,
         }],
       })
@@ -90,7 +90,15 @@ describe("readPersistentContractingDetail", () => {
       nextActionValue: "Validar registro fictício",
       lastMovement: "2026-09-01T12:30:00.000Z",
       relatedIdentifiers: [{ value: "REF-DEMO-901" }],
-      items: [{ label: "1. Item fictício" }],
+      items: [{
+        label: "1.   Item fictício exato  ",
+        mutationSnapshot: {
+          description: "  Item fictício exato  ",
+          quantity: "3.1250000000000000001",
+          unit: "  UN  ",
+          catalogCode: null,
+        },
+      }],
       activity: [{ label: "evento-demo" }],
     });
 
@@ -106,9 +114,59 @@ describe("readPersistentContractingDetail", () => {
       expect(values).toEqual([id]);
     }
 
+    const itemSql = query.mock.calls[2][0] as string;
+    expect(itemSql).toContain("quantity::text AS quantity");
+    expect(itemSql).toContain("description");
+    expect(itemSql).toContain("unit");
+    expect(itemSql).toContain("catalog_code");
+    expect(itemSql).not.toContain("label");
+    expect(itemSql).not.toContain("note");
+
     const baseSql = query.mock.calls[0][0] as string;
     expect(baseSql).toContain("LEFT JOIN public.team_member_directory");
     expect(baseSql).not.toContain("team_id = $1");
+  });
+
+  it("keeps item NULL, empty string and spaces distinct in the mutation snapshot", async () => {
+    const id = "00000000-0000-4000-8000-000000000931";
+    query
+      .mockResolvedValueOnce({
+        rows: [{
+          id,
+          object: "Registro fictício",
+          responsible_membership_id: null,
+          responsible_name: null,
+          stage: null,
+          status: null,
+          waiting_type: null,
+          waiting_reference: null,
+          waiting_since: null,
+          waiting_reason: null,
+          next_action: null,
+          created_at: "2026-09-01T00:00:00.000Z",
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: "00000000-0000-4000-8000-000000000932",
+          ordinal: 4,
+          description: "   ",
+          quantity: null,
+          unit: "",
+          catalog_code: "   ",
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const result = await readPersistentContractingDetail(id);
+
+    expect(result?.items[0]?.mutationSnapshot).toEqual({
+      description: "   ",
+      quantity: null,
+      unit: "",
+      catalogCode: "   ",
+    });
   });
 
   it("returns not found without child queries when RLS exposes no contracting row", async () => {

@@ -26,6 +26,13 @@ const BASE_INPUT = {
   newCatalogCode: "",
 } as const;
 
+const FORGED_EVENT_IDS = [
+  "38070000-0000-4000-8000-000000009991",
+  "38070000-0000-4000-8000-000000009992",
+  "38070000-0000-4000-8000-000000009993",
+  "38070000-0000-4000-8000-000000009994",
+] as const;
+
 describe("persistent contracting item mutation adapter", () => {
   const query = vi.fn();
 
@@ -66,10 +73,10 @@ describe("persistent contracting item mutation adapter", () => {
         ordinal: 999,
         retiredAt: "2026-01-01T00:00:00Z",
         updatedAt: "2026-01-01T00:00:00Z",
-        descriptionEventId: "38070000-0000-4000-8000-000000009991",
-        quantityEventId: "38070000-0000-4000-8000-000000009992",
-        unitEventId: "38070000-0000-4000-8000-000000009993",
-        catalogCodeEventId: "38070000-0000-4000-8000-000000009994",
+        descriptionEventId: FORGED_EVENT_IDS[0],
+        quantityEventId: FORGED_EVENT_IDS[1],
+        unitEventId: FORGED_EVENT_IDS[2],
+        catalogCodeEventId: FORGED_EVENT_IDS[3],
       }),
     ).resolves.toBe("updated");
 
@@ -99,7 +106,7 @@ describe("persistent contracting item mutation adapter", () => {
     expect(eventIds).toHaveLength(4);
     for (const eventId of eventIds) {
       expect(eventId).toEqual(expect.stringMatching(UUID_PATTERN));
-      expect(String(eventId)).not.toContain("9999");
+      expect(FORGED_EVENT_IDS).not.toContain(String(eventId));
     }
     expect(new Set(eventIds).size).toBe(4);
   });

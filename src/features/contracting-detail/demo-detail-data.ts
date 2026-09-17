@@ -23,8 +23,8 @@ const demoDetailExtras: Record<string, DemoDetailExtra> = {
       { id: "REF-ID-DEMO-A2", label: "Identificador demo B", value: "REF-DEMO-A2", note: null },
     ],
     items: [
-      { id: "ITEM-DEMO-01", label: "Item demonstrativo 01", note: "Descrição fictícia para validar organização." },
-      { id: "ITEM-DEMO-02", label: "Item demonstrativo 02", note: "Sem quantidade, preço ou referência operacional real." },
+      { id: "ITEM-DEMO-01", label: "Item demonstrativo 01", note: "Descrição fictícia para validar organização.", mutationSnapshot: null },
+      { id: "ITEM-DEMO-02", label: "Item demonstrativo 02", note: "Sem quantidade, preço ou referência operacional real.", mutationSnapshot: null },
     ],
     activity: [
       { id: "EVENT-DEMO-01", label: "Evento demonstrativo 01", moment: "Momento demo A1", note: null },
@@ -34,7 +34,7 @@ const demoDetailExtras: Record<string, DemoDetailExtra> = {
   "DEMO-002": {
     relatedIdentifiers: [{ id: "REF-ID-DEMO-B1", label: "Identificador demo A", value: "REF-DEMO-B1", note: null }],
     items: [
-      { id: "ITEM-DEMO-03", label: "Item demonstrativo 03", note: "Conteúdo estático e exclusivamente demonstrativo." },
+      { id: "ITEM-DEMO-03", label: "Item demonstrativo 03", note: "Conteúdo estático e exclusivamente demonstrativo.", mutationSnapshot: null },
     ],
     activity: [
       { id: "EVENT-DEMO-03", label: "Evento demonstrativo 03", moment: "Momento demo B1", note: null },
@@ -44,8 +44,8 @@ const demoDetailExtras: Record<string, DemoDetailExtra> = {
   "DEMO-003": {
     relatedIdentifiers: [{ id: "REF-ID-DEMO-C1", label: "Identificador demo A", value: "REF-DEMO-C1", note: null }],
     items: [
-      { id: "ITEM-DEMO-04", label: "Item demonstrativo 04", note: "Exemplo genérico sem semântica definitiva de domínio." },
-      { id: "ITEM-DEMO-05", label: "Item demonstrativo 05", note: "Usado somente para avaliar densidade da tela." },
+      { id: "ITEM-DEMO-04", label: "Item demonstrativo 04", note: "Exemplo genérico sem semântica definitiva de domínio.", mutationSnapshot: null },
+      { id: "ITEM-DEMO-05", label: "Item demonstrativo 05", note: "Usado somente para avaliar densidade da tela.", mutationSnapshot: null },
     ],
     activity: [{ id: "EVENT-DEMO-05", label: "Evento demonstrativo 05", moment: "Momento demo C1", note: null }],
   },
@@ -54,12 +54,12 @@ const demoDetailExtras: Record<string, DemoDetailExtra> = {
       { id: "REF-ID-DEMO-D1", label: "Identificador demo A", value: "REF-DEMO-D1", note: null },
       { id: "REF-ID-DEMO-D2", label: "Identificador demo B", value: "REF-DEMO-D2", note: null },
     ],
-    items: [{ id: "ITEM-DEMO-06", label: "Item demonstrativo 06", note: "Registro fictício para teste de navegação." }],
+    items: [{ id: "ITEM-DEMO-06", label: "Item demonstrativo 06", note: "Registro fictício para teste de navegação.", mutationSnapshot: null }],
     activity: [{ id: "EVENT-DEMO-06", label: "Evento demonstrativo 06", moment: "Momento demo D1", note: null }],
   },
   "DEMO-005": {
     relatedIdentifiers: [{ id: "REF-ID-DEMO-E1", label: "Identificador demo A", value: "REF-DEMO-E1", note: null }],
-    items: [{ id: "ITEM-DEMO-07", label: "Item demonstrativo 07", note: "Nenhum dado foi derivado de contratação real." }],
+    items: [{ id: "ITEM-DEMO-07", label: "Item demonstrativo 07", note: "Nenhum dado foi derivado de contratação real.", mutationSnapshot: null }],
     activity: [
       { id: "EVENT-DEMO-07", label: "Evento demonstrativo 07", moment: "Momento demo E1", note: null },
       { id: "EVENT-DEMO-08", label: "Evento demonstrativo 08", moment: "Momento demo E2", note: null },
@@ -68,8 +68,8 @@ const demoDetailExtras: Record<string, DemoDetailExtra> = {
   "DEMO-006": {
     relatedIdentifiers: [{ id: "REF-ID-DEMO-F1", label: "Identificador demo A", value: "REF-DEMO-F1", note: null }],
     items: [
-      { id: "ITEM-DEMO-08", label: "Item demonstrativo 08", note: "Descrição genérica para validar agrupamento." },
-      { id: "ITEM-DEMO-09", label: "Item demonstrativo 09", note: "Sem vínculo com sistema, setor ou processo real." },
+      { id: "ITEM-DEMO-08", label: "Item demonstrativo 08", note: "Descrição genérica para validar agrupamento.", mutationSnapshot: null },
+      { id: "ITEM-DEMO-09", label: "Item demonstrativo 09", note: "Sem vínculo com sistema, setor ou processo real.", mutationSnapshot: null },
     ],
     activity: [{ id: "EVENT-DEMO-09", label: "Evento demonstrativo 09", moment: "Momento demo F1", note: null }],
   },

@@ -13,12 +13,36 @@ type ParsedNullableField = Readonly<
   | { ok: false; value: null }
 >;
 
+type ItemMutationBrowserResult =
+  | "updated"
+  | "unchanged"
+  | "conflict"
+  | "not-available"
+  | "unavailable";
+
 const ITEM_CREATE_FORM_FIELDS = new Set([
   "contractingId",
   "description",
   "quantity",
   "unit",
   "catalogCode",
+]);
+
+const ITEM_MUTATION_FORM_FIELDS = new Set([
+  "contractingId",
+  "itemId",
+  "expectedDescription",
+  "expectedQuantity",
+  "expectedUnitKind",
+  "expectedUnit",
+  "expectedCatalogCodeKind",
+  "expectedCatalogCode",
+  "newDescription",
+  "newQuantity",
+  "newUnitKind",
+  "newUnit",
+  "newCatalogCodeKind",
+  "newCatalogCode",
 ]);
 
 function readRequiredStringOnce(formData: FormData, name: string): string | null {
@@ -68,6 +92,48 @@ function readOptionalQuantityOnce(formData: FormData): ParsedNullableField {
   return { ok: true, value: values[0] === "" ? null : values[0] };
 }
 
+/**
+ * F39 new quantity must be an explicit scalar. Literal empty means SQL NULL;
+ * every non-empty string is forwarded exactly for PostgreSQL numeric parsing.
+ */
+function readNewItemQuantityOnce(formData: FormData): ParsedNullableField {
+  const values = formData.getAll("newQuantity");
+
+  if (values.length !== 1 || typeof values[0] !== "string") {
+    return { ok: false, value: null };
+  }
+
+  return { ok: true, value: values[0] === "" ? null : values[0] };
+}
+
+/**
+ * Nullable text fields use an explicit transport kind so SQL NULL never gets
+ * inferred from an empty string. A text scalar is required only for kind=text.
+ * For kind=null, an optional single text scalar is ignored by design.
+ */
+function readNullableTextTransportOnce(
+  formData: FormData,
+  kindName: string,
+  valueName: string,
+): ParsedNullableField {
+  const kind = readRequiredStringOnce(formData, kindName);
+  const values = formData.getAll(valueName);
+
+  if (values.length > 1 || (values.length === 1 && typeof values[0] !== "string")) {
+    return { ok: false, value: null };
+  }
+
+  if (kind === "null") {
+    return { ok: true, value: null };
+  }
+
+  if (kind === "text" && values.length === 1) {
+    return { ok: true, value: values[0] as string };
+  }
+
+  return { ok: false, value: null };
+}
+
 function hasOnlyExpectedItemCreateFields(formData: FormData): boolean {
   for (const name of formData.keys()) {
     if (!ITEM_CREATE_FORM_FIELDS.has(name) && !name.startsWith("$ACTION_")) {
@@ -76,6 +142,26 @@ function hasOnlyExpectedItemCreateFields(formData: FormData): boolean {
   }
 
   return true;
+}
+
+function hasOnlyExpectedItemMutationFields(formData: FormData): boolean {
+  for (const name of formData.keys()) {
+    if (!ITEM_MUTATION_FORM_FIELDS.has(name) && !name.startsWith("$ACTION_")) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function isItemMutationBrowserResult(value: unknown): value is ItemMutationBrowserResult {
+  return (
+    value === "updated" ||
+    value === "unchanged" ||
+    value === "conflict" ||
+    value === "not-available" ||
+    value === "unavailable"
+  );
 }
 
 function detailPath(contractingId: string): string {
@@ -222,4 +308,98 @@ export async function createPersistentContractingItemAction(formData: FormData):
   }
 
   redirect(`${path}?itemCreation=${result}`);
+}
+
+/**
+ * The only F39 browser-facing item edit entrypoint. It carries the complete
+ * protected four-field snapshot plus the complete requested four-field state
+ * to F38. It owns no SQL/DML and accepts no browser authority for team, actor,
+ * membership, event IDs, ordinal, retired state, timestamps or navigation.
+ */
+export async function updatePersistentContractingItemAction(formData: FormData): Promise<never> {
+  if (readPersistentReadMode() !== "persistent") {
+    redirect("/");
+  }
+
+  const contractingId = readRequiredStringOnce(formData, "contractingId");
+
+  if (!contractingId || !isPersistentContractingId(contractingId)) {
+    redirect("/");
+  }
+
+  const path = detailPath(contractingId);
+
+  if (!hasOnlyExpectedItemMutationFields(formData)) {
+    redirect(`${path}?itemMutation=unavailable`);
+  }
+
+  const itemId = readRequiredStringOnce(formData, "itemId");
+
+  if (!itemId || !isPersistentContractingId(itemId)) {
+    redirect(`${path}?itemMutation=unavailable`);
+  }
+
+  const expectedDescription = readRequiredStringOnce(formData, "expectedDescription");
+  const expectedQuantity = readNullableStringOnce(formData, "expectedQuantity");
+  const expectedUnit = readNullableTextTransportOnce(
+    formData,
+    "expectedUnitKind",
+    "expectedUnit",
+  );
+  const expectedCatalogCode = readNullableTextTransportOnce(
+    formData,
+    "expectedCatalogCodeKind",
+    "expectedCatalogCode",
+  );
+  const newDescription = readRequiredStringOnce(formData, "newDescription");
+  const newQuantity = readNewItemQuantityOnce(formData);
+  const newUnit = readNullableTextTransportOnce(formData, "newUnitKind", "newUnit");
+  const newCatalogCode = readNullableTextTransportOnce(
+    formData,
+    "newCatalogCodeKind",
+    "newCatalogCode",
+  );
+
+  if (
+    expectedDescription === null ||
+    !expectedQuantity.ok ||
+    !expectedUnit.ok ||
+    !expectedCatalogCode.ok ||
+    newDescription === null ||
+    !newQuantity.ok ||
+    !newUnit.ok ||
+    !newCatalogCode.ok
+  ) {
+    redirect(`${path}?itemMutation=unavailable`);
+  }
+
+  let result: ItemMutationBrowserResult = "unavailable";
+
+  try {
+    const { mutatePersistentContractingItem } = await import("./persistent-item-mutation");
+    const boundaryResult: unknown = await mutatePersistentContractingItem({
+      contractingId,
+      itemId,
+      expectedDescription,
+      expectedQuantity: expectedQuantity.value,
+      expectedUnit: expectedUnit.value,
+      expectedCatalogCode: expectedCatalogCode.value,
+      newDescription,
+      newQuantity: newQuantity.value,
+      newUnit: newUnit.value,
+      newCatalogCode: newCatalogCode.value,
+    });
+
+    if (isItemMutationBrowserResult(boundaryResult)) {
+      result = boundaryResult;
+    }
+  } catch {
+    result = "unavailable";
+  }
+
+  if (result === "updated") {
+    revalidatePath(path);
+  }
+
+  redirect(`${path}?itemMutation=${result}`);
 }

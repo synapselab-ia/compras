@@ -16,19 +16,18 @@ A fundação possui:
 - leituras persistentes protegidas e diretório mínimo da equipe;
 - Better Auth self-hosted com signup normal fechado;
 - limiter distribuído de sign-in;
-- edição persistente de `contractings.next_action` e UI correspondente;
-- criação mínima persistente de `contractings`, auditável e idempotente, com UI correspondente;
-- edição persistente de `contractings.object` e UI correspondente;
-- criação mínima persistente de `contracting_items`, com allocator concorrente e UI correspondente;
-- edição persistente server-side dos quatro campos de item, ainda sem UI;
-- correção aditiva da concorrência F29 em migration `0008`;
+- edição persistente de `contractings.next_action` com UI;
+- criação mínima persistente de `contractings`, auditável e idempotente, com UI;
+- edição persistente de `contractings.object` com UI;
+- criação mínima persistente de `contracting_items`, com allocator concorrente e UI;
+- edição persistente dos quatro campos de item com UI e optimistic concurrency por snapshot completo;
 - migrations de domínio `0001..0009` integradas e imutáveis.
 
-F38 foi integrada pela PR `#59`, merge `38850c8c8e4ceb41c7d1a4d0c83ba158aa20c597`, com CI, F22, F29, F32, F35 e o novo gate F38 verdes no head final e após o merge.
+F39 foi integrada pela PR `#61`, merge `09737ac6d11046af5d149b7926997e7e630557cc`. CI, F22, F29, F32, F35 e F38 ficaram verdes no head final e após o merge.
 
 A próxima e única frente canônica é:
 
-`F39-PERSISTENT-CONTRACTING-ITEM-MUTATION-DETAIL-UI-01 - Integrar edição persistente de item no detalhe`.
+`F40-PERSISTENT-RELATED-IDENTIFIER-CREATE-DESIGN-01 - Desenhar vínculo persistente mínimo de identificador relacionado`.
 
 F17 permanece `ON HOLD` histórico. F21 permanece `ON HOLD` até existir control plane Vercel capaz de readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch sem expor valores.
 
@@ -56,44 +55,23 @@ ADR-011 define primitive específica para `contractings.next_action`. Runtime re
 
 ### F28/F29/F30 - criação de contratação
 
-ADR-012 define capability separada para criação mínima de `contractings`. O browser fornece somente candidato `contractingId + object`; team/actor/creator são derivados no banco. Row e evento `contracting_created` são atômicos.
+ADR-012 define capability separada para criação mínima de `contractings`. Team/actor/creator são derivados no banco. Row e evento `contracting_created` são atômicos.
 
-A migration `0008_contracting_create_concurrency_repair.sql` corrigiu, de forma aditiva, a corrida entre a PK `id` e a unique `(team_id,id)`. `0005_contracting_create.sql` permaneceu imutável. O replay só é reconhecido depois da prova exata e autorizada da row existente.
+A migration aditiva `0008_contracting_create_concurrency_repair.sql` corrigiu a corrida entre a PK `id` e a unique `(team_id,id)` sem reescrever `0005`.
 
 ### F31/F32/F33 - edição de objeto
 
-ADR-013 define capability própria para editar somente `contractings.object`. O contrato é `contractingId + expectedObject + newObject`; `SELECT ... FOR UPDATE` e expected value impedem lost update. F33 integra a boundary ao detalhe.
+ADR-013 define capability própria para editar somente `contractings.object`. `SELECT ... FOR UPDATE` e expected value impedem lost update. F33 integra a boundary ao detalhe.
 
 ### F34/F35/F36 - criação mínima de item
 
-ADR-014/F35 implementam criação de `contracting_items` por capability dedicada. O payload server-only é:
+ADR-014/F35 implementam criação de `contracting_items` por capability dedicada. `quantity` permanece `string | null` até PostgreSQL `numeric`. Item/event UUIDs e ordinal são gerados/derivados internamente. F36 integra a criação ao detalhe persistente.
 
-```text
-contractingId
-description
-quantity
-unit
-catalogCode
-```
+O allocator técnico por contratação serializa writers sem conceder UPDATE em `contractings`. Gaps não são reutilizados e falha de item/evento reverte também o avanço do allocator.
 
-`quantity` é `string | null` até PostgreSQL `numeric`. Item/event UUIDs e ordinal são gerados/derivados internamente. F36 integra a criação ao detalhe persistente. Demo permanece read-only.
+### F37/F38/F39 - edição mínima de item
 
-O allocator técnico por contratação serializa writers sem conceder UPDATE em `contractings`:
-
-```text
-contracting_item_ordinal_counters
-team_id uuid NOT NULL
-contracting_id uuid PRIMARY KEY
-last_ordinal integer NULL
-```
-
-Gaps não são reutilizados. Falha de item/evento reverte também o avanço do allocator.
-
-### F37/F38 - edição mínima de item
-
-ADR-015 e F38 definem e implementam a primeira mutation persistente de item.
-
-Campos alteráveis:
+ADR-015/F38 implementam a mutation persistente dos campos:
 
 ```text
 description
@@ -102,84 +80,47 @@ unit
 catalog_code
 ```
 
-Contrato server-only:
+F39 expõe essa boundary no detalhe persistente.
+
+Cada item editável recebe um snapshot bruto protegido:
 
 ```text
-contractingId
-itemId
-expectedDescription
-expectedQuantity
-expectedUnit
-expectedCatalogCode
-newDescription
-newQuantity
-newUnit
-newCatalogCode
+description: string
+quantity: string | null
+unit: string | null
+catalogCode: string | null
 ```
 
-Team, actor, membership, issuer, subject, ordinal, retired state, timestamps e event UUIDs não são authority do caller público. Quatro event UUIDs são gerados server-side.
+A UI envia sempre os quatro expected e os quatro new values. Expected vem das colunas protegidas, nunca de label/note/DOM. `conflict` precede `unchanged` no banco e não existe retry automático na UI.
 
-A capability `compras_contracting_item_mutation_owner` pode atualizar somente:
+Unit/catalog preservam `NULL`, `''` e espaços por codificação explícita `text|null`. Quantity usa input textual e nunca passa por `Number`, `parseFloat` ou `type=number`.
 
-```text
-description
-quantity
-unit
-catalog_code
-updated_at
-```
+A capability F38 continua limitada a `description`, `quantity`, `unit`, `catalog_code` e `updated_at`. F39 não ampliou authority, grant, policy, primitive ou provisioning.
 
-Ela não pode criar/deletar item, alterar ordinal/retired/scope, atualizar `contractings`, tocar allocator nem atualizar/deletar eventos. Runtime normal recebe somente EXECUTE da primitive F38 por provisioning separado.
+Resultado completo da UI: `tasks/F39-PERSISTENT-CONTRACTING-ITEM-MUTATION-DETAIL-UI-01/RESULT.md`.
 
-A primitive bloqueia somente a row do item, revalida parent/membership depois do lock e exige snapshot esperado dos quatro campos. Se qualquer expected estiver stale, retorna `conflict` antes de no-op. Com expected atual e new igual ao current, retorna `unchanged` sem timestamp/evento. Mudança real retorna `updated`.
+## Próxima frente F40
 
-A auditoria gera um `item_changed` por campo efetivamente alterado, com old/new escalares, mesmo `operation_at` e rollback integral se qualquer evento falhar.
-
-A suíte F38 prova oito writers concorrentes com o mesmo snapshot: exatamente um `updated`, sete `conflict` e somente o histórico do vencedor.
-
-Resultado e verificação completos: `tasks/F38-PERSISTENT-CONTRACTING-ITEM-MUTATION-IMPLEMENT-01/RESULT.md`.
-
-## Semântica de item
-
-Não foi criada regra de:
-
-- trim;
-- descrição non-empty;
-- quantidade positiva;
-- unidade obrigatória;
-- catálogo obrigatório;
-- escala/precisão de negócio;
-- tamanho máximo;
-- pesquisa de preços.
-
-`description`, `unit` e `catalogCode` preservam texto exato. `unit` e `catalogCode` distinguem `NULL`, `''` e espaços. `quantity` não passa por `Number`/`parseFloat`; no read model é obtida por `numeric::text`.
-
-Numeric inválido falha fechado e é sanitizado como `unavailable` na boundary server-only.
-
-## Próxima frente F39
+O núcleo inicial documentado prevê múltiplos processos/identificadores administrativos relacionados à mesma contratação. A tabela `related_identifiers` e a leitura protegida já existem, mas ainda não existe boundary de escrita para criar o vínculo.
 
 A única `NEXT_ACTION` canônica está em `docs/ai/NEXT_ACTION.md`:
 
-`F39-PERSISTENT-CONTRACTING-ITEM-MUTATION-DETAIL-UI-01 - Integrar edição persistente de item no detalhe`.
+`F40-PERSISTENT-RELATED-IDENTIFIER-CREATE-DESIGN-01 - Desenhar vínculo persistente mínimo de identificador relacionado`.
 
-F39 deve integrar somente a boundary F38, sem alterar authority PostgreSQL.
+F40 é design-only. Deve definir:
 
-Pontos obrigatórios:
+- payload server-only mínimo;
+- authority derivada e guard pilot-only;
+- capability dedicada e least privilege;
+- semântica de `NULL`, vazio e espaços sem regras inventadas;
+- atomicidade com evento de vínculo;
+- concorrência/idempotência sem deduplicação por valor inventada;
+- resultados sanitizados;
+- matriz adversarial da futura implementação.
 
-- o read model protegido deve fornecer snapshot bruto de `description`, `quantity`, `unit`, `catalogCode` para cada item editável;
-- é proibido reconstruir expected de `label`, `note`, ordinal, timestamp ou DOM;
-- a Server Action deve enviar sempre os quatro expected values e os quatro new values para F38;
-- unit/catalog precisam de codificação explícita `text` versus `NULL`, pois vazio é um valor textual distinto;
-- quantity permanece input textual e `string | null`;
-- action não executa SQL/DML e não aceita authority de team/actor/membership/event UUID;
-- `conflict` não gera retry automático;
-- feedback/navegação permanecem sanitizados e locais;
-- pending reduz double-submit acidental;
-- demo permanece read-only;
-- migrations `0001..0009` permanecem imutáveis;
-- reorder, retire/restore, delete e pesquisa de preços ficam fora de escopo.
+F40 não cria código operacional. Ela deve produzir uma ADR canônica e uma única SPEC de implementação seguinte.
 
-A SPEC está em `tasks/F39-PERSISTENT-CONTRACTING-ITEM-MUTATION-DETAIL-UI-01/SPEC.md`.
+A SPEC está em `tasks/F40-PERSISTENT-RELATED-IDENTIFIER-CREATE-DESIGN-01/SPEC.md`.
 
 ## Modos da aplicação
 
@@ -190,7 +131,7 @@ Quando `COMPRAS_PERSISTENT_READ_ENABLED` está ausente ou `false`:
 - somente fixtures fictícias;
 - nenhuma consulta/mutação operacional;
 - banner explícito de protótipo;
-- nenhuma UI de escrita persistente deve ser renderizada.
+- nenhuma UI de escrita persistente é renderizada.
 
 ### Persistente
 
@@ -221,7 +162,7 @@ Migrations de domínio integradas e imutáveis:
 - `0008_contracting_create_concurrency_repair.sql`;
 - `0009_contracting_item_mutation.sql`.
 
-Migration aplicada não é reescrita. Correção futura exige migration aditiva.
+Migration aplicada não é reescrita. Correção ou feature persistente futura exige migration aditiva.
 
 ## Fonte de verdade
 

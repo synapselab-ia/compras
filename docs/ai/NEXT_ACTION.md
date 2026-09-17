@@ -1,90 +1,75 @@
 # Next Action - Compras
 
-## F39-PERSISTENT-CONTRACTING-ITEM-MUTATION-DETAIL-UI-01 - Integrar edição persistente de item no detalhe
+## F40-PERSISTENT-RELATED-IDENTIFIER-CREATE-DESIGN-01 - Desenhar vínculo persistente mínimo de identificador relacionado
 
-**Classe:** T1 - feature normal, com impacto T2 - autorização/escrita server-side  
-**Estado:** READY após integração da F38  
-**Objetivo:** integrar a boundary F38 ao detalhe persistente com snapshot bruto protegido, Server Action estreita, semântica exata de `NULL`/texto/numeric, feedback sanitizado e demo read-only.
+**Classe:** T2 - desenho arquitetural de escrita/autorização  
+**Estado:** READY após integração da F39  
+**Objetivo:** definir a primeira boundary persistente para vincular um processo/identificador administrativo a uma contratação, com payload mínimo, autorização, least privilege, auditoria, concorrência/idempotência e resultados sanitizados, sem código operacional nesta slice.
 
 Esta é a única `NEXT_ACTION` canônica.
 
 ## Por que esta ação agora
 
-F38 integrou migration `0009`, capability, RLS, primitive, provisioning, adapter server-only e gate dedicado para editar somente `description`, `quantity`, `unit` e `catalog_code` de item ativo. A boundary está verde no head final e no pós-merge, mas ainda não existe jornada UI/Server Action correspondente.
+F39 integrou a edição dos quatro campos mutáveis de item ao detalhe persistente e fechou o ciclo ADR-015/F37/F38/F39.
 
-O padrão canônico já usado em F31/F32/F33 e F34/F35/F36 separa desenho, implementação da boundary e integração UI. F39 é a terceira slice desse ciclo para ADR-015.
+O núcleo funcional inicial também exige relacionamentos com múltiplos processos/identificadores externos. O schema e o read model de `related_identifiers` já existem e o detalhe já os apresenta, mas ainda não há boundary de escrita para criar o vínculo.
 
-Q-004 sobre pesquisa de preços e Q-009 sobre política multiusuário permanecem abertas. F21 continua `ON HOLD` sob seu `resume_when` externo e não é dependência da F39.
+Essa frente é independente de F21, não depende de pesquisa de preços e não exige resolver Q-009.
 
 ## Execução obrigatória
 
-1. recuperar `main` real após F38 e confirmar PR #59 integrada;
-2. revalidar `CONTEXT_MANIFEST`;
-3. ler ADR-015, `tasks/F38-PERSISTENT-CONTRACTING-ITEM-MUTATION-IMPLEMENT-01/RESULT.md` e a SPEC F39;
-4. inspecionar F33/F36, `persistent-read.ts`, `types.ts`, actions, feedbacks e detalhe atuais;
-5. manter migrations `0001..0009` byte-for-byte imutáveis;
-6. não alterar grants, policies, capability, primitive ou provisioning F38;
-7. estender o read model protegido para fornecer o snapshot bruto de item necessário à optimistic concurrency, sem parse de `label`/`note`;
-8. preservar `description`, `quantity`, `unit` e `catalogCode` exatamente, incluindo distinção de `NULL`, vazio e espaços;
-9. manter `quantity` como `string | null`, lida por `numeric::text`, sem `Number`, `parseFloat` ou `type=number`;
-10. criar Server Action dedicada que aceite somente os campos de transporte definidos na SPEC e rejeite duplicados/campos extras;
-11. nunca aceitar team, actor, membership, issuer, subject, ordinal, retired state, timestamps ou event UUIDs como authority do browser;
-12. nunca aceitar callback/redirect arbitrário;
-13. chamar exclusivamente `mutatePersistentContractingItem`, sem SQL/DML próprio;
-14. transportar sempre os quatro expected values do snapshot protegido, não expected parcial;
-15. codificar `unit` e `catalogCode` com escolha explícita `text` versus `null`, para não colapsar `NULL` em `''`;
-16. interpretar somente quantity literalmente vazia como `null`; qualquer texto não vazio segue exato para F38/PostgreSQL;
-17. renderizar editor somente em persistent mode válido e para item com snapshot protegido;
-18. manter demo estritamente read-only e sem hidden snapshot operacional;
-19. mapear somente `updated`, `unchanged`, `conflict`, `not-available` e `unavailable` para feedback fixo sanitizado;
-20. `updated` revalida somente a rota local fixa e relê pelo read model protegido;
-21. `conflict` não faz retry automático nem expõe current protegido na URL;
-22. `not-available` não distingue cross-team, inexistente, retired, parent inativo ou membership;
-23. desabilitar nova submissão enquanto pending;
-24. não criar reorder, retire/restore, delete ou pesquisa de preços;
-25. executar lint, typecheck, unit/component tests, build, CI database/Auth, F22, F29, F32, F35 e F38;
-26. fazer red-team integral de forged payload, null/empty, concurrency snapshot, demo e navegação;
-27. atualizar checkpoint somente depois de todos os gates ficarem verdes;
-28. deixar exatamente uma nova NEXT_ACTION somente após F39 ser integralmente verificada.
+1. recuperar `main` real e confirmar F39 integrada pela PR #61;
+2. confirmar os seis gates pós-merge verdes em `09737ac6d11046af5d149b7926997e7e630557cc`;
+3. revalidar `CONTEXT_MANIFEST`;
+4. executar `tasks/F40-PERSISTENT-RELATED-IDENTIFIER-CREATE-DESIGN-01/SPEC.md`;
+5. inspecionar schema, RLS, read model e auditoria de `related_identifiers`;
+6. comparar os padrões recentes de capability e escrita F29/F32/F35/F38;
+7. não alterar migrations `0001..0009`;
+8. não implementar migration, policy, grant, primitive, adapter, Server Action ou UI na F40;
+9. não inventar máscara, formato, unicidade de negócio, taxonomia fechada ou normalização de identificadores;
+10. manter team, actor, membership, issuer, subject, timestamps e UUIDs de auditoria fora da authority do browser;
+11. desenhar atomicidade entre o identificador novo e o evento de vínculo;
+12. definir semântica segura de retry/concorrência sem deduplicação por valor inventada;
+13. manter cross-team, contratação inexistente/inativa e falhas de membership sem oracle indevido;
+14. preservar Q-004 e Q-009 abertas;
+15. fazer red-team documental integral;
+16. produzir uma ADR canônica e exatamente uma SPEC executável para a implementação seguinte;
+17. atualizar o checkpoint apenas depois dos gates da slice de desenho ficarem verdes.
 
 ## Red-team mínimo
 
 Rejeitar PASS se:
 
-- expected snapshot for reconstruído de `label`, `note`, DOM, ordinal ou timestamp;
-- expected for parcial;
-- unit/catalog `NULL` virar vazio implicitamente;
-- quantity sofrer coerção floating-point no navegador/JavaScript;
-- action executar SQL/DML ou contornar F38;
-- browser puder fornecer scope/actor/event IDs como authority;
-- callback/redirect externo controlar navegação;
-- conflito for convertido em retry automático;
-- feedback criar oracle de existência/scope/retired state;
-- demo/configuração inválida puder gravar;
-- falha protegida cair para fixture/demo;
-- migrations `0001..0009`, grants, policies, capability ou primitive F38 forem alterados;
-- escopo expandir para reorder/retire/delete/preço;
+- browser puder definir scope, actor, membership ou UUIDs internos como authority;
+- runtime normal ganhar DML direto;
+- a operação futura puder vincular identificador em contratação cross-team, arquivada ou cancelada;
+- texto for trimado, normalizado ou validado por regra de negócio não documentada;
+- `NULL`, vazio e espaços forem colapsados sem decisão fundamentada;
+- for criada deduplicação por identificador/tipo/origem sem requisito canônico;
+- retry ou colisão de UUID forem tratados como sucesso sem prova exata e autorizada;
+- evento de vínculo não for atômico;
+- F26/F29/F32/F35/F38 ganharem authority adicional;
+- migrations `0001..0009` forem reescritas;
+- F21, Q-004 ou Q-009 forem resolvidas implicitamente;
 - provider hosted, secret ou dado real for necessário.
 
 ## Invariantes
 
 - `REAL_DATA_ALLOWED = NO`;
-- somente dados/identidades fictícios;
-- nenhum provider hosted write;
+- somente dados e identidades fictícios;
+- repositório público continua tratado como superfície permanente;
 - F21 permanece `ON HOLD` até seu `resume_when` objetivo;
-- Q-004 e Q-009 continuam abertas;
+- Q-004 e Q-009 permanecem abertas;
 - autenticação não é autorização;
 - RLS/capabilities permanecem autoritativas;
 - runtime normal continua sem DML direto;
-- F35 continua exclusiva da criação de item;
-- F38 continua exclusiva da edição dos quatro campos de item;
 - migrations aplicadas `0001..0009` permanecem imutáveis;
-- falha protegida nunca vira demo fallback nem expõe detalhe interno.
+- falha protegida nunca vira demo fallback.
 
 ## Fonte da tarefa
 
-Executar `tasks/F39-PERSISTENT-CONTRACTING-ITEM-MUTATION-DETAIL-UI-01/SPEC.md` seguindo ADR-015 e os precedentes F33/F36.
+Executar `tasks/F40-PERSISTENT-RELATED-IDENTIFIER-CREATE-DESIGN-01/SPEC.md`.
 
 ## Critério de encerramento
 
-F39 fecha quando o detalhe persistente editar item exclusivamente por F38, com snapshot bruto protegido dos quatro campos, optimistic concurrency completo, semântica exata de `NULL`/texto/numeric, feedback e navegação sanitizados, demo read-only e todos os gates/adversariais verdes.
+F40 fecha quando o vínculo persistente mínimo de `related_identifiers` estiver completamente desenhado e red-teamed, com decisão canônica para payload, autorização, least privilege, auditoria, concorrência/idempotência e resultados, e uma única SPEC de implementação seguinte pronta, sem código operacional na própria F40.

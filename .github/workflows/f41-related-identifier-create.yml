@@ -1,0 +1,219 @@
+name: F41 Related Identifier Create
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  related-identifier-create:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Use Node.js 24 LTS
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24.x"
+          cache: npm
+
+      - name: Install dependencies from lockfile
+        run: npm ci
+
+      - name: Red-team F41 capability preflight
+        run: |
+          set -euo pipefail
+
+          createdb compras_f41_preflight_ci
+          for migration in \
+            0001_core_foundation.sql \
+            0002_trusted_identity_read_policies.sql \
+            0003_team_member_directory.sql \
+            0004_next_action_mutation.sql \
+            0005_contracting_create.sql \
+            0006_contracting_object_mutation.sql \
+            0007_contracting_item_create.sql \
+            0008_contracting_create_concurrency_repair.sql \
+            0009_contracting_item_mutation.sql; do
+            PGDATABASE=compras_f41_preflight_ci psql -v ON_ERROR_STOP=1 -f "database/migrations/$migration"
+          done
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_related_identifier_create_owner LOGIN;"
+          if PGDATABASE=compras_f41_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0010_related_identifier_create.sql; then
+            echo "unsafe LOGIN related identifier capability was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_related_identifier_create_owner;"
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_related_identifier_create_owner NOLOGIN NOINHERIT SUPERUSER;"
+          if PGDATABASE=compras_f41_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0010_related_identifier_create.sql; then
+            echo "unsafe SUPERUSER related identifier capability was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_related_identifier_create_owner;"
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_related_identifier_create_owner NOLOGIN NOINHERIT CREATEROLE NOBYPASSRLS;"
+          if PGDATABASE=compras_f41_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0010_related_identifier_create.sql; then
+            echo "unsafe CREATEROLE related identifier capability was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_related_identifier_create_owner;"
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_related_identifier_create_owner NOLOGIN NOINHERIT BYPASSRLS;"
+          if PGDATABASE=compras_f41_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0010_related_identifier_create.sql; then
+            echo "unsafe BYPASSRLS related identifier capability was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_related_identifier_create_owner;"
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_related_identifier_create_owner NOLOGIN NOINHERIT NOBYPASSRLS;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_f41_preflight_member NOLOGIN;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "GRANT compras_related_identifier_create_owner TO compras_f41_preflight_member WITH INHERIT FALSE, SET TRUE;"
+          if PGDATABASE=compras_f41_preflight_ci psql -v ON_ERROR_STOP=1 -f database/migrations/0010_related_identifier_create.sql; then
+            echo "SET-capable related identifier capability membership was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "REVOKE compras_related_identifier_create_owner FROM compras_f41_preflight_member;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_f41_preflight_member;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_related_identifier_create_owner;"
+
+          dropdb compras_f41_preflight_ci
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_item_mutation_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_item_create_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_object_mutation_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_create_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_next_action_mutation_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_team_directory_view_owner;"
+
+      - name: Verify F41 persistent related identifier boundary
+        run: |
+          set -euo pipefail
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_f41_migrator_ci LOGIN CREATEROLE NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOREPLICATION PASSWORD 'DEMO-F41-MIGRATOR-PASSWORD';"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_domain_runtime_f41_ci LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD 'DEMO-F41-DOMAIN-RUNTIME-PASSWORD';"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_auth_runtime_f41_ci LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD 'DEMO-F41-AUTH-RUNTIME-PASSWORD';"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_readonly_runtime_f41_ci LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD 'DEMO-F41-READONLY-RUNTIME-PASSWORD';"
+          createdb -O compras_f41_migrator_ci compras_related_identifier_ci
+
+          for migration in \
+            0001_core_foundation.sql \
+            0002_trusted_identity_read_policies.sql \
+            0003_team_member_directory.sql \
+            0004_next_action_mutation.sql \
+            0005_contracting_create.sql \
+            0006_contracting_object_mutation.sql \
+            0007_contracting_item_create.sql \
+            0008_contracting_create_concurrency_repair.sql \
+            0009_contracting_item_mutation.sql \
+            0010_related_identifier_create.sql; do
+            PGUSER=compras_f41_migrator_ci PGPASSWORD='DEMO-F41-MIGRATOR-PASSWORD' PGDATABASE=compras_related_identifier_ci \
+              psql -v ON_ERROR_STOP=1 -f "database/migrations/$migration"
+          done
+
+          FUNCTION_SIG='public.create_related_identifier(uuid,uuid,text,text,text,text,uuid)'
+          DOMAIN_PRE="$(PGDATABASE=compras_related_identifier_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_domain_runtime_f41_ci', '$FUNCTION_SIG', 'EXECUTE')")"
+          AUTH_PRE="$(PGDATABASE=compras_related_identifier_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_auth_runtime_f41_ci', '$FUNCTION_SIG', 'EXECUTE')")"
+          READONLY_PRE="$(PGDATABASE=compras_related_identifier_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_readonly_runtime_f41_ci', '$FUNCTION_SIG', 'EXECUTE')")"
+          if [[ "$DOMAIN_PRE" != "f" || "$AUTH_PRE" != "f" || "$READONLY_PRE" != "f" ]]; then
+            echo "F41 related identifier EXECUTE leaked before explicit provisioning" >&2
+            exit 1
+          fi
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_f41_unsafe_inherit LOGIN INHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;"
+          if PGUSER=compras_f41_migrator_ci PGPASSWORD='DEMO-F41-MIGRATOR-PASSWORD' PGDATABASE=compras_related_identifier_ci \
+            psql -v ON_ERROR_STOP=1 -v runtime_role='compras_f41_unsafe_inherit' -f database/provisioning/grant_related_identifier_create_runtime.sql; then
+            echo "unsafe INHERIT runtime was accepted" >&2
+            exit 1
+          fi
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_f41_unsafe_inherit;"
+
+          psql -v ON_ERROR_STOP=1 -d postgres -c "CREATE ROLE compras_f41_unsafe_dml LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION;"
+          PGUSER=compras_f41_migrator_ci PGPASSWORD='DEMO-F41-MIGRATOR-PASSWORD' PGDATABASE=compras_related_identifier_ci \
+            psql -v ON_ERROR_STOP=1 -c "GRANT INSERT (identifier_value) ON public.related_identifiers TO compras_f41_unsafe_dml;"
+          if PGUSER=compras_f41_migrator_ci PGPASSWORD='DEMO-F41-MIGRATOR-PASSWORD' PGDATABASE=compras_related_identifier_ci \
+            psql -v ON_ERROR_STOP=1 -v runtime_role='compras_f41_unsafe_dml' -f database/provisioning/grant_related_identifier_create_runtime.sql; then
+            echo "runtime with direct related identifier DML was accepted" >&2
+            exit 1
+          fi
+          PGUSER=compras_f41_migrator_ci PGPASSWORD='DEMO-F41-MIGRATOR-PASSWORD' PGDATABASE=compras_related_identifier_ci \
+            psql -v ON_ERROR_STOP=1 -c "REVOKE INSERT (identifier_value) ON public.related_identifiers FROM compras_f41_unsafe_dml;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_f41_unsafe_dml;"
+
+          PGUSER=compras_f41_migrator_ci PGPASSWORD='DEMO-F41-MIGRATOR-PASSWORD' PGDATABASE=compras_related_identifier_ci \
+            psql -v ON_ERROR_STOP=1 -v runtime_role='compras_domain_runtime_f41_ci' \
+              -f database/provisioning/grant_related_identifier_create_runtime.sql
+
+          DOMAIN_POST="$(PGDATABASE=compras_related_identifier_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_domain_runtime_f41_ci', '$FUNCTION_SIG', 'EXECUTE')")"
+          AUTH_POST="$(PGDATABASE=compras_related_identifier_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_auth_runtime_f41_ci', '$FUNCTION_SIG', 'EXECUTE')")"
+          READONLY_POST="$(PGDATABASE=compras_related_identifier_ci psql -v ON_ERROR_STOP=1 -Atqc "SELECT has_function_privilege('compras_readonly_runtime_f41_ci', '$FUNCTION_SIG', 'EXECUTE')")"
+          if [[ "$DOMAIN_POST" != "t" || "$AUTH_POST" != "f" || "$READONLY_POST" != "f" ]]; then
+            echo "F41 runtime provisioning did not remain isolated" >&2
+            exit 1
+          fi
+
+          PGUSER=compras_f41_migrator_ci PGPASSWORD='DEMO-F41-MIGRATOR-PASSWORD' PGDATABASE=compras_related_identifier_ci psql -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT USAGE ON SCHEMA public TO compras_domain_runtime_f41_ci;
+          GRANT SELECT ON TABLE
+            public.app_users,
+            public.memberships,
+            public.teams,
+            public.contractings,
+            public.related_identifiers,
+            public.contracting_items,
+            public.contracting_events
+            TO compras_domain_runtime_f41_ci;
+          GRANT EXECUTE ON FUNCTION public.current_auth_issuer() TO compras_domain_runtime_f41_ci;
+          GRANT EXECUTE ON FUNCTION public.current_auth_subject() TO compras_domain_runtime_f41_ci;
+          GRANT EXECUTE ON FUNCTION public.current_app_user_id() TO compras_domain_runtime_f41_ci;
+          SQL
+
+          PGDATABASE=compras_related_identifier_ci psql -v ON_ERROR_STOP=1 -f database/tests/related_identifier_create.sql
+
+          npx vitest run src/features/contracting-detail/persistent-related-identifier-create.test.ts
+
+          F41_RELATED_IDENTIFIER_CREATE_POSTGRES_TEST=1 \
+          F41_DOMAIN_RUNTIME_DATABASE_URL='postgresql://compras_domain_runtime_f41_ci:DEMO-F41-DOMAIN-RUNTIME-PASSWORD@localhost:5432/compras_related_identifier_ci' \
+          F41_ADMIN_DATABASE_URL='postgresql://postgres:postgres@localhost:5432/compras_related_identifier_ci' \
+            npx vitest run src/features/contracting-detail/persistent-related-identifier-create.postgres.test.ts
+
+          dropdb compras_related_identifier_ci
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_related_identifier_create_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_item_mutation_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_item_create_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_object_mutation_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_contracting_create_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_next_action_mutation_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_team_directory_view_owner;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_domain_runtime_f41_ci;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_auth_runtime_f41_ci;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_readonly_runtime_f41_ci;"
+          psql -v ON_ERROR_STOP=1 -d postgres -c "DROP ROLE compras_f41_migrator_ci;"

@@ -353,7 +353,7 @@ AS $function$
 DECLARE
   current_user_id uuid;
   target_team_id uuid;
-  actor_membership_id uuid;
+  current_actor_membership_id uuid;
   existing_team_id uuid;
   existing_contracting_id uuid;
   existing_identifier_kind text;
@@ -391,13 +391,13 @@ BEGIN
   END IF;
 
   SELECT membership.id
-  INTO actor_membership_id
+  INTO current_actor_membership_id
   FROM public.memberships AS membership
   WHERE membership.team_id = target_team_id
     AND membership.user_id = current_user_id
     AND membership.revoked_at IS NULL;
 
-  IF actor_membership_id IS NULL THEN
+  IF current_actor_membership_id IS NULL THEN
     RETURN 'denied';
   END IF;
 
@@ -449,7 +449,7 @@ BEGIN
         AND event.contracting_id = p_contracting_id
         AND event.related_identifier_id = p_related_identifier_id
         AND event.event_type = 'related_identifier_linked'
-        AND event.actor_membership_id = actor_membership_id
+        AND event.actor_membership_id = current_actor_membership_id
         AND event.occurred_at = existing_linked_at
         AND event.created_at = existing_linked_at
         AND event.field_key IS NULL
@@ -504,7 +504,7 @@ BEGIN
       p_event_id,
       target_team_id,
       p_contracting_id,
-      actor_membership_id,
+      current_actor_membership_id,
       'related_identifier_linked',
       operation_at,
       p_related_identifier_id,
@@ -553,7 +553,7 @@ BEGIN
       AND event.contracting_id = p_contracting_id
       AND event.related_identifier_id = p_related_identifier_id
       AND event.event_type = 'related_identifier_linked'
-      AND event.actor_membership_id = actor_membership_id
+      AND event.actor_membership_id = current_actor_membership_id
       AND event.occurred_at = existing_linked_at
       AND event.created_at = existing_linked_at
       AND event.field_key IS NULL

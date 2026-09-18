@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../actions", () => ({
   createPersistentContractingItemAction: "/f36-test-item-create",
+  createPersistentRelatedIdentifierAction: "/f42-test-related-identifier-create",
   updatePersistentContractingItemAction: "/f39-test-item-mutation",
   updatePersistentNextActionAction: "/f27-test-next-action",
   updatePersistentObjectAction: "/f33-test-object",
@@ -17,6 +18,8 @@ import { getDemoContractingDetail } from "../demo-detail-data";
 import { ContractingDetail } from "./contracting-detail";
 
 const detail = getDemoContractingDetail("DEMO-001")!;
+const RELATED_IDENTIFIER_CANDIDATE =
+  "42010000-0000-4000-8000-000000000001";
 const persistentDetail = {
   ...detail,
   id: "39000000-0000-4000-8000-000000000001",
@@ -56,6 +59,8 @@ describe("ContractingDetail persistent editor boundaries", () => {
         objectMutationState="updated"
         itemCreationState="created"
         itemMutationState="updated"
+        relatedIdentifierCandidateId={RELATED_IDENTIFIER_CANDIDATE}
+        relatedIdentifierCreationState="created"
       />,
     );
 
@@ -66,12 +71,15 @@ describe("ContractingDetail persistent editor boundaries", () => {
     expect(html).not.toContain("Salvar objeto");
     expect(html).not.toContain("Adicionar item");
     expect(html).not.toContain("Salvar item");
+    expect(html).not.toContain("Vincular identificador");
+    expect(html).not.toContain(RELATED_IDENTIFIER_CANDIDATE);
     expect(html).not.toContain("expectedDescription");
     expect(html).not.toContain("expectedUnitKind");
     expect(html).not.toContain("Próxima ação atualizada.");
     expect(html).not.toContain("Objeto atualizado.");
     expect(html).not.toContain("Item adicionado.");
     expect(html).not.toContain("Item atualizado.");
+    expect(html).not.toContain("Identificador relacionado vinculado.");
   });
 
   it("renders existing editors plus F39 item editors only in persistent detail", () => {
@@ -83,6 +91,8 @@ describe("ContractingDetail persistent editor boundaries", () => {
         objectMutationState="conflict"
         itemCreationState="not-available"
         itemMutationState="conflict"
+        relatedIdentifierCandidateId={RELATED_IDENTIFIER_CANDIDATE}
+        relatedIdentifierCreationState="not-available"
       />,
     );
 
@@ -92,6 +102,8 @@ describe("ContractingDetail persistent editor boundaries", () => {
     expect(html).toContain("Limpar próxima ação");
     expect(html).toContain("Adicionar item");
     expect(html).toContain("Salvar item");
+    expect(html).toContain("Vincular identificador");
+    expect(html).toContain(RELATED_IDENTIFIER_CANDIDATE);
     expect(html).toContain('name="contractingId"');
     expect(html).toContain('name="expectedObject"');
     expect(html).toContain('name="newObject"');
@@ -114,12 +126,21 @@ describe("ContractingDetail persistent editor boundaries", () => {
     expect(html).toContain('name="newUnit"');
     expect(html).toContain('name="newCatalogCodeKind"');
     expect(html).toContain('name="newCatalogCode"');
+    expect(html).toContain('name="relatedIdentifierId"');
+    expect(html).toContain('name="identifierKindKind"');
+    expect(html).toContain('name="identifierKind"');
+    expect(html).toContain('name="identifierValue"');
+    expect(html).toContain('name="sourceSystemKind"');
+    expect(html).toContain('name="sourceSystem"');
+    expect(html).toContain('name="noteKind"');
+    expect(html).toContain('name="note"');
     expect(html).toContain('inputMode="decimal"');
     expect(html).not.toContain('required=""');
     expect(html).not.toContain('type="number"');
     expect(html).toContain("O objeto mudou desde sua leitura");
     expect(html).toContain("A próxima ação mudou desde sua leitura");
     expect(html).toContain("A criação de item não está disponível para este registro.");
+    expect(html).toContain("O vínculo de identificador não está disponível para este registro.");
     expect(html).toContain("O item mudou desde sua leitura");
     expect(html).toContain('role="alert"');
 
@@ -148,6 +169,54 @@ describe("ContractingDetail persistent editor boundaries", () => {
     ]) {
       expect(html).not.toContain(`name="${forbiddenField}"`);
     }
+  });
+
+  it("encodes nullable related identifier fields explicitly without imposing a taxonomy", () => {
+    const html = renderToStaticMarkup(
+      <ContractingDetail
+        detail={persistentDetail}
+        source="persistent"
+        relatedIdentifierCandidateId={RELATED_IDENTIFIER_CANDIDATE}
+        relatedIdentifierCreationState="unavailable"
+      />,
+    );
+
+    expect(html).toContain(
+      `name="relatedIdentifierId" value="${RELATED_IDENTIFIER_CANDIDATE}"`,
+    );
+    expect(html).toContain('name="identifierKindKind"');
+    expect(html).toContain('name="sourceSystemKind"');
+    expect(html).toContain('name="noteKind"');
+    expect(html.match(/value="null"/g)?.length).toBeGreaterThanOrEqual(3);
+    expect(html.match(/value="text"/g)?.length).toBeGreaterThanOrEqual(3);
+    expect(html).toContain("Ausente (NULL)");
+    expect(html).toContain("Texto");
+    expect(html).toContain('name="identifierValue" type="text"');
+    expect(html).not.toContain('name="identifierValue" type="text" required=""');
+    expect(html).toContain(
+      "Texto vazio e espaços são preservados exatamente, sem máscara, normalização ou deduplicação.",
+    );
+    expect(html).toContain("Não foi possível vincular o identificador agora.");
+  });
+
+  it("keeps existing related identifiers visible alongside the persistent creation form", () => {
+    const html = renderToStaticMarkup(
+      <ContractingDetail
+        detail={persistentDetail}
+        source="persistent"
+        relatedIdentifierCandidateId={RELATED_IDENTIFIER_CANDIDATE}
+        relatedIdentifierCreationState="already-linked"
+      />,
+    );
+
+    for (const identifier of persistentDetail.relatedIdentifiers) {
+      expect(html).toContain(identifier.id);
+      expect(html).toContain(identifier.value);
+    }
+    expect(html).toContain("A mesma solicitação de vínculo já foi concluída.");
+    expect(html).not.toContain("Desvincular");
+    expect(html).not.toContain("Excluir identificador");
+    expect(html).not.toContain("Editar identificador");
   });
 
   it("uses the exact protected object value as expected value and textarea default", () => {

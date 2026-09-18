@@ -21,14 +21,14 @@ A fundação possui:
 - edição persistente de `contractings.object` com UI;
 - criação mínima persistente de `contracting_items`, com allocator concorrente e UI;
 - edição persistente dos quatro campos de item com UI e optimistic concurrency por snapshot completo;
-- desenho ADR-016 para criação persistente mínima de `related_identifiers`, ainda sem implementação operacional;
-- migrations de domínio `0001..0009` integradas e imutáveis.
+- criação persistente mínima de `related_identifiers`, auditável e idempotente por UUID preparado, ainda sem UI;
+- migrations de domínio `0001..0010` integradas e imutáveis.
 
-F40 foi integrada pela PR `#63`, merge `9463aab5dbfbda5b1c037b622ddb83859600253e`. No head final `4211d92b100be1064bfd14b60d1b8ab132e51abe`, CI, F22, F29, F32, F35 e F38 ficaram verdes. A slice foi exclusivamente documental e não alterou runtime, schema, policies, grants, provisioning ou migrations.
+F41 foi integrada pela PR `#65`, merge `d460e38a4d5a6a1ef3408d72f10ac1d8765fee63`. No head final `24fccfbd9a58a7ddfd265b7f6b3ec05646e583e0`, CI, F22, F29, F32, F35, F38 e F41 ficaram verdes.
 
 A próxima e única frente canônica é:
 
-`F41-PERSISTENT-RELATED-IDENTIFIER-CREATE-IMPLEMENT-01 - Implementar vínculo persistente mínimo de identificador relacionado`.
+`F42-PERSISTENT-RELATED-IDENTIFIER-CREATE-DETAIL-UI-01 - Integrar criação persistente de identificador relacionado no detalhe`.
 
 F17 permanece `ON HOLD` histórico. F21 permanece `ON HOLD` até existir control plane Vercel capaz de readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch sem expor valores.
 
@@ -96,13 +96,21 @@ A UI envia sempre os quatro expected e os quatro new values. Expected vem das co
 
 Unit/catalog preservam `NULL`, `''` e espaços por codificação explícita `text|null`. Quantity usa input textual e nunca passa por `Number`, `parseFloat` ou `type=number`.
 
-A capability F38 continua limitada a `description`, `quantity`, `unit`, `catalog_code` e `updated_at`. F39 não ampliou authority, grant, policy, primitive ou provisioning.
+### F40/F41 - criação mínima de identificador relacionado
 
-Resultado completo da UI: `tasks/F39-PERSISTENT-CONTRACTING-ITEM-MUTATION-DETAIL-UI-01/RESULT.md`.
+ADR-016 define a boundary de criação de `related_identifiers`; F41 materializa a decisão.
 
-### F40 - desenho de criação de identificador relacionado
+A implementação integrada possui:
 
-ADR-016 define a primeira boundary de criação de `related_identifiers`.
+- migration aditiva `0010_related_identifier_create.sql`;
+- capability dedicada `compras_related_identifier_create_owner`;
+- primitive `public.create_related_identifier(...)`;
+- provisioning separado de runtime;
+- adapter server-only;
+- auditoria atômica `related_identifier_linked`;
+- replay seguro por UUID preparado;
+- testes SQL adversariais e prova PostgreSQL concorrente;
+- workflow dedicado F41.
 
 Decisões centrais:
 
@@ -110,37 +118,36 @@ Decisões centrais:
 - `relatedIdentifierId` é UUID preparado pelo servidor e usado como identidade estável/idempotency key, nunca como authority;
 - team, actor, membership, issuer, subject, timestamps e event UUID são derivados de contexto confiável;
 - autorização segue o guard target-team pilot-only;
-- `identifierValue` preserva o texto exato, inclusive vazio e espaços, porque não existe regra canônica non-empty;
+- `identifierValue` preserva o texto exato, inclusive vazio e espaços;
 - `identifierKind`, `sourceSystem` e `note` preservam `NULL`, vazio e espaços;
 - não existe deduplicação por número, tipo ou origem;
-- replay `already-linked` exige prova exata e autorizada da row ativa e de exatamente um evento canônico `related_identifier_linked`;
-- row e evento devem ser atômicos;
+- replay `already-linked` exige prova exata e autorizada da row ativa e de exatamente um evento canônico;
+- row e evento são atômicos;
 - runtime normal continua sem DML direto;
-- capability futura é dedicada e não amplia F26/F29/F32/F35/F38.
+- F41 não adicionou UI nem Server Action.
 
-A implementação operacional ficou deliberadamente para F41.
+Resultado completo: `tasks/F41-PERSISTENT-RELATED-IDENTIFIER-CREATE-IMPLEMENT-01/RESULT.md`.
 
-## Próxima frente F41
+## Próxima frente F42
 
 A única `NEXT_ACTION` canônica está em `docs/ai/NEXT_ACTION.md`:
 
-`F41-PERSISTENT-RELATED-IDENTIFIER-CREATE-IMPLEMENT-01 - Implementar vínculo persistente mínimo de identificador relacionado`.
+`F42-PERSISTENT-RELATED-IDENTIFIER-CREATE-DETAIL-UI-01 - Integrar criação persistente de identificador relacionado no detalhe`.
 
-F41 deve materializar ADR-016 com:
+F42 deve expor F41 no detalhe persistente com:
 
-- migration aditiva `0010`;
-- capability dedicada e policies RLS estreitas;
-- primitive `SECURITY DEFINER`;
-- provisioning separado que concede apenas `EXECUTE` à runtime;
-- adapter server-only;
-- auditoria atômica `related_identifier_linked`;
-- replay seguro e concorrência por UUID preparado;
-- testes SQL adversariais e prova PostgreSQL concorrente;
-- workflow/regressões aplicáveis.
+- Server Action estreita;
+- candidate UUID preparado no servidor;
+- preservação do mesmo candidate em retry técnico da mesma intenção;
+- transporte explícito de `NULL` versus texto para os campos nullable;
+- feedback fixo e sanitizado;
+- readback pelo modelo protegido;
+- demo estritamente read-only;
+- nenhuma alteração em migration, RLS, grant, capability, primitive ou provisioning F41.
 
-F41 não inclui UI nem Server Action.
+F42 não inclui edição, desvínculo, re-link, delete, taxonomia fechada ou deduplicação.
 
-A SPEC está em `tasks/F41-PERSISTENT-RELATED-IDENTIFIER-CREATE-IMPLEMENT-01/SPEC.md`.
+A SPEC está em `tasks/F42-PERSISTENT-RELATED-IDENTIFIER-CREATE-DETAIL-UI-01/SPEC.md`.
 
 ## Modos da aplicação
 
@@ -180,9 +187,10 @@ Migrations de domínio integradas e imutáveis:
 - `0006_contracting_object_mutation.sql`;
 - `0007_contracting_item_create.sql`;
 - `0008_contracting_create_concurrency_repair.sql`;
-- `0009_contracting_item_mutation.sql`.
+- `0009_contracting_item_mutation.sql`;
+- `0010_related_identifier_create.sql`.
 
-Migration aplicada não é reescrita. A implementação F41 deve começar em migration aditiva `0010` ou posterior.
+Migration aplicada não é reescrita. F42 é uma slice de integração UI/server action e não deve alterar as migrations `0001..0010`.
 
 ## Fonte de verdade
 

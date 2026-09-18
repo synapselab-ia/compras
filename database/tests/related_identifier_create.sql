@@ -297,11 +297,11 @@ COMMIT;
 BEGIN;
 SELECT set_config('request.jwt.claims', '{"iss":"urn:compras:better-auth:self-hosted:v1","sub":"DEMO-F41-NO-MEMBERSHIP"}', true);
 SELECT test_support_f41.assert_text(
-  $SELECT public.create_related_identifier(
+  $$SELECT public.create_related_identifier(
     '41140000-0000-4000-8000-000000000001',
     '41150000-0000-4000-8000-000000000006',
     'DEMO-kind', 'DEMO no membership', 'DEMO-source', 'DEMO-note',
-    '41160000-0000-4000-8000-000000000006')$,
+    '41160000-0000-4000-8000-000000000006')$$,
   'denied', 'active app user without membership deny'
 );
 COMMIT;
@@ -382,19 +382,19 @@ SELECT test_support_f41.assert_count(
   1, 'replay adds no second event'
 );
 SELECT test_support_f41.assert_text(
-  $SELECT public.create_related_identifier(
+  $$SELECT public.create_related_identifier(
     '41140000-0000-4000-8000-000000000001',
     '41150000-0000-4000-8000-000000000101',
     NULL, 'DIFFERENT', '   ', '  DEMO note  ',
-    '41160000-0000-4000-8000-000000000103')$,
+    '41160000-0000-4000-8000-000000000103')$$,
   'denied', 'same UUID divergent payload deny'
 );
 SELECT test_support_f41.assert_text(
-  $SELECT public.create_related_identifier(
+  $$SELECT public.create_related_identifier(
     '41140000-0000-4000-8000-000000000001',
     '41150000-0000-4000-8000-000000000101',
     '', '', '   ', '  DEMO note  ',
-    '41160000-0000-4000-8000-000000000104')$,
+    '41160000-0000-4000-8000-000000000104')$$,
   'denied', 'null and empty identifier kind remain distinct on replay'
 );
 COMMIT;

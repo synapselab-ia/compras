@@ -16,6 +16,31 @@ vi.mock("next/navigation", () => ({
   redirect: pageMocks.redirect,
   notFound: pageMocks.notFound,
 }));
+vi.mock("@/features/contracting-create/feedback", () => ({
+  getContractingCreateFeedback: () => null,
+  readContractingCreateUiState: () => null,
+}));
+vi.mock("@/features/contracting-detail/item-create-feedback", () => ({
+  readItemCreationUiState: () => null,
+}));
+vi.mock("@/features/contracting-detail/item-mutation-feedback", () => ({
+  readItemMutationUiState: () => null,
+}));
+vi.mock("@/features/contracting-detail/next-action-feedback", () => ({
+  readNextActionMutationUiState: () => null,
+}));
+vi.mock("@/features/contracting-detail/object-feedback", () => ({
+  readObjectMutationUiState: () => null,
+}));
+vi.mock("@/features/contracting-detail/related-identifier-create-feedback", () => ({
+  readRelatedIdentifierCreationUiState: (
+    value: string | string[] | undefined,
+  ) =>
+    typeof value === "string" &&
+    ["created", "already-linked", "not-available", "unavailable"].includes(value)
+      ? value
+      : null,
+}));
 vi.mock("@/features/contracting-detail/view-data", () => ({
   loadContractingDetailViewData: pageMocks.loadContractingDetailViewData,
 }));

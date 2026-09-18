@@ -170,7 +170,7 @@ Se já existir row com o mesmo `relatedIdentifierId`, o resultado só pode ser `
 - mesmo `source_system` por comparação null-safe;
 - mesmo `note` por comparação null-safe.
 
-Além da row, deve existir o fato de criação esperado em `contracting_events`:
+Além da row, deve existir exatamente um fato de criação canônico em `contracting_events` para esse `related_identifier_id`:
 
 - `event_type = 'related_identifier_linked'`;
 - mesmo `team_id`;
@@ -178,6 +178,7 @@ Além da row, deve existir o fato de criação esperado em `contracting_events`:
 - mesmo `related_identifier_id`;
 - `actor_membership_id` igual à membership pilot-only derivada;
 - `occurred_at = related_identifiers.linked_at`;
+- `created_at = related_identifiers.linked_at`;
 - `field_key IS NULL`;
 - `old_value IS NULL`;
 - `new_value IS NULL`;

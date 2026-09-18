@@ -96,7 +96,8 @@ INSERT INTO public.app_users (
   ('41120000-0000-4000-8000-000000000003', 'urn:compras:better-auth:self-hosted:v1', 'DEMO-F41-C', 'DEMO F41 C', '2026-01-01T00:00:00Z', NULL),
   ('41120000-0000-4000-8000-000000000004', 'urn:compras:better-auth:self-hosted:v1', 'DEMO-F41-C-DISABLED-MEMBER', 'DEMO F41 C disabled member', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z'),
   ('41120000-0000-4000-8000-000000000005', 'urn:compras:better-auth:self-hosted:v1', 'DEMO-F41-REVOKED', 'DEMO F41 revoked', '2026-01-01T00:00:00Z', NULL),
-  ('41120000-0000-4000-8000-000000000006', 'urn:compras:better-auth:self-hosted:v1', 'DEMO-F41-DISABLED', 'DEMO F41 disabled', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z');
+  ('41120000-0000-4000-8000-000000000006', 'urn:compras:better-auth:self-hosted:v1', 'DEMO-F41-DISABLED', 'DEMO F41 disabled', '2026-01-01T00:00:00Z', '2026-01-02T00:00:00Z'),
+  ('41120000-0000-4000-8000-000000000008', 'urn:compras:better-auth:self-hosted:v1', 'DEMO-F41-NO-MEMBERSHIP', 'DEMO F41 no membership', '2026-01-01T00:00:00Z', NULL);
 
 INSERT INTO public.memberships (
   id, team_id, user_id, joined_at, revoked_at
@@ -293,6 +294,18 @@ SELECT test_support_f41.assert_text(
 );
 COMMIT;
 
+BEGIN;
+SELECT set_config('request.jwt.claims', '{"iss":"urn:compras:better-auth:self-hosted:v1","sub":"DEMO-F41-NO-MEMBERSHIP"}', true);
+SELECT test_support_f41.assert_text(
+  $SELECT public.create_related_identifier(
+    '41140000-0000-4000-8000-000000000001',
+    '41150000-0000-4000-8000-000000000006',
+    'DEMO-kind', 'DEMO no membership', 'DEMO-source', 'DEMO-note',
+    '41160000-0000-4000-8000-000000000006')$,
+  'denied', 'active app user without membership deny'
+);
+COMMIT;
+
 -- The target-team guard permits A even though the same user also belongs to
 -- another team. Text and nullability are preserved exactly.
 BEGIN;
@@ -369,12 +382,20 @@ SELECT test_support_f41.assert_count(
   1, 'replay adds no second event'
 );
 SELECT test_support_f41.assert_text(
-  $$SELECT public.create_related_identifier(
+  $SELECT public.create_related_identifier(
     '41140000-0000-4000-8000-000000000001',
     '41150000-0000-4000-8000-000000000101',
     NULL, 'DIFFERENT', '   ', '  DEMO note  ',
-    '41160000-0000-4000-8000-000000000103')$$,
+    '41160000-0000-4000-8000-000000000103')$,
   'denied', 'same UUID divergent payload deny'
+);
+SELECT test_support_f41.assert_text(
+  $SELECT public.create_related_identifier(
+    '41140000-0000-4000-8000-000000000001',
+    '41150000-0000-4000-8000-000000000101',
+    '', '', '   ', '  DEMO note  ',
+    '41160000-0000-4000-8000-000000000104')$,
+  'denied', 'null and empty identifier kind remain distinct on replay'
 );
 COMMIT;
 

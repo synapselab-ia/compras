@@ -1,70 +1,61 @@
 # Next Action - Compras
 
-## F42-PERSISTENT-RELATED-IDENTIFIER-CREATE-DETAIL-UI-01 - Integrar criação persistente de identificador relacionado no detalhe
+## F43-PERSISTENT-MANUAL-TIMELINE-NOTE-DESIGN-01 - Desenhar criação persistente de nota manual na timeline
 
-**Classe:** T1 - feature normal, com impacto T2 - autorização/escrita server-side  
-**Estado:** READY após integração da F41  
-**Objetivo:** tornar a boundary F41 utilizável no detalhe persistente por uma Server Action estreita e UI mínima, com UUID preparado estável em retry, transporte explícito de NULL/texto, feedback sanitizado, readback protegido e demo read-only, sem ampliar authority PostgreSQL.
+**Classe:** T2 - desenho arquitetural de escrita/auditoria  
+**Estado:** READY após integração da F42  
+**Objetivo:** desenhar a primeira boundary persistente de criação de nota manual em `contracting_events`, com payload mínimo, authorization guard pilot-only, least privilege, semântica textual, idempotência/concorrência e resultados sanitizados definidos para implementação posterior.
 
 Esta é a única `NEXT_ACTION` canônica.
 
 ## Por que esta ação agora
 
-F41 integrou a criação persistente mínima de `related_identifiers` com capability dedicada, RLS, primitive, provisioning, adapter server-only, auditoria atômica e replay seguro por UUID preparado.
+F42 integrou a criação persistente de identificador relacionado ao detalhe e fechou o ciclo F40/F41/F42.
 
-O read model do detalhe já lista identificadores relacionados ativos. O próximo gap pequeno e independente é expor somente essa operação existente para uma pessoa autorizada, repetindo o padrão já usado para contratação, objeto e itens, sem abrir edição, desvínculo ou CRUD genérico.
+O núcleo funcional inicial ainda exige timeline útil e rastreável. O DOMAIN_MODEL prevê explicitamente `nota manual` como tipo de evento esperado e o DATABASE já registra que eventos de nota manual podem usar `note` sem `field_key`.
 
-A frente é independente de F21, não depende de pesquisa de preços e não resolve Q-003 nem Q-009.
+Essa frente é pequena, independente e não exige resolver as taxonomias de etapa/status, Q-003, pesquisa de preços ou política multiusuário. Edição/desvínculo de identificador relacionado continua fora do próximo passo porque sua semântica pode depender de Q-003.
 
 ## Execução obrigatória
 
-1. recuperar `main` real e confirmar F41 integrada pela PR `#65`, merge `d460e38a4d5a6a1ef3408d72f10ac1d8765fee63`;
+1. recuperar o `main` real e confirmar F42 integrada pela PR `#67`, merge `53db535df7981f957674ca708bea7b30308992b3`;
 2. revalidar `CONTEXT_MANIFEST`;
-3. ler integralmente ADR-016, resultado F41 e `tasks/F42-PERSISTENT-RELATED-IDENTIFIER-CREATE-DETAIL-UI-01/SPEC.md`;
-4. confirmar migrations `0001..0010` byte-for-byte antes de editar;
-5. inspecionar F30 como precedente de UUID preparado/retry e F36/F39 como precedentes de Server Action/UI;
-6. inspecionar o read model, tipos, detalhe, actions e feedbacks atuais;
-7. manter migrations, grants, policies, capabilities, primitive e provisioning F41 imutáveis;
-8. renderizar a jornada somente em modo persistente válido;
-9. manter demo e falha protegida estritamente read-only, sem fallback;
-10. gerar o `relatedIdentifierId` inicial no servidor pelo helper F41;
-11. preservar o mesmo candidate em retry da mesma intenção, especialmente após `unavailable`;
-12. não gerar candidate no browser e não tratá-lo como authority;
-13. criar Server Action dedicada que aceite somente os campos de transporte aprovados;
-14. rejeitar scalars duplicados, campos extras e callback/redirect controlável pelo cliente;
-15. validar `contractingId` e `relatedIdentifierId` como candidatos UUID antes de F41;
-16. chamar exclusivamente `createPersistentRelatedIdentifier`, sem SQL/DML próprio;
-17. codificar explicitamente `NULL` versus texto para identifierKind, sourceSystem e note;
-18. preservar `''`, spaces-only e leading/trailing spaces exatamente;
-19. não aplicar trim, case-folding, máscara, regex, taxonomia fechada ou deduplicação;
-20. mapear `created`, `already-linked`, `not-available` e `unavailable` apenas para feedback fixo e sanitizado;
-21. revalidar/readback somente pela rota local fixa e pelo modelo protegido;
-22. impedir double-submit acidental por estado pending;
-23. criar testes adversariais de action, UI, candidate/retry, NULL/texto, demo e navegação;
-24. executar lint, typecheck, testes, build e regressões CI/F22/F29/F32/F35/F38/F41;
-25. fazer red-team integral, confirmar `0001..0010` imutáveis, promover somente com gates aplicáveis verdes e atualizar checkpoint deixando exatamente uma nova `NEXT_ACTION`.
+3. ler `tasks/F42-PERSISTENT-RELATED-IDENTIFIER-CREATE-DETAIL-UI-01/RESULT.md` e `tasks/F43-PERSISTENT-MANUAL-TIMELINE-NOTE-DESIGN-01/SPEC.md`;
+4. ler diretamente SECURITY e DATABASE porque F43 é T2;
+5. inspecionar PROJECT_DESIGN, DOMAIN_MODEL e BUSINESS_WORKFLOW nos pontos de timeline/auditoria;
+6. inspecionar schema físico, RLS e grants atuais de `contracting_events`;
+7. inspecionar os shapes de eventos e guards de F26/F29/F32/F35/F38/F41;
+8. confirmar migrations `0001..0010` byte-for-byte antes de qualquer alteração documental;
+9. desenhar somente a criação de nota manual, sem mutar estado de contratação, item ou identificador;
+10. definir payload server-only mínimo e todos os valores derivados por contexto confiável;
+11. impedir que browser escolha team, actor, membership, issuer, subject, timestamps ou `event_type` arbitrário;
+12. definir shape fechado do evento manual, incluindo nullability de `field_key`, old/new, item e related identifier;
+13. definir semântica exata de `note` para `NULL`, vazio e espaços sem inventar non-empty, trim ou limite de negócio;
+14. decidir e justificar estratégia de UUID/idempotência/replay;
+15. definir autorização pilot-only sem resolver Q-009;
+16. definir capability dedicada e grants máximos sem ampliar capabilities anteriores;
+17. definir opacidade para inexistente, cross-team, inativo e falhas de membership;
+18. definir concorrência, colisões e resultados externos sanitizados;
+19. produzir ADR canônica e exatamente uma SPEC executável para a implementação seguinte;
+20. executar red-team documental, CI/gates aplicáveis e confirmar migrations imutáveis;
+21. atualizar checkpoint deixando exatamente uma nova `NEXT_ACTION`.
 
 ## Red-team mínimo
 
 Rejeitar PASS se:
 
-- browser puder transformar `relatedIdentifierId` em scope/authority;
-- candidate for gerado no browser;
-- retry técnico trocar candidate automaticamente e puder duplicar a intenção;
-- Server Action executar SQL/DML próprio ou contornar F41;
-- team, actor, membership, issuer, subject, event UUID, timestamps ou estado de vínculo atravessarem como authority;
-- callback/redirect externo for controlável pelo cliente;
-- `NULL` e string vazia forem colapsados;
-- texto for trimado, normalizado, mascarado ou validado por regra não documentada;
-- UI criar taxonomia fechada ou deduplicação por valor/tipo/origem;
-- `not-available` revelar existência cross-team ou motivo protegido;
-- `unavailable` expor SQL, claims, conexão ou erro interno;
-- demo/configuração inválida puder gravar;
-- falha protegida cair para fixture/demo;
-- migrations `0001..0010`, grants, policies, capability, primitive ou provisioning F41 forem alterados;
+- browser puder escolher team, actor, membership, issuer, subject ou timestamps;
+- browser puder definir `event_type`, `field_key`, old/new, item ou related identifier arbitrários;
+- nota manual virar primitive genérica de evento;
+- runtime normal receber INSERT direto em `contracting_events`;
+- capability receber UPDATE/DELETE de eventos ou DML de contratação/item/identificador;
 - F26/F29/F32/F35/F38/F41 ganharem authority adicional;
-- escopo expandir para edit/unlink/re-link/delete;
-- Q-003, Q-004 ou Q-009 forem resolvidas implicitamente;
+- cross-team, contratação inativa ou falha de membership produzir oracle protegido;
+- semântica textual for normalizada por conveniência;
+- taxonomia, categoria, prioridade ou entidade Pendência forem inventadas;
+- falha protegida cair para demo;
+- migrations `0001..0010` forem alteradas;
+- Q-001, Q-002, Q-003, Q-004, Q-006, Q-009 ou Q-010 forem resolvidas implicitamente;
 - provider hosted, secret ou dado real for necessário.
 
 ## Invariantes
@@ -73,18 +64,17 @@ Rejeitar PASS se:
 - somente dados e identidades fictícios;
 - repositório público continua tratado como superfície permanente;
 - F21 permanece `ON HOLD` até seu `resume_when` objetivo;
-- Q-003, Q-004 e Q-009 permanecem abertas;
+- questões abertas não são resolvidas silenciosamente;
 - autenticação não é autorização;
 - RLS/capabilities permanecem autoritativas;
 - runtime normal continua sem DML direto;
 - migrations aplicadas `0001..0010` permanecem imutáveis;
-- F41 continua sendo a única boundary de criação persistente de identificador relacionado;
 - falha protegida nunca vira demo fallback.
 
 ## Fonte da tarefa
 
-Executar `tasks/F42-PERSISTENT-RELATED-IDENTIFIER-CREATE-DETAIL-UI-01/SPEC.md`.
+Executar `tasks/F43-PERSISTENT-MANUAL-TIMELINE-NOTE-DESIGN-01/SPEC.md`.
 
 ## Critério de encerramento
 
-F42 fecha quando uma pessoa autorizada em modo persistente puder criar um identificador relacionado pelo detalhe usando exclusivamente F41, com candidate UUID preparado no servidor e estável em retry, transporte explícito de NULL/texto, payload sem authority controlada pelo browser, feedback sanitizado, readback protegido, demo read-only e regressões aplicáveis verdes.
+F43 fecha quando existir decisão canônica e red-teamed para criação persistente mínima de nota manual na timeline, com payload, authority, authorization guard, capability, semântica textual, idempotência/concorrência, resultados sanitizados e matriz adversarial definidos, além de exatamente uma SPEC de implementação seguinte pronta para execução, sem código operacional nesta slice.

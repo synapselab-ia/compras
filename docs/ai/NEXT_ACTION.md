@@ -1,56 +1,72 @@
 # Next Action - Compras
 
-## F40-PERSISTENT-RELATED-IDENTIFIER-CREATE-DESIGN-01 - Desenhar vínculo persistente mínimo de identificador relacionado
+## F41-PERSISTENT-RELATED-IDENTIFIER-CREATE-IMPLEMENT-01 - Implementar vínculo persistente mínimo de identificador relacionado
 
-**Classe:** T2 - desenho arquitetural de escrita/autorização  
-**Estado:** READY após integração da F39  
-**Objetivo:** definir a primeira boundary persistente para vincular um processo/identificador administrativo a uma contratação, com payload mínimo, autorização, least privilege, auditoria, concorrência/idempotência e resultados sanitizados, sem código operacional nesta slice.
+**Classe:** T2 - banco/segurança  
+**Estado:** READY após integração da F40  
+**Objetivo:** implementar ADR-016 com uma capability persistente dedicada para criar/vincular `related_identifiers`, registrar auditoria atômica, reconhecer replay seguro por UUID preparado e preservar least privilege, sem UI ou Server Action nesta slice.
 
 Esta é a única `NEXT_ACTION` canônica.
 
 ## Por que esta ação agora
 
-F39 integrou a edição dos quatro campos mutáveis de item ao detalhe persistente e fechou o ciclo ADR-015/F37/F38/F39.
+F40 integrou ADR-016 e fechou o desenho da primeira boundary de escrita para processos/identificadores relacionados.
 
-O núcleo funcional inicial também exige relacionamentos com múltiplos processos/identificadores externos. O schema e o read model de `related_identifiers` já existem e o detalhe já os apresenta, mas ainda não há boundary de escrita para criar o vínculo.
+O schema e a leitura protegida de `related_identifiers` já existem. O próximo gap pequeno e independente é materializar a operação server/database antes de expor qualquer jornada de UI.
 
-Essa frente é independente de F21, não depende de pesquisa de preços e não exige resolver Q-009.
+A frente é independente de F21, não depende de pesquisa de preços e não resolve Q-003 nem Q-009.
 
 ## Execução obrigatória
 
-1. recuperar `main` real e confirmar F39 integrada pela PR #61;
-2. confirmar os seis gates pós-merge verdes em `09737ac6d11046af5d149b7926997e7e630557cc`;
-3. revalidar `CONTEXT_MANIFEST`;
-4. executar `tasks/F40-PERSISTENT-RELATED-IDENTIFIER-CREATE-DESIGN-01/SPEC.md`;
-5. inspecionar schema, RLS, read model e auditoria de `related_identifiers`;
-6. comparar os padrões recentes de capability e escrita F29/F32/F35/F38;
-7. não alterar migrations `0001..0009`;
-8. não implementar migration, policy, grant, primitive, adapter, Server Action ou UI na F40;
-9. não inventar máscara, formato, unicidade de negócio, taxonomia fechada ou normalização de identificadores;
-10. manter team, actor, membership, issuer, subject, timestamps e UUIDs de auditoria fora da authority do browser;
-11. desenhar atomicidade entre o identificador novo e o evento de vínculo;
-12. definir semântica segura de retry/concorrência sem deduplicação por valor inventada;
-13. manter cross-team, contratação inexistente/inativa e falhas de membership sem oracle indevido;
-14. preservar Q-004 e Q-009 abertas;
-15. fazer red-team documental integral;
-16. produzir uma ADR canônica e exatamente uma SPEC executável para a implementação seguinte;
-17. atualizar o checkpoint apenas depois dos gates da slice de desenho ficarem verdes.
+1. recuperar `main` real e confirmar F40 integrada pela PR `#63`, merge `9463aab5dbfbda5b1c037b622ddb83859600253e`;
+2. revalidar `CONTEXT_MANIFEST`;
+3. ler integralmente `docs/decisions/ADR-016-minimal-persistent-related-identifier-creation.md`;
+4. executar `tasks/F41-PERSISTENT-RELATED-IDENTIFIER-CREATE-IMPLEMENT-01/SPEC.md`;
+5. confirmar migrations `0001..0009` byte-for-byte antes de editar;
+6. criar somente migration aditiva `0010` ou equivalente ordenável;
+7. criar capability dedicada de related identifier create;
+8. criar apenas policies/grants estreitos necessários à nova capability;
+9. materializar primitive `SECURITY DEFINER` com `search_path = pg_catalog` e `PUBLIC EXECUTE` revogado;
+10. manter runtime normal sem DML direto;
+11. criar provisioning separado que conceda somente `EXECUTE` da primitive;
+12. criar adapter server-only com contrato estrito da ADR-016;
+13. preservar `NULL`, vazio e espaços exatamente, sem trim ou normalização;
+14. não criar unicidade/deduplicação por identificador, tipo, origem ou combinação;
+15. implementar replay `already-linked` somente após autorização atual e prova exata da row ativa + exatamente um evento canônico;
+16. garantir atomicidade entre row e evento `related_identifier_linked`;
+17. tratar concorrência de mesmo UUID sem retry cego;
+18. manter cross-team, inexistente, inativo, membership inválida e colisão não equivalente sem oracle;
+19. criar testes SQL adversariais e prova PostgreSQL concorrente real;
+20. criar testes unitários do adapter e workflow F41;
+21. executar gates e regressões F22/F29/F32/F35/F38;
+22. fazer red-team integral de grants, RLS, authority, replay e atomicidade;
+23. confirmar migrations `0001..0009` imutáveis;
+24. promover somente depois dos gates aplicáveis verdes;
+25. atualizar checkpoint deixando exatamente uma nova `NEXT_ACTION`.
 
 ## Red-team mínimo
 
 Rejeitar PASS se:
 
-- browser puder definir scope, actor, membership ou UUIDs internos como authority;
+- browser puder definir team, actor, membership, issuer, subject, timestamps ou event UUID como authority;
+- `relatedIdentifierId` conceder scope ou autorização;
 - runtime normal ganhar DML direto;
-- a operação futura puder vincular identificador em contratação cross-team, arquivada ou cancelada;
-- texto for trimado, normalizado ou validado por regra de negócio não documentada;
-- `NULL`, vazio e espaços forem colapsados sem decisão fundamentada;
-- for criada deduplicação por identificador/tipo/origem sem requisito canônico;
-- retry ou colisão de UUID forem tratados como sucesso sem prova exata e autorizada;
-- evento de vínculo não for atômico;
+- a capability puder editar, desvincular ou excluir identificador existente;
 - F26/F29/F32/F35/F38 ganharem authority adicional;
+- contratação cross-team, arquivada ou cancelada aceitar vínculo;
+- segundo membro não revogado for tratado como política multiusuário resolvida;
+- texto for trimado, normalizado, mascarado ou validado por regra não documentada;
+- `NULL`, vazio e espaços forem colapsados;
+- existir deduplicação por número/tipo/origem sem requisito canônico;
+- replay aceitar row desvinculada;
+- replay aceitar row sem exatamente um evento canônico `related_identifier_linked`;
+- replay aceitar payload diferente pela mesma PK;
+- colisão de event UUID virar replay-success;
+- evento de vínculo não for atômico;
+- `contractings.updated_at` for alterado apenas para representar timeline;
 - migrations `0001..0009` forem reescritas;
-- F21, Q-004 ou Q-009 forem resolvidas implicitamente;
+- Q-003, Q-004 ou Q-009 forem resolvidas implicitamente;
+- falha protegida cair para demo;
 - provider hosted, secret ou dado real for necessário.
 
 ## Invariantes
@@ -59,17 +75,18 @@ Rejeitar PASS se:
 - somente dados e identidades fictícios;
 - repositório público continua tratado como superfície permanente;
 - F21 permanece `ON HOLD` até seu `resume_when` objetivo;
-- Q-004 e Q-009 permanecem abertas;
+- Q-003, Q-004 e Q-009 permanecem abertas;
 - autenticação não é autorização;
 - RLS/capabilities permanecem autoritativas;
 - runtime normal continua sem DML direto;
 - migrations aplicadas `0001..0009` permanecem imutáveis;
-- falha protegida nunca vira demo fallback.
+- falha protegida nunca vira demo fallback;
+- F41 não inclui UI nem Server Action.
 
 ## Fonte da tarefa
 
-Executar `tasks/F40-PERSISTENT-RELATED-IDENTIFIER-CREATE-DESIGN-01/SPEC.md`.
+Executar `tasks/F41-PERSISTENT-RELATED-IDENTIFIER-CREATE-IMPLEMENT-01/SPEC.md`.
 
 ## Critério de encerramento
 
-F40 fecha quando o vínculo persistente mínimo de `related_identifiers` estiver completamente desenhado e red-teamed, com decisão canônica para payload, autorização, least privilege, auditoria, concorrência/idempotência e resultados, e uma única SPEC de implementação seguinte pronta, sem código operacional na própria F40.
+F41 fecha quando a criação persistente mínima de `related_identifiers` estiver implementada e provada contra a matriz adversarial da ADR-016, com row + evento atômicos, idempotência segura por UUID preparado, capability least-privilege, resultados sanitizados e regressões aplicáveis verdes, sem UI nesta slice.

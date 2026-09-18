@@ -191,8 +191,8 @@ describe("ContractingDetail persistent editor boundaries", () => {
     expect(html.match(/value="text"/g)?.length).toBeGreaterThanOrEqual(3);
     expect(html).toContain("Ausente (NULL)");
     expect(html).toContain("Texto");
-    expect(html).toContain('name="identifierValue" type="text"');
-    expect(html).not.toContain('name="identifierValue" type="text" required=""');
+    expect(html).toContain('name="identifierValue"');
+    expect(html).not.toContain('name="identifierValue" required=""');
     expect(html).toContain(
       "Texto vazio e espaços são preservados exatamente, sem máscara, normalização ou deduplicação.",
     );

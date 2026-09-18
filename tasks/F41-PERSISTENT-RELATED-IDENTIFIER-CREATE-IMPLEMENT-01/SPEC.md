@@ -186,9 +186,10 @@ A implementação não pode transformar `unique_violation` de event UUID em `alr
 - mesmo team e contracting;
 - `unlinked_at IS NULL`;
 - textos exatamente iguais com comparação null-safe;
-- evento `related_identifier_linked` coerente com a row;
+- exatamente um evento canônico `related_identifier_linked` para esse `related_identifier_id`;
 - actor igual à membership derivada;
 - `occurred_at = linked_at`;
+- `created_at = linked_at`;
 - shape do evento sem field/old/new/note/item.
 
 Se qualquer elemento não puder ser provado, retornar `denied`.
@@ -294,7 +295,7 @@ Cobrir integralmente a matriz da ADR-016, incluindo:
 - colisão cross-team do UUID;
 - replay exato;
 - colisão com payload diferente;
-- row sem evento;
+- row sem exatamente um evento canônico de vínculo;
 - row desvinculada;
 - campos vazios e spaces-only;
 - `NULL` versus `''`;

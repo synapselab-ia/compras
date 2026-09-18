@@ -20,6 +20,12 @@ type ItemMutationBrowserResult =
   | "not-available"
   | "unavailable";
 
+type RelatedIdentifierCreateBrowserResult =
+  | "created"
+  | "already-linked"
+  | "not-available"
+  | "unavailable";
+
 const ITEM_CREATE_FORM_FIELDS = new Set([
   "contractingId",
   "description",
@@ -43,6 +49,18 @@ const ITEM_MUTATION_FORM_FIELDS = new Set([
   "newUnit",
   "newCatalogCodeKind",
   "newCatalogCode",
+]);
+
+const RELATED_IDENTIFIER_CREATE_FORM_FIELDS = new Set([
+  "contractingId",
+  "relatedIdentifierId",
+  "identifierKindKind",
+  "identifierKind",
+  "identifierValue",
+  "sourceSystemKind",
+  "sourceSystem",
+  "noteKind",
+  "note",
 ]);
 
 function readRequiredStringOnce(formData: FormData, name: string): string | null {
@@ -154,6 +172,19 @@ function hasOnlyExpectedItemMutationFields(formData: FormData): boolean {
   return true;
 }
 
+function hasOnlyExpectedRelatedIdentifierCreateFields(formData: FormData): boolean {
+  for (const name of formData.keys()) {
+    if (
+      !RELATED_IDENTIFIER_CREATE_FORM_FIELDS.has(name) &&
+      !name.startsWith("$ACTION_")
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function isItemMutationBrowserResult(value: unknown): value is ItemMutationBrowserResult {
   return (
     value === "updated" ||
@@ -164,8 +195,33 @@ function isItemMutationBrowserResult(value: unknown): value is ItemMutationBrows
   );
 }
 
+function isRelatedIdentifierCreateBrowserResult(
+  value: unknown,
+): value is RelatedIdentifierCreateBrowserResult {
+  return (
+    value === "created" ||
+    value === "already-linked" ||
+    value === "not-available" ||
+    value === "unavailable"
+  );
+}
+
 function detailPath(contractingId: string): string {
   return `/contratacoes/${encodeURIComponent(contractingId)}`;
+}
+
+function relatedIdentifierCreateFeedbackPath(
+  path: string,
+  result: RelatedIdentifierCreateBrowserResult,
+  retryCandidate?: string,
+): string {
+  const base = `${path}?relatedIdentifierCreation=${result}`;
+
+  return result === "unavailable" &&
+    retryCandidate &&
+    isPersistentContractingId(retryCandidate)
+    ? `${base}&relatedIdentifierCandidate=${encodeURIComponent(retryCandidate)}`
+    : base;
 }
 
 /**
@@ -308,6 +364,111 @@ export async function createPersistentContractingItemAction(formData: FormData):
   }
 
   redirect(`${path}?itemCreation=${result}`);
+}
+
+/**
+ * The only F42 browser-facing related identifier creation entrypoint. The
+ * prepared UUID is an opaque idempotency key, never scope or authorization.
+ * Only the nine approved transport scalars can reach F41; nullable text uses
+ * an explicit null/text discriminator and the action performs no SQL itself.
+ */
+export async function createPersistentRelatedIdentifierAction(
+  formData: FormData,
+): Promise<never> {
+  if (readPersistentReadMode() !== "persistent") {
+    redirect("/");
+  }
+
+  const contractingId = readRequiredStringOnce(formData, "contractingId");
+
+  if (!contractingId || !isPersistentContractingId(contractingId)) {
+    redirect("/");
+  }
+
+  const path = detailPath(contractingId);
+  const relatedIdentifierId = readRequiredStringOnce(
+    formData,
+    "relatedIdentifierId",
+  );
+  const retryCandidate =
+    relatedIdentifierId && isPersistentContractingId(relatedIdentifierId)
+      ? relatedIdentifierId
+      : undefined;
+
+  if (
+    !hasOnlyExpectedRelatedIdentifierCreateFields(formData) ||
+    !retryCandidate
+  ) {
+    redirect(
+      relatedIdentifierCreateFeedbackPath(
+        path,
+        "unavailable",
+        retryCandidate,
+      ),
+    );
+  }
+
+  const identifierKind = readNullableTextTransportOnce(
+    formData,
+    "identifierKindKind",
+    "identifierKind",
+  );
+  const identifierValue = readRequiredStringOnce(formData, "identifierValue");
+  const sourceSystem = readNullableTextTransportOnce(
+    formData,
+    "sourceSystemKind",
+    "sourceSystem",
+  );
+  const note = readNullableTextTransportOnce(formData, "noteKind", "note");
+
+  if (
+    !identifierKind.ok ||
+    identifierValue === null ||
+    !sourceSystem.ok ||
+    !note.ok
+  ) {
+    redirect(
+      relatedIdentifierCreateFeedbackPath(
+        path,
+        "unavailable",
+        retryCandidate,
+      ),
+    );
+  }
+
+  let result: RelatedIdentifierCreateBrowserResult = "unavailable";
+
+  try {
+    const { createPersistentRelatedIdentifier } = await import(
+      "./persistent-related-identifier-create"
+    );
+    const boundaryResult: unknown = await createPersistentRelatedIdentifier({
+      contractingId,
+      relatedIdentifierId: retryCandidate,
+      identifierKind: identifierKind.value,
+      identifierValue,
+      sourceSystem: sourceSystem.value,
+      note: note.value,
+    });
+
+    if (isRelatedIdentifierCreateBrowserResult(boundaryResult)) {
+      result = boundaryResult;
+    }
+  } catch {
+    result = "unavailable";
+  }
+
+  if (result === "created" || result === "already-linked") {
+    revalidatePath(path);
+  }
+
+  redirect(
+    relatedIdentifierCreateFeedbackPath(
+      path,
+      result,
+      result === "unavailable" ? retryCandidate : undefined,
+    ),
+  );
 }
 
 /**

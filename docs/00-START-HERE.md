@@ -21,14 +21,14 @@ A fundação possui:
 - edição persistente de `contractings.object` com UI;
 - criação mínima persistente de `contracting_items`, com allocator concorrente e UI;
 - edição persistente dos quatro campos de item com UI e optimistic concurrency por snapshot completo;
-- criação persistente mínima de `related_identifiers`, auditável e idempotente por UUID preparado, ainda sem UI;
+- criação persistente mínima de `related_identifiers`, auditável e idempotente por UUID preparado, com UI persistente e demo read-only;
 - migrations de domínio `0001..0010` integradas e imutáveis.
 
-F41 foi integrada pela PR `#65`, merge `d460e38a4d5a6a1ef3408d72f10ac1d8765fee63`. No head final `24fccfbd9a58a7ddfd265b7f6b3ec05646e583e0`, CI, F22, F29, F32, F35, F38 e F41 ficaram verdes.
+F42 foi integrada pela PR `#67`, merge `53db535df7981f957674ca708bea7b30308992b3`. O head promovido `296b00a98402fa7a8dd534ea4cea9eda9b0e90cc` ficou verde em CI, F22, F29, F32, F35, F38 e F41.
 
 A próxima e única frente canônica é:
 
-`F42-PERSISTENT-RELATED-IDENTIFIER-CREATE-DETAIL-UI-01 - Integrar criação persistente de identificador relacionado no detalhe`.
+`F43-PERSISTENT-MANUAL-TIMELINE-NOTE-DESIGN-01 - Desenhar criação persistente de nota manual na timeline`.
 
 F17 permanece `ON HOLD` histórico. F21 permanece `ON HOLD` até existir control plane Vercel capaz de readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch sem expor valores.
 
@@ -96,9 +96,9 @@ A UI envia sempre os quatro expected e os quatro new values. Expected vem das co
 
 Unit/catalog preservam `NULL`, `''` e espaços por codificação explícita `text|null`. Quantity usa input textual e nunca passa por `Number`, `parseFloat` ou `type=number`.
 
-### F40/F41 - criação mínima de identificador relacionado
+### F40/F41/F42 - criação mínima de identificador relacionado
 
-ADR-016 define a boundary de criação de `related_identifiers`; F41 materializa a decisão.
+ADR-016 define a boundary de criação de `related_identifiers`; F41 materializa a decisão e F42 integra a operação ao detalhe persistente.
 
 A implementação integrada possui:
 
@@ -124,30 +124,40 @@ Decisões centrais:
 - replay `already-linked` exige prova exata e autorizada da row ativa e de exatamente um evento canônico;
 - row e evento são atômicos;
 - runtime normal continua sem DML direto;
-- F41 não adicionou UI nem Server Action.
+- F42 adiciona somente a Server Action e UI estreitas sobre F41;
+- candidate UUID é preparado no servidor e preservado apenas no retry técnico `unavailable`;
+- campos nullable usam transporte explícito `null|text`;
+- feedback é fixo e sanitizado;
+- sucesso/replay revalidam e relêem a lista pelo modelo protegido;
+- demo e falha protegida não possuem caminho de escrita;
+- nenhuma migration, RLS, grant, capability, primitive ou provisioning F41 foi alterado.
 
-Resultado completo: `tasks/F41-PERSISTENT-RELATED-IDENTIFIER-CREATE-IMPLEMENT-01/RESULT.md`.
+Resultados completos:
 
-## Próxima frente F42
+- `tasks/F41-PERSISTENT-RELATED-IDENTIFIER-CREATE-IMPLEMENT-01/RESULT.md`;
+- `tasks/F42-PERSISTENT-RELATED-IDENTIFIER-CREATE-DETAIL-UI-01/RESULT.md`.
+
+## Próxima frente F43
 
 A única `NEXT_ACTION` canônica está em `docs/ai/NEXT_ACTION.md`:
 
-`F42-PERSISTENT-RELATED-IDENTIFIER-CREATE-DETAIL-UI-01 - Integrar criação persistente de identificador relacionado no detalhe`.
+`F43-PERSISTENT-MANUAL-TIMELINE-NOTE-DESIGN-01 - Desenhar criação persistente de nota manual na timeline`.
 
-F42 deve expor F41 no detalhe persistente com:
+F43 é uma slice T2 exclusivamente documental. Ela deve desenhar a primeira boundary persistente de nota manual em `contracting_events`, usando os fatos já previstos no DOMAIN_MODEL e DATABASE sem transformar a operação em primitive genérica de eventos.
 
-- Server Action estreita;
-- candidate UUID preparado no servidor;
-- preservação do mesmo candidate em retry técnico da mesma intenção;
-- transporte explícito de `NULL` versus texto para os campos nullable;
-- feedback fixo e sanitizado;
-- readback pelo modelo protegido;
-- demo estritamente read-only;
-- nenhuma alteração em migration, RLS, grant, capability, primitive ou provisioning F41.
+A decisão deve fechar apenas:
 
-F42 não inclui edição, desvínculo, re-link, delete, taxonomia fechada ou deduplicação.
+- payload server-only mínimo;
+- authorization guard pilot-only;
+- shape fechado do evento manual;
+- semântica de `note` para NULL/vazio/espaços;
+- idempotência/replay e concorrência;
+- capability dedicada e least privilege;
+- resultados externos sanitizados e opacidade protegida.
 
-A SPEC está em `tasks/F42-PERSISTENT-RELATED-IDENTIFIER-CREATE-DETAIL-UI-01/SPEC.md`.
+F43 não inclui código operacional, UI, mutation de responsável/etapa/status/aguardando, Pendência, pesquisa de preços, edição/desvínculo de identificador ou resolução de questões abertas.
+
+A SPEC está em `tasks/F43-PERSISTENT-MANUAL-TIMELINE-NOTE-DESIGN-01/SPEC.md`.
 
 ## Modos da aplicação
 
@@ -190,7 +200,7 @@ Migrations de domínio integradas e imutáveis:
 - `0009_contracting_item_mutation.sql`;
 - `0010_related_identifier_create.sql`.
 
-Migration aplicada não é reescrita. F42 é uma slice de integração UI/server action e não deve alterar as migrations `0001..0010`.
+Migration aplicada não é reescrita. F42 não alterou as migrations `0001..0010`; F43 é uma slice de desenho e também deve mantê-las byte-for-byte.
 
 ## Fonte de verdade
 

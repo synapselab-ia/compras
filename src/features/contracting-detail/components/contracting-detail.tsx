@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import {
   createPersistentContractingItemAction,
+  createPersistentRelatedIdentifierAction,
   updatePersistentContractingItemAction,
   updatePersistentNextActionAction,
   updatePersistentObjectAction,
@@ -22,6 +23,10 @@ import {
   getObjectMutationFeedback,
   type ObjectMutationUiState,
 } from "../object-feedback";
+import {
+  getRelatedIdentifierCreationFeedback,
+  type RelatedIdentifierCreationUiState,
+} from "../related-identifier-create-feedback";
 import type {
   ContractingDetailPresentation,
   ContractingDetailSource,
@@ -36,6 +41,8 @@ type ContractingDetailProps = Readonly<{
   objectMutationState?: ObjectMutationUiState | null;
   itemCreationState?: ItemCreationUiState | null;
   itemMutationState?: ItemMutationUiState | null;
+  relatedIdentifierCandidateId?: string | null;
+  relatedIdentifierCreationState?: RelatedIdentifierCreationUiState | null;
 }>;
 
 type ItemMutationEditorProps = Readonly<{
@@ -169,12 +176,17 @@ export function ContractingDetail({
   objectMutationState = null,
   itemCreationState = null,
   itemMutationState = null,
+  relatedIdentifierCandidateId = null,
+  relatedIdentifierCreationState = null,
 }: ContractingDetailProps) {
   const isDemo = source === "demo";
   const feedback = isDemo ? null : getNextActionMutationFeedback(mutationState);
   const objectFeedback = isDemo ? null : getObjectMutationFeedback(objectMutationState);
   const itemCreationFeedback = isDemo ? null : getItemCreationFeedback(itemCreationState);
   const itemMutationFeedback = isDemo ? null : getItemMutationFeedback(itemMutationState);
+  const relatedIdentifierCreationFeedback = isDemo
+    ? null
+    : getRelatedIdentifierCreationFeedback(relatedIdentifierCreationState);
   const editorId = `next-action-${detail.id}`;
   const editorHelpId = `${editorId}-help`;
   const feedbackId = `${editorId}-feedback`;
@@ -196,6 +208,19 @@ export function ContractingDetail({
   const itemDescriptionDescribedBy = itemCreationFeedback
     ? `${itemHelpId} ${itemFeedbackId}`
     : itemHelpId;
+  const relatedIdentifierEditorId = `related-identifier-create-${detail.id}`;
+  const relatedIdentifierKindId = `${relatedIdentifierEditorId}-kind`;
+  const relatedIdentifierKindValueId = `${relatedIdentifierEditorId}-kind-value`;
+  const relatedIdentifierValueId = `${relatedIdentifierEditorId}-value`;
+  const relatedIdentifierSourceKindId = `${relatedIdentifierEditorId}-source-kind`;
+  const relatedIdentifierSourceId = `${relatedIdentifierEditorId}-source`;
+  const relatedIdentifierNoteKindId = `${relatedIdentifierEditorId}-note-kind`;
+  const relatedIdentifierNoteId = `${relatedIdentifierEditorId}-note`;
+  const relatedIdentifierHelpId = `${relatedIdentifierEditorId}-help`;
+  const relatedIdentifierFeedbackId = `${relatedIdentifierEditorId}-feedback`;
+  const relatedIdentifierDescribedBy = relatedIdentifierCreationFeedback
+    ? `${relatedIdentifierHelpId} ${relatedIdentifierFeedbackId}`
+    : relatedIdentifierHelpId;
 
   return (
     <main className="detail-shell">
@@ -208,7 +233,7 @@ export function ContractingDetail({
         ) : (
           <>
             <strong>Dados persistentes autorizados.</strong>
-            <span>Objeto, próxima ação, inclusão e edição de item possuem operações restritas; autorização e histórico permanecem no servidor e no banco.</span>
+            <span>Objeto, próxima ação, identificadores relacionados e itens possuem operações restritas; autorização e histórico permanecem no servidor e no banco.</span>
           </>
         )}
       </section>
@@ -400,6 +425,121 @@ export function ContractingDetail({
             </div>
           </div>
           <p className="detail-panel-note">Tipos permanecem extensíveis e não constituem catálogo definitivo.</p>
+
+          {!isDemo && relatedIdentifierCandidateId ? (
+            <div
+              className="item-create-editor"
+              aria-labelledby={`${relatedIdentifierEditorId}-title`}
+            >
+              <h3
+                id={`${relatedIdentifierEditorId}-title`}
+                className="item-create-title"
+              >
+                Vincular identificador
+              </h3>
+
+              {relatedIdentifierCreationFeedback ? (
+                <p
+                  id={relatedIdentifierFeedbackId}
+                  className={`next-action-feedback next-action-feedback-${relatedIdentifierCreationFeedback.state}`}
+                  role={relatedIdentifierCreationFeedback.role}
+                  aria-live="polite"
+                >
+                  {relatedIdentifierCreationFeedback.message}
+                </p>
+              ) : null}
+
+              <form
+                action={createPersistentRelatedIdentifierAction}
+                className="next-action-form"
+              >
+                <input type="hidden" name="contractingId" value={detail.id} />
+                <input
+                  type="hidden"
+                  name="relatedIdentifierId"
+                  value={relatedIdentifierCandidateId}
+                />
+
+                <label htmlFor={relatedIdentifierKindId}>Estado do tipo</label>
+                <select
+                  id={relatedIdentifierKindId}
+                  name="identifierKindKind"
+                  defaultValue="null"
+                >
+                  <option value="null">Ausente (NULL)</option>
+                  <option value="text">Texto</option>
+                </select>
+
+                <label htmlFor={relatedIdentifierKindValueId}>Tipo opcional</label>
+                <input
+                  id={relatedIdentifierKindValueId}
+                  name="identifierKind"
+                  type="text"
+                  autoComplete="off"
+                />
+
+                <label htmlFor={relatedIdentifierValueId}>Valor do identificador</label>
+                <input
+                  id={relatedIdentifierValueId}
+                  name="identifierValue"
+                  type="text"
+                  autoComplete="off"
+                  aria-describedby={relatedIdentifierDescribedBy}
+                />
+
+                <label htmlFor={relatedIdentifierSourceKindId}>
+                  Estado do sistema de origem
+                </label>
+                <select
+                  id={relatedIdentifierSourceKindId}
+                  name="sourceSystemKind"
+                  defaultValue="null"
+                >
+                  <option value="null">Ausente (NULL)</option>
+                  <option value="text">Texto</option>
+                </select>
+
+                <label htmlFor={relatedIdentifierSourceId}>
+                  Sistema de origem opcional
+                </label>
+                <input
+                  id={relatedIdentifierSourceId}
+                  name="sourceSystem"
+                  type="text"
+                  autoComplete="off"
+                />
+
+                <label htmlFor={relatedIdentifierNoteKindId}>Estado da nota</label>
+                <select
+                  id={relatedIdentifierNoteKindId}
+                  name="noteKind"
+                  defaultValue="null"
+                >
+                  <option value="null">Ausente (NULL)</option>
+                  <option value="text">Texto</option>
+                </select>
+
+                <label htmlFor={relatedIdentifierNoteId}>Nota opcional</label>
+                <textarea
+                  id={relatedIdentifierNoteId}
+                  name="note"
+                  rows={3}
+                />
+
+                <p id={relatedIdentifierHelpId} className="next-action-help">
+                  NULL e texto são estados distintos. Texto vazio e espaços são preservados exatamente, sem máscara, normalização ou deduplicação.
+                </p>
+
+                <div className="next-action-actions">
+                  <NextActionSubmitButton
+                    label="Vincular identificador"
+                    pendingLabel="Vinculando…"
+                  />
+                </div>
+              </form>
+            </div>
+          ) : null}
+
           {detail.relatedIdentifiers.length > 0 ? (
             <dl className="demo-definition-list">
               {detail.relatedIdentifiers.map((identifier) => (

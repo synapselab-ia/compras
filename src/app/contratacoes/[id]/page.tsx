@@ -10,7 +10,15 @@ import { readItemCreationUiState } from "@/features/contracting-detail/item-crea
 import { readItemMutationUiState } from "@/features/contracting-detail/item-mutation-feedback";
 import { readNextActionMutationUiState } from "@/features/contracting-detail/next-action-feedback";
 import { readObjectMutationUiState } from "@/features/contracting-detail/object-feedback";
+import {
+  readRelatedIdentifierCreationUiState,
+} from "@/features/contracting-detail/related-identifier-create-feedback";
+import {
+  preparePersistentRelatedIdentifierCandidateId,
+} from "@/features/contracting-detail/persistent-related-identifier-create";
 import { loadContractingDetailViewData } from "@/features/contracting-detail/view-data";
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type ContractingDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -20,8 +28,16 @@ type ContractingDetailPageProps = {
     itemCreation?: string | string[];
     itemMutation?: string | string[];
     creation?: string | string[];
+    relatedIdentifierCreation?: string | string[];
+    relatedIdentifierCandidate?: string | string[];
   }>;
 };
+
+function readRelatedIdentifierRetryCandidate(
+  value: string | string[] | undefined,
+): string | null {
+  return typeof value === "string" && UUID_PATTERN.test(value) ? value : null;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +79,18 @@ export default async function ContractingDetailPage({
     viewData.kind === "demo"
       ? null
       : getContractingCreateFeedback(readContractingCreateUiState(query.creation));
+  const relatedIdentifierCreationState =
+    viewData.kind === "demo"
+      ? null
+      : readRelatedIdentifierCreationUiState(query.relatedIdentifierCreation);
+  const retryCandidate =
+    relatedIdentifierCreationState === "unavailable"
+      ? readRelatedIdentifierRetryCandidate(query.relatedIdentifierCandidate)
+      : null;
+  const relatedIdentifierCandidateId =
+    viewData.kind === "persistent"
+      ? retryCandidate ?? preparePersistentRelatedIdentifierCandidateId()
+      : null;
 
   return (
     <>
@@ -84,6 +112,8 @@ export default async function ContractingDetailPage({
         objectMutationState={readObjectMutationUiState(query.objectMutation)}
         itemCreationState={readItemCreationUiState(query.itemCreation)}
         itemMutationState={readItemMutationUiState(query.itemMutation)}
+        relatedIdentifierCandidateId={relatedIdentifierCandidateId}
+        relatedIdentifierCreationState={relatedIdentifierCreationState}
       />
     </>
   );

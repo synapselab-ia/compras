@@ -21,17 +21,18 @@ A fundação possui:
 - edição persistente de `contractings.object` com UI;
 - criação mínima persistente de `contracting_items`, com allocator concorrente e UI;
 - edição persistente dos quatro campos de item com UI e optimistic concurrency por snapshot completo;
+- desenho ADR-016 para criação persistente mínima de `related_identifiers`, ainda sem implementação operacional;
 - migrations de domínio `0001..0009` integradas e imutáveis.
 
-F39 foi integrada pela PR `#61`, merge `09737ac6d11046af5d149b7926997e7e630557cc`. CI, F22, F29, F32, F35 e F38 ficaram verdes no head final e após o merge.
+F40 foi integrada pela PR `#63`, merge `9463aab5dbfbda5b1c037b622ddb83859600253e`. No head final `4211d92b100be1064bfd14b60d1b8ab132e51abe`, CI, F22, F29, F32, F35 e F38 ficaram verdes. A slice foi exclusivamente documental e não alterou runtime, schema, policies, grants, provisioning ou migrations.
 
 A próxima e única frente canônica é:
 
-`F40-PERSISTENT-RELATED-IDENTIFIER-CREATE-DESIGN-01 - Desenhar vínculo persistente mínimo de identificador relacionado`.
+`F41-PERSISTENT-RELATED-IDENTIFIER-CREATE-IMPLEMENT-01 - Implementar vínculo persistente mínimo de identificador relacionado`.
 
 F17 permanece `ON HOLD` histórico. F21 permanece `ON HOLD` até existir control plane Vercel capaz de readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch sem expor valores.
 
-Q-004 sobre pesquisa de preços e Q-009 sobre política multiusuário continuam abertas. Enquanto Q-009 estiver aberta, as boundaries de escrita permanecem pilot-only.
+Q-003 sobre semântica final dos processos relacionados, Q-004 sobre pesquisa de preços e Q-009 sobre política multiusuário continuam abertas. Enquanto Q-009 estiver aberta, as boundaries de escrita permanecem pilot-only.
 
 ## Auth e sign-in
 
@@ -99,28 +100,47 @@ A capability F38 continua limitada a `description`, `quantity`, `unit`, `catalog
 
 Resultado completo da UI: `tasks/F39-PERSISTENT-CONTRACTING-ITEM-MUTATION-DETAIL-UI-01/RESULT.md`.
 
-## Próxima frente F40
+### F40 - desenho de criação de identificador relacionado
 
-O núcleo inicial documentado prevê múltiplos processos/identificadores administrativos relacionados à mesma contratação. A tabela `related_identifiers` e a leitura protegida já existem, mas ainda não existe boundary de escrita para criar o vínculo.
+ADR-016 define a primeira boundary de criação de `related_identifiers`.
+
+Decisões centrais:
+
+- `contractingId` é somente seletor candidato da contratação;
+- `relatedIdentifierId` é UUID preparado pelo servidor e usado como identidade estável/idempotency key, nunca como authority;
+- team, actor, membership, issuer, subject, timestamps e event UUID são derivados de contexto confiável;
+- autorização segue o guard target-team pilot-only;
+- `identifierValue` preserva o texto exato, inclusive vazio e espaços, porque não existe regra canônica non-empty;
+- `identifierKind`, `sourceSystem` e `note` preservam `NULL`, vazio e espaços;
+- não existe deduplicação por número, tipo ou origem;
+- replay `already-linked` exige prova exata e autorizada da row ativa e de exatamente um evento canônico `related_identifier_linked`;
+- row e evento devem ser atômicos;
+- runtime normal continua sem DML direto;
+- capability futura é dedicada e não amplia F26/F29/F32/F35/F38.
+
+A implementação operacional ficou deliberadamente para F41.
+
+## Próxima frente F41
 
 A única `NEXT_ACTION` canônica está em `docs/ai/NEXT_ACTION.md`:
 
-`F40-PERSISTENT-RELATED-IDENTIFIER-CREATE-DESIGN-01 - Desenhar vínculo persistente mínimo de identificador relacionado`.
+`F41-PERSISTENT-RELATED-IDENTIFIER-CREATE-IMPLEMENT-01 - Implementar vínculo persistente mínimo de identificador relacionado`.
 
-F40 é design-only. Deve definir:
+F41 deve materializar ADR-016 com:
 
-- payload server-only mínimo;
-- authority derivada e guard pilot-only;
-- capability dedicada e least privilege;
-- semântica de `NULL`, vazio e espaços sem regras inventadas;
-- atomicidade com evento de vínculo;
-- concorrência/idempotência sem deduplicação por valor inventada;
-- resultados sanitizados;
-- matriz adversarial da futura implementação.
+- migration aditiva `0010`;
+- capability dedicada e policies RLS estreitas;
+- primitive `SECURITY DEFINER`;
+- provisioning separado que concede apenas `EXECUTE` à runtime;
+- adapter server-only;
+- auditoria atômica `related_identifier_linked`;
+- replay seguro e concorrência por UUID preparado;
+- testes SQL adversariais e prova PostgreSQL concorrente;
+- workflow/regressões aplicáveis.
 
-F40 não cria código operacional. Ela deve produzir uma ADR canônica e uma única SPEC de implementação seguinte.
+F41 não inclui UI nem Server Action.
 
-A SPEC está em `tasks/F40-PERSISTENT-RELATED-IDENTIFIER-CREATE-DESIGN-01/SPEC.md`.
+A SPEC está em `tasks/F41-PERSISTENT-RELATED-IDENTIFIER-CREATE-IMPLEMENT-01/SPEC.md`.
 
 ## Modos da aplicação
 
@@ -162,7 +182,7 @@ Migrations de domínio integradas e imutáveis:
 - `0008_contracting_create_concurrency_repair.sql`;
 - `0009_contracting_item_mutation.sql`.
 
-Migration aplicada não é reescrita. Correção ou feature persistente futura exige migration aditiva.
+Migration aplicada não é reescrita. A implementação F41 deve começar em migration aditiva `0010` ou posterior.
 
 ## Fonte de verdade
 
@@ -180,7 +200,7 @@ Startup mínimo:
 
 Fontes de produto: `PROJECT_DESIGN.md`, `DOMAIN_MODEL.md`, `BUSINESS_WORKFLOW.md`, `OPEN_QUESTIONS.md`.
 
-Fontes de arquitetura: `ARCHITECTURE.md`, `SECURITY.md`, `DATABASE.md`, ADR-003, ADR-005, ADR-009 a ADR-015.
+Fontes de arquitetura: `ARCHITECTURE.md`, `SECURITY.md`, `DATABASE.md`, ADR-003, ADR-005, ADR-009 a ADR-016.
 
 Operação por IA: `SOURCE_OF_TRUTH.md`, `WORK_PROTOCOL.md`, `CONTEXT_MANIFEST.md`, `CURRENT_STATE.md`, `NEXT_ACTION.md`.
 

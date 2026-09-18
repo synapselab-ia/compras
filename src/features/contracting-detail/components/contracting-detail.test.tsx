@@ -210,8 +210,11 @@ describe("ContractingDetail persistent editor boundaries", () => {
     );
 
     for (const identifier of persistentDetail.relatedIdentifiers) {
-      expect(html).toContain(identifier.id);
+      expect(html).toContain(identifier.label);
       expect(html).toContain(identifier.value);
+      if (identifier.note) {
+        expect(html).toContain(identifier.note);
+      }
     }
     expect(html).toContain("A mesma solicitação de vínculo já foi concluída.");
     expect(html).not.toContain("Desvincular");

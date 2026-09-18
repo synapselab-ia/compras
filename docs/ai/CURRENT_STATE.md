@@ -1,27 +1,28 @@
 # Current State - Compras
 
-**PROJECT_STATUS:** F40_INTEGRATED_F41_READY  
-**CURRENT_PHASE:** F40 integrada e verificada; F41 READY; F21 ON HOLD  
+**PROJECT_STATUS:** F41_INTEGRATED_F42_READY  
+**CURRENT_PHASE:** F41 integrada e verificada no head da PR; F42 READY; F21 ON HOLD  
 **REPO_VISIBILITY:** PUBLIC  
-**APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_SIGNIN_LIMITER_CONTRACTING_CREATE_NEXT_ACTION_OBJECT_ITEM_CREATE_AND_ITEM_EDIT_UI_INTEGRATED  
-**DATABASE_STATUS:** PROTECTED_READ_MODEL_F26_F29_F32_F35_F38_VALIDATED_MIGRATIONS_0001_0009_IMMUTABLE  
+**APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_SIGNIN_LIMITER_CONTRACTING_CREATE_NEXT_ACTION_OBJECT_ITEM_CREATE_AND_ITEM_EDIT_UI_INTEGRATED_RELATED_IDENTIFIER_CREATE_BOUNDARY_NO_UI  
+**DATABASE_STATUS:** PROTECTED_READ_MODEL_F26_F29_F32_F35_F38_F41_VALIDATED_MIGRATIONS_0001_0010_IMMUTABLE  
 **AUTH_STATUS:** SELF_HOSTED_BETTER_AUTH_AND_SIGNIN_LIMITER_INTEGRATED  
-**DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_NO_F39_HOSTED_WRITE_VALIDATION  
+**DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_NO_F41_HOSTED_WRITE_VALIDATION  
 **REAL_DATA_ALLOWED:** NO  
 **CONTEXT_STATUS:** VALID  
 **FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`  
 **F21_FINAL_CHECKPOINT_COMMIT:** `73cd3ec1ef524c526c91124d40efae1eff2061ce`  
 **F29_CONCURRENCY_REPAIR_MERGE_COMMIT:** `738666901fae43ce25dd11398904735e15c85da1`  
-**F37_MERGE_COMMIT:** `88d7d43f06afe8a9eef4d446331c173a8d238856`  
 **F38_PR:** `#59`  
 **F38_MERGE_COMMIT:** `38850c8c8e4ceb41c7d1a4d0c83ba158aa20c597`  
 **F39_PR:** `#61`  
-**F39_FINAL_HEAD:** `3f4d5d0c7d63d4b5f221481bec42e7e0464faee0`  
 **F39_MERGE_COMMIT:** `09737ac6d11046af5d149b7926997e7e630557cc`  
 **F40_PR:** `#63`  
-**F40_FINAL_HEAD:** `4211d92b100be1064bfd14b60d1b8ab132e51abe`  
 **F40_MERGE_COMMIT:** `9463aab5dbfbda5b1c037b622ddb83859600253e`  
-**F40_FINAL_HEAD_CI_RUN:** `35350201262`  
+**F41_PR:** `#65`  
+**F41_FINAL_HEAD:** `24fccfbd9a58a7ddfd265b7f6b3ec05646e583e0`  
+**F41_MERGE_COMMIT:** `d460e38a4d5a6a1ef3408d72f10ac1d8765fee63`  
+**F41_FINAL_HEAD_CI_RUN:** `35355476581`  
+**F41_FINAL_HEAD_DB_RUN:** `35355476626`  
 **LAST_GOOD_MAIN_COMMIT:** `09737ac6d11046af5d149b7926997e7e630557cc`  
 **LAST_GOOD_MAIN_CI_RUN:** `35252994972`  
 **F21_STATE:** `ON HOLD / BLOCKED` - Vercel control-plane surface unavailable for required protection/env readback+CRUD  
@@ -30,30 +31,37 @@
 
 ## Recuperação e contexto
 
-A sessão recuperou `main` em `bfe60c895b94ff5373360d830f1f5e4d95bc51d2`, confirmou ausência de PR aberta e ausência de branch F40 operacional ainda ativa. A única frente canônica era F40.
+A sessão recuperou `main` em `ac1d365de27999a5dcfe6d9b9a6e1b85693927a2`, merge do checkpoint F40/F41. Não havia PR operacional aberta da F41 nem branch de implementação ativa.
 
-O `CONTEXT_MANIFEST` foi revalidado contra os 10 inputs canônicos. Todos os blobs declarados permaneceram idênticos, portanto `CONTEXT_STATUS = VALID`.
+A única frente canônica era:
 
-Foram inspecionados produto, domínio, workflow, questões abertas, SECURITY, DATABASE, DoD, migrations relevantes, ADR-012 a ADR-015 e o read model persistente de `related_identifiers`.
+`F41-PERSISTENT-RELATED-IDENTIFIER-CREATE-IMPLEMENT-01 - Implementar vínculo persistente mínimo de identificador relacionado`.
+
+O `CONTEXT_MANIFEST` foi revalidado contra os 10 inputs canônicos e todos os blob SHAs coincidiram. SECURITY e DATABASE foram lidos diretamente por se tratar de tarefa T2.
+
+Os blobs de migrations `0001..0009` foram capturados antes da implementação e comparados novamente após a promoção. Todos permaneceram byte-for-byte idênticos.
 
 O repositório continua público e `REAL_DATA_ALLOWED = NO` permanece obrigatório.
 
-## F40 integrada
+## F41 integrada
 
-A PR `#63` executou a slice design-only da primeira criação persistente de identificador relacionado.
+A implementação foi realizada na branch `f41-persistent-related-identifier-create-implement` e promovida pela PR `#65`.
 
 Artefatos integrados:
 
-- `docs/decisions/ADR-016-minimal-persistent-related-identifier-creation.md`;
-- `tasks/F41-PERSISTENT-RELATED-IDENTIFIER-CREATE-IMPLEMENT-01/SPEC.md`.
+- `database/migrations/0010_related_identifier_create.sql`;
+- `database/provisioning/grant_related_identifier_create_runtime.sql`;
+- `database/tests/related_identifier_create.sql`;
+- `src/features/contracting-detail/persistent-related-identifier-create.ts`;
+- `src/features/contracting-detail/persistent-related-identifier-create.test.ts`;
+- `src/features/contracting-detail/persistent-related-identifier-create.postgres.test.ts`;
+- `.github/workflows/f41-related-identifier-create.yml`.
 
-Nenhuma migration, policy, grant, capability, primitive, provisioning, adapter, Server Action, UI ou código operacional foi criado na F40.
+A migration `0010` é exclusivamente aditiva. Migrations `0001..0009` não foram alteradas.
 
-Migrations `0001..0009` permaneceram byte-for-byte imutáveis.
+## Boundary F41
 
-## Decisão ADR-016
-
-O contrato server-only futuro parte de:
+O contrato server-only aceita somente:
 
 ```text
 contractingId
@@ -64,134 +72,158 @@ sourceSystem
 note
 ```
 
-`contractingId` e `relatedIdentifierId` são apenas candidatos opacos. O segundo funciona como identidade estável/idempotency key preparada pelo servidor, nunca como authority.
+O adapter prepara/aceita UUID opaco da intenção e gera `eventId` server-side em cada tentativa.
 
-Team, actor, membership, issuer, subject, timestamps e event UUIDs permanecem derivados de contexto confiável.
+Team, actor, membership, issuer, subject, `linked_at`, `unlinked_at` e timestamps continuam derivados de contexto confiável.
 
-A autorização usa o guard target-team pilot-only já adotado pelas mutations em entidade existente:
+Resultados externos:
 
-1. identidade corrente resolve app_user ativo;
+- `created`;
+- `already-linked`;
+- `not-available`;
+- `unavailable`.
+
+Não existe UI nem Server Action F41.
+
+## Autorização target-team pilot-only
+
+A primitive só cria quando:
+
+1. identidade confiável resolve app_user ativo;
 2. contratação candidata está visível e ativa;
 3. usuário possui membership não revogada na equipe alvo;
 4. a equipe alvo possui exatamente uma membership não revogada.
 
-Segundo membro não revogado bloqueia, inclusive se seu app_user estiver desabilitado. Membership adicional do mesmo usuário em outra equipe não bloqueia por si só.
+Segundo membro não revogado bloqueia, inclusive se seu app_user estiver desabilitado.
+
+Membership adicional do mesmo usuário em outra equipe não bloqueia a equipe alvo por si só.
 
 Q-009 permanece aberta.
 
-## Semântica de texto e cardinalidade
+## Replay e concorrência
 
-A decisão não inventa regras ausentes das fontes:
+`relatedIdentifierId` é somente idempotency key preparada, nunca authority.
 
-- não há trim;
-- não há case-folding;
-- não há máscara ou regex;
-- não há catálogo fechado de tipo/origem;
-- não há limite de tamanho de negócio inventado;
-- não há empty-to-NULL implícito;
-- não há deduplicação por número, tipo, origem ou combinação.
+`already-linked` exige nova autorização e prova exata da row ativa e do evento canônico:
 
-`identifierValue` é `text NOT NULL`, portanto a boundary futura preserva inclusive `''` e espaços enquanto não houver regra canônica non-empty.
-
-`identifierKind`, `sourceSystem` e `note` preservam `NULL`, vazio e espaços como estados distintos.
-
-UUIDs diferentes com payload textual igual podem representar duas criações distintas. Q-003 permanece aberta.
-
-## Idempotência e concorrência
-
-`relatedIdentifierId` é preparado no servidor antes da primeira submissão e reutilizado nos retries da mesma intenção.
-
-Um replay só pode retornar `already-linked` depois de nova autorização da contratação candidata e prova exata de:
-
-- mesma row ativa;
-- mesmo team e contracting;
+- mesmo UUID, team e contracting;
+- `unlinked_at IS NULL`;
 - textos idênticos por comparação null-safe;
-- exatamente um evento canônico `related_identifier_linked`;
-- actor derivado igual;
-- `occurred_at` e `created_at` iguais a `linked_at`;
-- shape do evento sem field/old/new/note/item.
+- exatamente um evento `related_identifier_linked` com actor derivado;
+- `occurred_at = created_at = linked_at`;
+- field/old/new/note/item nulos.
 
-Row desvinculada ou row sem exatamente um evento canônico não é replay-success.
+Row sem evento, row com dois eventos canônicos, row desvinculada e payload divergente retornam `denied`.
 
-Chamadas concorrentes com o mesmo UUID/payload devem produzir uma única row e um único evento. Colisão com payload diferente não faz overwrite. UUIDs diferentes com payload igual podem criar rows distintas.
+A prova PostgreSQL concorrente confirmou:
 
-Colisão de event UUID é falha técnica e nunca vira replay-success.
+- oito writers com mesmo UUID/payload geram uma `created` e sete `already-linked`;
+- exatamente uma row e um evento;
+- mesmo UUID com payload divergente não faz overwrite;
+- UUIDs diferentes com payload idêntico criam rows distintas.
+
+## Semântica textual
+
+F41 não inventou regra ausente:
+
+- sem trim;
+- sem case-folding;
+- sem máscara;
+- sem regex de negócio;
+- sem empty-to-NULL implícito;
+- sem taxonomia fechada;
+- sem deduplicação por valor/tipo/origem.
+
+`identifierValue` preserva inclusive `''` e spaces-only.
+
+`identifierKind`, `sourceSystem` e `note` preservam `NULL`, `''`, spaces-only e leading/trailing spaces como estados distintos.
+
+Q-003 permanece aberta.
 
 ## Least privilege e auditoria
 
-A futura capability é dedicada, conceitualmente `compras_related_identifier_create_owner`, sem LOGIN, SUPERUSER, BYPASSRLS ou ownership de tabela-base.
+A capability `compras_related_identifier_create_owner` é dedicada, `NOLOGIN`, `NOINHERIT`, sem privilégio administrativo, sem `BYPASSRLS` e sem ownership de tabela-base.
 
-Runtime normal recebe somente `EXECUTE` da primitive futura por provisioning separado.
+Ela possui somente:
 
-A capability poderá apenas:
+- leituras necessárias para identidade, guard e replay;
+- INSERT coluna-a-coluna nas colunas aprovadas de `related_identifiers`;
+- INSERT coluna-a-coluna nas colunas aprovadas de `contracting_events`;
+- helpers indispensáveis.
 
-- resolver identidade;
-- ler memberships do guard;
-- ler contratação alvo;
-- ler o mínimo de row/evento para prova de replay;
-- inserir colunas aprovadas de `related_identifiers`;
-- inserir colunas aprovadas de `contracting_events`.
+Ela não possui:
 
-Ela não recebe UPDATE/DELETE de identificador/evento, UPDATE de contratação nem authority das capabilities anteriores.
+- UPDATE/DELETE de identificador;
+- UPDATE de contratação;
+- UPDATE/DELETE de evento;
+- DML de itens/allocator;
+- EXECUTE de F26/F29/F32/F35/F38.
 
-Criação e evento `related_identifier_linked` pertencem à mesma transação e usam o mesmo `operation_at`. Falha do evento reverte a row. `contractings.updated_at` não é usado como substituto da timeline.
+As capabilities anteriores não receberam EXECUTE F41.
 
-## Red-team F40
+Runtime normal recebe somente EXECUTE F41 pelo provisioning dedicado e continua sem DML direto.
 
-A revisão adversarial rejeitou explicitamente:
+Criação e evento `related_identifier_linked` usam o mesmo `operation_at` na mesma transação. Falha de evento reverte a row. `contractings.updated_at` permanece inalterado.
 
-- scope, actor, membership ou timestamps vindos do browser;
-- autorização derivada do UUID do identificador;
-- vínculo cross-team, arquivado ou cancelado;
-- resolução implícita da política multiusuário;
-- DML direto pela runtime;
-- ampliação de F26/F29/F32/F35/F38;
-- normalização ou validação textual inventada;
-- colapso de `NULL`, vazio e espaços;
-- deduplicação por valor/tipo/origem;
-- replay por mera colisão de UUID;
-- replay de row desvinculada;
-- replay de row sem exatamente um evento canônico;
-- evento fora da transação;
-- update artificial de `contractings.updated_at`;
-- reescrita de migrations aplicadas;
-- resolução implícita de Q-003, Q-004 ou Q-009;
-- fallback para demo;
-- dependência de provider hosted, secret ou dado real.
+## Red-team F41
 
-O red-team reforçou o desenho inicial para exigir exatamente um evento canônico no replay e igualdade de `created_at` e `occurred_at` com `linked_at`.
+A matriz adversarial cobriu:
 
-## Verificação F40
+- capability insegura por LOGIN, SUPERUSER, CREATEROLE, BYPASSRLS e membership utilizável;
+- runtime INHERIT e runtime com DML direto;
+- auth/context ausente, malformado e identidade desconhecida;
+- app_user desabilitado;
+- app_user ativo sem membership;
+- membership revogada;
+- segundo membro não revogado, inclusive app_user desabilitado;
+- membership adicional do mesmo usuário em outra equipe;
+- cross-team, inexistente, arquivado e cancelado;
+- colisão global cross-team do UUID sem oracle;
+- replay exato;
+- payload divergente sob o mesmo UUID;
+- row sem evento, com dois eventos e desvinculada;
+- `NULL` versus `''`;
+- vazio, spaces-only e leading/trailing spaces;
+- ausência de deduplicação textual;
+- event UUID collision com rollback integral;
+- ausência de authority cruzada;
+- parent `updated_at` invariável;
+- concorrência real.
 
-Head final da PR `#63`: `4211d92b100be1064bfd14b60d1b8ab132e51abe`.
+O primeiro run dedicado encontrou uma ambiguidade PL/pgSQL entre variável local e coluna `actor_membership_id`. A variável foi renomeada para `current_actor_membership_id`, sem relaxamento de segurança. O red-team foi então ampliado e o head final ficou verde.
+
+## Verificação F41
+
+Head final da PR `#65`: `24fccfbd9a58a7ddfd265b7f6b3ec05646e583e0`.
 
 Gates observados no head final:
 
-- CI `35350201262`: PASS;
-- F22 Private Preview Preflight `35350201005`: PASS;
-- F29 Contracting Create `35350201149`: PASS;
-- F32 Contracting Object Mutation `35350201190`: PASS;
-- F35 Contracting Item Create `35350201079`: PASS;
-- F38 Contracting Item Mutation `35350201025`: PASS.
+- CI `35355476581`: PASS;
+- F22 Private Preview Preflight `35355476503`: PASS;
+- F29 Contracting Create `35355476516`: PASS;
+- F32 Contracting Object Mutation `35355476614`: PASS;
+- F35 Contracting Item Create `35355476513`: PASS;
+- F38 Contracting Item Mutation `35355476539`: PASS;
+- F41 Related Identifier Create `35355476626`: PASS.
 
-A comparação `main...head` mostrou somente os dois documentos da F40.
+A comparação final da PR mostrou somente os sete artefatos novos da F41. Não havia review thread pendente.
 
-Os blobs de migrations `0001..0009` foram comparados entre `main` e a branch F40 e permaneceram idênticos.
+PR `#65` integrada por merge commit `d460e38a4d5a6a1ef3408d72f10ac1d8765fee63`.
 
-PR `#63` integrada por merge commit `9463aab5dbfbda5b1c037b622ddb83859600253e`. O merge commit foi inspecionado e contém somente ADR-016 e a SPEC F41.
+O conector GitHub disponível expõe runs associados a evento de pull request, mas não fornece readback dos runs de push do merge commit. Nenhum PASS pós-merge é afirmado sem evidência. Por esse motivo `LAST_GOOD_MAIN_COMMIT` permanece no último main executável com readback pós-merge disponível, o pós-F39.
 
-O conector GitHub disponível expõe runs associados a evento de pull request, mas não fornece readback dos runs de push do merge commit. Portanto nenhum PASS pós-merge é afirmado sem evidência. O `LAST_GOOD_MAIN_COMMIT` executável com readback de CI permanece o pós-F39 já validado; F40 não alterou código executável.
+Resultado detalhado: `tasks/F41-PERSISTENT-RELATED-IDENTIFIER-CREATE-IMPLEMENT-01/RESULT.md`.
 
 ## Próxima ação
 
 Existe exatamente uma `NEXT_ACTION` canônica:
 
-`F41-PERSISTENT-RELATED-IDENTIFIER-CREATE-IMPLEMENT-01 - Implementar vínculo persistente mínimo de identificador relacionado`.
+`F42-PERSISTENT-RELATED-IDENTIFIER-CREATE-DETAIL-UI-01 - Integrar criação persistente de identificador relacionado no detalhe`.
 
-A SPEC está em `tasks/F41-PERSISTENT-RELATED-IDENTIFIER-CREATE-IMPLEMENT-01/SPEC.md`.
+A SPEC está em `tasks/F42-PERSISTENT-RELATED-IDENTIFIER-CREATE-DETAIL-UI-01/SPEC.md`.
 
-F41 deve implementar ADR-016 com migration aditiva `0010`, capability dedicada, policies RLS, primitive, provisioning, adapter server-only, testes SQL adversariais, prova PostgreSQL concorrente e workflow/regressões.
+F42 deve expor F41 no detalhe persistente com Server Action estreita, UUID preparado no servidor e estável em retry, transporte explícito de `NULL`/texto, feedback sanitizado, readback protegido e demo read-only.
 
-F41 não inclui UI nem Server Action.
+F42 não altera migrations, grants, policies, capability, primitive ou provisioning F41 e não inclui edição, desvínculo/re-link ou delete.
 
 F21 permanece `ON HOLD` até seu `resume_when` objetivo. Q-003, Q-004 e Q-009 permanecem abertas.

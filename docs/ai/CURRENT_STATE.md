@@ -1,215 +1,188 @@
 # Current State - Compras
 
-**PROJECT_STATUS:** F42_INTEGRATED_F43_READY  
-**CURRENT_PHASE:** F42 integrada; F43 READY; F21 ON HOLD  
+**PROJECT_STATUS:** F43_INTEGRATED_F44_READY  
+**CURRENT_PHASE:** F43 integrada e verificada; F44 READY; F21 ON HOLD  
 **REPO_VISIBILITY:** PUBLIC  
 **APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_SIGNIN_LIMITER_CONTRACTING_CREATE_NEXT_ACTION_OBJECT_ITEM_CREATE_ITEM_EDIT_AND_RELATED_IDENTIFIER_CREATE_UI_INTEGRATED  
 **DATABASE_STATUS:** PROTECTED_READ_MODEL_F26_F29_F32_F35_F38_F41_VALIDATED_MIGRATIONS_0001_0010_IMMUTABLE  
 **AUTH_STATUS:** SELF_HOSTED_BETTER_AUTH_AND_SIGNIN_LIMITER_INTEGRATED  
-**DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_NO_F42_HOSTED_WRITE_VALIDATION  
+**DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_NO_F43_HOSTED_WRITE_VALIDATION_REQUIRED  
 **REAL_DATA_ALLOWED:** NO  
 **CONTEXT_STATUS:** VALID  
 **FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`  
 **F21_FINAL_CHECKPOINT_COMMIT:** `73cd3ec1ef524c526c91124d40efae1eff2061ce`  
-**F41_PR:** `#65`  
-**F41_MERGE_COMMIT:** `d460e38a4d5a6a1ef3408d72f10ac1d8765fee63`  
 **F42_PR:** `#67`  
-**F42_IMPLEMENTATION_HEAD:** `296b00a98402fa7a8dd534ea4cea9eda9b0e90cc`  
 **F42_MERGE_COMMIT:** `53db535df7981f957674ca708bea7b30308992b3`  
-**F42_CI_RUN:** `35382784877`  
+**F43_PR:** `#69`  
+**F43_FINAL_HEAD:** `c253311e989d0d4f93031ab7cbbea3ac875005e5`  
+**F43_MERGE_COMMIT:** `adab76f1a02ca4602c917d812ceb1d5721ddbfd4`  
+**F43_CI_RUN:** `35997435206`  
 **F21_STATE:** `ON HOLD / BLOCKED` - Vercel control-plane surface unavailable for required protection/env readback+CRUD  
 **F21_RESUME_WHEN:** sessão Vercel autenticada permitir readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch, sem exposição de valores  
 **ON_HOLD:** `F17-B2` histórico + `F21` conforme resume_when acima
 
 ## Recuperação e contexto desta frente
 
-A sessão recuperou o estado real do GitHub em `main` no merge do checkpoint F41/F42:
+A sessão recuperou `main` no checkpoint F42/F43, commit `47b9ec768a408e12d81e49219ebff5c9eacd0609`.
 
-`5953f5dbfc4cab82b61311f293d6b2dd62972b64`.
+Não havia PR aberta. As branches F42 e checkpoint anteriores eram históricas; não existia branch operacional F43 ativa. A única frente canônica era:
 
-Não havia PR operacional aberta nem branch F42 ativa.
+`F43-PERSISTENT-MANUAL-TIMELINE-NOTE-DESIGN-01 - Desenhar criação persistente de nota manual na timeline`.
 
-A única frente canônica era:
+O `CONTEXT_MANIFEST` foi revalidado contra os 10 inputs canônicos e todos os blob SHAs coincidiram. `CONTEXT_STATUS = VALID`.
 
-`F42-PERSISTENT-RELATED-IDENTIFIER-CREATE-DETAIL-UI-01 - Integrar criação persistente de identificador relacionado no detalhe`.
+Como F43 é T2, foram lidos diretamente SECURITY, DATABASE, Definition of Done, PROJECT_DESIGN, DOMAIN_MODEL, BUSINESS_WORKFLOW, OPEN_QUESTIONS, o schema físico de `contracting_events`, as migrations/capabilities de escrita recentes e o resultado F42.
 
-O `CONTEXT_MANIFEST` foi revalidado contra os 10 inputs canônicos e todos os blob SHAs coincidiram.
+O repositório continua público e `REAL_DATA_ALLOWED = NO` permanece obrigatório.
 
-SECURITY e DATABASE foram lidos diretamente porque F42 possui efeito T2 de autorização/escrita server-side.
+## F43 integrada
 
-O baseline de migrations `0001..0010` foi capturado antes da implementação.
+A work unit foi executada na branch:
 
-A correção pós-merge da F41 em `c61eb4a3c253e96fb347b2787d201bc5e249c36f` foi verificada independentemente e estava verde em CI, F22, F29, F32, F35, F38 e F41.
+`f43-persistent-manual-timeline-note-design`
 
-## F42 integrada
+e promovida pela PR `#69`.
 
-A implementação foi realizada na branch:
+Head final promovido:
 
-`f42-related-identifier-create-detail-ui`
-
-e promovida pela PR `#67`.
+`c253311e989d0d4f93031ab7cbbea3ac875005e5`.
 
 Merge em `main`:
 
-`53db535df7981f957674ca708bea7b30308992b3`.
+`adab76f1a02ca4602c917d812ceb1d5721ddbfd4`.
 
-Artefatos de produção alterados/adicionados:
+F43 foi exclusivamente documental e adicionou somente:
 
-- `src/app/contratacoes/[id]/page.tsx`;
-- `src/features/contracting-detail/actions.ts`;
-- `src/features/contracting-detail/components/contracting-detail.tsx`;
-- `src/features/contracting-detail/related-identifier-create-feedback.ts`.
+- `docs/decisions/ADR-017-minimal-persistent-manual-timeline-note.md`;
+- `tasks/F44-PERSISTENT-MANUAL-TIMELINE-NOTE-IMPLEMENT-01/SPEC.md`.
 
-Testes novos/ajustados:
+Nenhum runtime, migration, policy, grant, capability, primitive, provisioning, adapter, Server Action ou UI foi alterado.
 
-- `src/app/contratacoes/[id]/page.test.tsx`;
-- `src/features/contracting-detail/related-identifier-create-action.test.ts`;
-- `src/features/contracting-detail/related-identifier-create-feedback.test.ts`;
-- `src/features/contracting-detail/components/contracting-detail.test.tsx`.
+## Decisão ADR-017
 
-Nenhum arquivo de banco, migration, grant, policy, capability, primitive ou provisioning foi alterado.
+A primeira nota manual persistente será uma capability específica sobre `contracting_events`, sem primitive genérica de eventos.
 
-## Jornada F42
-
-No detalhe persistente autorizado, o painel de identificadores relacionados agora permite criar um novo vínculo usando exclusivamente a boundary F41.
-
-A Server Action aceita somente:
+Contrato server-only definido para a implementação:
 
 ```text
-contractingId
-relatedIdentifierId
-identifierKindKind
-identifierKind
-identifierValue
-sourceSystemKind
-sourceSystem
-noteKind
-note
+contractingId: string
+eventId: string
+note: string | null
 ```
 
-Team, actor, membership, issuer, subject, event UUID, timestamps, lifecycle e navegação arbitrária não são aceitos como authority.
+`contractingId` é somente seletor candidato. `eventId` é UUID técnico preparado server-side e estável nos retries da mesma intenção. Nenhum deles concede scope ou autorização.
 
-A action não possui SQL/DML próprio.
+O browser não define team, actor, membership, issuer, subject, `event_type`, timestamps, field/old/new, item ou related identifier.
 
-Ela chama exclusivamente:
+## Shape do evento manual
 
-`createPersistentRelatedIdentifier(...)`.
+O evento canônico F44 será:
 
-## Candidate e retry
+```text
+id = eventId preparado
+team_id = team derivado
+contracting_id = contratação autorizada
+actor_membership_id = membership derivada
+event_type = 'manual_note_added'
+occurred_at = operation_at
+field_key = NULL
+old_value = NULL
+new_value = NULL
+note = valor exato
+related_identifier_id = NULL
+item_id = NULL
+created_at = operation_at
+```
 
-O `relatedIdentifierId` inicial é preparado no servidor por:
+`operation_at` vem do banco. A operação não altera `contractings.updated_at` e não muda qualquer estado estruturado da contratação.
 
-`preparePersistentRelatedIdentifierCandidateId()`.
+## Semântica textual
 
-Semântica integrada:
+`note` segue o contrato físico `text NULL` sem regra de negócio inventada.
 
-- `created`: intenção concluída, readback protegido e novo candidate na próxima intenção;
-- `already-linked`: replay exato concluído, readback protegido e novo candidate na próxima intenção;
-- `not-available`: feedback genérico, candidate anterior descartado;
-- `unavailable`: feedback técnico sanitizado e o mesmo candidate validado é preservado para retry.
-
-O candidate continua sendo somente identidade técnica/idempotency key. Não concede scope nem autorização.
-
-Demo, falha protegida e detalhe indisponível não preparam nem expõem candidate de escrita.
-
-## NULL versus texto
-
-`identifierKind`, `sourceSystem` e `note` usam transporte explícito `null|text`.
-
-A UI e a action preservam:
+Continuam distintos:
 
 - `NULL`;
 - `''`;
 - spaces-only;
 - leading/trailing spaces.
 
-`identifierValue` permanece string exata, inclusive vazia ou somente espaços, conforme F41.
+Não existe trim, empty-to-NULL, case-folding, limite arbitrário, sanitização de persistência, Markdown/HTML, categoria ou prioridade nesta boundary.
 
-Não existe:
+## Idempotência e concorrência
 
-- trim;
-- case-folding;
-- máscara;
-- regex de negócio;
-- taxonomia fechada;
-- deduplicação por valor/tipo/origem;
-- conversão implícita empty-to-NULL.
+O próprio evento é a entidade criada. Por isso o `eventId` precisa permanecer estável nos retries da mesma intenção. Deduplicação por conteúdo da nota foi rejeitada.
 
-Q-003 permanece aberta.
+`already-added` só pode ser reconhecido depois de nova autorização do target e prova exata do evento existente: mesmo team, contracting e actor, event type fixo, nota null-safe idêntica, campos auxiliares nulos e `created_at = occurred_at`.
 
-## Demo e falha protegida
+Mesmo UUID com payload divergente não faz overwrite. UUIDs diferentes com a mesma nota podem criar eventos distintos. Colisão cross-team, em outra contratação ou com outro event type permanece opaca.
 
-Demo continua estritamente read-only.
+## Autorização e least privilege
 
-Mesmo query state F42 forjado em demo:
+ADR-017 reutiliza o guard target-team pilot-only de F26/F32/F35/F38/F41:
 
-- não renderiza formulário;
-- não mostra candidate;
-- não mostra feedback de escrita como se uma operação tivesse ocorrido.
+1. current app user ativo;
+2. contratação candidata visível e ativa;
+3. membership não revogada do usuário na equipe alvo;
+4. exatamente uma membership não revogada na equipe alvo.
 
-Falha protegida continua sem fallback para fixture/demo.
+Segundo membro não revogado bloqueia, inclusive se o app_user correspondente estiver desabilitado. Membership adicional do mesmo usuário em outra equipe não bloqueia por si só.
 
-## Red-team F42
+A capability futura é dedicada, conceitualmente `compras_manual_timeline_note_create_owner`, selada e sem LOGIN/SUPERUSER/BYPASSRLS/ownership de tabela-base.
 
-A matriz cobriu:
+Runtime normal receberá somente `EXECUTE` da primitive futura por provisioning separado.
 
-- duplicate scalars;
-- campos extras;
-- authority forjada;
-- event UUID/timestamps/lifecycle forjados;
-- callback/redirect externo;
-- candidate malformado;
-- candidate válido forjado sem authority;
-- NULL versus vazio/espaços;
-- texto sem normalização;
-- resultado impossível;
-- exceção com detalhe técnico;
-- demo com query state forjado;
-- retry `unavailable` com candidate estável;
-- sucesso/replay com nova intenção posterior;
-- ausência de UI F42 em demo;
-- readback pela lista protegida existente.
+O INSERT de evento será coluna-a-coluna apenas para `id`, `team_id`, `contracting_id`, `actor_membership_id`, `event_type`, `occurred_at`, `note` e `created_at`.
 
-O primeiro CI da PR encontrou duas falhas apenas em testes novos: uma asserção dependente da ordem de atributos React e isolamento incompleto de aliases no teste de página. Os testes foram corrigidos sem alterar o contrato de produção.
+A capability não recebe UPDATE/DELETE de eventos nem DML de contratação, item, identifier ou allocator. F26/F29/F32/F35/F38/F41 não ganham authority adicional.
 
-## Verificação F42
+## Red-team F43
 
-Head promovido:
+A decisão foi revisada contra os principais atalhos perigosos. Foram rejeitados:
 
-`296b00a98402fa7a8dd534ea4cea9eda9b0e90cc`.
+- evento genérico controlável pelo caller;
+- team, actor, membership, issuer, subject ou timestamp como authority do browser;
+- `event_type` ou campos auxiliares arbitrários;
+- novo UUID automático em cada retry da mesma intenção;
+- deduplicação por texto da nota;
+- replay por simples colisão de UUID;
+- DML direto de eventos na runtime;
+- UPDATE/DELETE de evento na capability;
+- DML de contratação/item/identifier na nova capability;
+- ampliação de capabilities existentes;
+- vínculo de evento em target cross-team ou inativo;
+- oracle de existência por colisão;
+- normalização textual sem fonte canônica;
+- categoria, prioridade ou entidade Pendência inventadas;
+- alteração artificial de `contractings.updated_at`;
+- reescrita de migration aplicada;
+- resolução implícita de Q-001, Q-002, Q-003, Q-004, Q-006, Q-009 ou Q-010;
+- fallback para demo;
+- provider hosted, secret ou dado real.
 
-Gates finais:
+## Verificação F43
 
-- CI `35382784877`: PASS;
-- F22 Private Preview Preflight `35382784984`: PASS;
-- F29 Contracting Create `35382784990`: PASS;
-- F32 Contracting Object Mutation `35382784911`: PASS;
-- F35 Contracting Item Create `35382784957`: PASS;
-- F38 Contracting Item Mutation `35382784934`: PASS;
-- F41 Related Identifier Create `35382784907`: PASS.
+A comparação `main...head` mostrou exatamente dois arquivos documentais novos.
 
-O job `verify` de CI confirmou:
+Migrations `0001..0010` foram comparadas entre `main` e a branch F43 e permaneceram byte-for-byte idênticas.
 
-- lint: PASS;
-- typecheck: PASS;
-- testes: PASS;
-- build: PASS.
+Não havia review thread pendente na PR `#69` antes do merge.
 
-Os jobs de banco e auth também ficaram verdes.
+Gates no head final `c253311e989d0d4f93031ab7cbbea3ac875005e5`:
 
-Não havia review thread pendente na PR `#67` antes do merge.
+- CI `35997435206`: PASS;
+- F22 Private Preview Preflight `35997435203`: PASS;
+- F29 Contracting Create `35997435119`: PASS;
+- F32 Contracting Object Mutation `35997435090`: PASS;
+- F35 Contracting Item Create `35997435047`: PASS;
+- F38 Contracting Item Mutation `35997435210`: PASS;
+- F41 Related Identifier Create `35997435125`: PASS.
 
-Os workflows são acionados na PR e não produziram run adicional para o merge commit de `main`; o tree promovido é exatamente o head verde da PR mais o merge GitHub.
-
-Resultado detalhado:
-
-`tasks/F42-PERSISTENT-RELATED-IDENTIFIER-CREATE-DETAIL-UI-01/RESULT.md`.
+A slice não exigiu provider hosted write nem dado real.
 
 ## Imutabilidade
 
-Migrations `0001..0010` permaneceram byte-for-byte idênticas ao baseline capturado antes da implementação.
-
-SHAs finais:
+SHAs das migrations após F43:
 
 - `0001_core_foundation.sql`: `a10e9733b71abae272fb58b763cae4c1439dd70c`;
 - `0002_trusted_identity_read_policies.sql`: `ba6dd439f86e893faf1e4cb5ef59a3730876a757`;
@@ -222,23 +195,19 @@ SHAs finais:
 - `0009_contracting_item_mutation.sql`: `11f0639ae623eefb5794e69a1c7419cfd6a66fc2`;
 - `0010_related_identifier_create.sql`: `9a1dd6fec62181c506a5efad8d5518f53cf2e154`.
 
-Provisioning F41 permaneceu:
-
-`grant_related_identifier_create_runtime.sql` = `0f6ac20ddff00f9c547f6c99919acdef81c73e86`.
-
 ## Próxima ação
 
 Existe exatamente uma `NEXT_ACTION` canônica:
 
-`F43-PERSISTENT-MANUAL-TIMELINE-NOTE-DESIGN-01 - Desenhar criação persistente de nota manual na timeline`.
+`F44-PERSISTENT-MANUAL-TIMELINE-NOTE-IMPLEMENT-01 - Implementar criação persistente de nota manual na timeline`.
 
 A SPEC está em:
 
-`tasks/F43-PERSISTENT-MANUAL-TIMELINE-NOTE-DESIGN-01/SPEC.md`.
+`tasks/F44-PERSISTENT-MANUAL-TIMELINE-NOTE-IMPLEMENT-01/SPEC.md`.
 
-A escolha dessa frente não resolve questões abertas. Ela usa uma capacidade já prevista pelo DOMAIN_MODEL e pelo DATABASE: nota manual como evento da timeline.
+F44 deve implementar ADR-017 com migration aditiva `0011`, capability dedicada, policies/grants mínimos, primitive, provisioning, adapter server-only, helper de candidate UUID, testes SQL adversariais, prova PostgreSQL concorrente e workflow/regressões.
 
-Edição/desvínculo de identificadores relacionados permanece fora da próxima frente para não antecipar semântica que pode depender de Q-003.
+F44 não inclui UI nem Server Action.
 
 F21 permanece `ON HOLD` até seu `resume_when` objetivo.
 

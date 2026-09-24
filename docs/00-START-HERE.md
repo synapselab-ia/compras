@@ -22,17 +22,18 @@ A fundação possui:
 - criação mínima persistente de `contracting_items`, com allocator concorrente e UI;
 - edição persistente dos quatro campos de item com UI e optimistic concurrency por snapshot completo;
 - criação persistente mínima de `related_identifiers`, auditável e idempotente por UUID preparado, com UI persistente e demo read-only;
+- ADR-017 integrado para a primeira criação persistente de nota manual na timeline, com implementação operacional ainda pendente na F44;
 - migrations de domínio `0001..0010` integradas e imutáveis.
 
-F42 foi integrada pela PR `#67`, merge `53db535df7981f957674ca708bea7b30308992b3`. O head promovido `296b00a98402fa7a8dd534ea4cea9eda9b0e90cc` ficou verde em CI, F22, F29, F32, F35, F38 e F41.
+F43 foi integrada pela PR `#69`, merge `adab76f1a02ca4602c917d812ceb1d5721ddbfd4`. O head promovido `c253311e989d0d4f93031ab7cbbea3ac875005e5` ficou verde em CI, F22, F29, F32, F35, F38 e F41.
 
 A próxima e única frente canônica é:
 
-`F43-PERSISTENT-MANUAL-TIMELINE-NOTE-DESIGN-01 - Desenhar criação persistente de nota manual na timeline`.
+`F44-PERSISTENT-MANUAL-TIMELINE-NOTE-IMPLEMENT-01 - Implementar criação persistente de nota manual na timeline`.
 
 F17 permanece `ON HOLD` histórico. F21 permanece `ON HOLD` até existir control plane Vercel capaz de readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch sem expor valores.
 
-Q-003 sobre semântica final dos processos relacionados, Q-004 sobre pesquisa de preços e Q-009 sobre política multiusuário continuam abertas. Enquanto Q-009 estiver aberta, as boundaries de escrita permanecem pilot-only.
+Q-001, Q-002, Q-003, Q-004, Q-006, Q-009 e Q-010 continuam abertas. Enquanto Q-009 estiver aberta, as boundaries de escrita permanecem pilot-only.
 
 ## Auth e sign-in
 
@@ -137,28 +138,51 @@ Resultados completos:
 - `tasks/F41-PERSISTENT-RELATED-IDENTIFIER-CREATE-IMPLEMENT-01/RESULT.md`;
 - `tasks/F42-PERSISTENT-RELATED-IDENTIFIER-CREATE-DETAIL-UI-01/RESULT.md`.
 
-## Próxima frente F43
+## F43 - desenho da nota manual na timeline
+
+ADR-017 define uma operação específica de nota manual em `contracting_events`, sem abrir primitive genérica de eventos.
+
+Decisões centrais:
+
+- payload server-only mínimo: `contractingId`, `eventId` preparado e `note: string | null`;
+- `event_type` fixo `manual_note_added`, fora da authority do caller;
+- team, actor, membership e timestamps derivados de contexto confiável;
+- shape fechado com field/old/new/item/related identifier nulos;
+- `note` preserva `NULL`, vazio e espaços sem trim ou normalização;
+- `eventId` é estável por intenção para retry idempotente;
+- replay `already-added` exige autorização atual e prova exata do evento canônico;
+- UUIDs diferentes com a mesma nota podem criar eventos distintos; não há deduplicação por conteúdo;
+- autorização segue guard target-team pilot-only;
+- capability futura será dedicada e runtime normal continuará sem DML direto;
+- a operação não altera `contractings.updated_at` nem qualquer estado estruturado.
+
+F43 adicionou apenas:
+
+- `docs/decisions/ADR-017-minimal-persistent-manual-timeline-note.md`;
+- `tasks/F44-PERSISTENT-MANUAL-TIMELINE-NOTE-IMPLEMENT-01/SPEC.md`.
+
+Todos os sete workflows aplicáveis ficaram verdes no head final da PR `#69`, não havia review thread pendente e migrations `0001..0010` permaneceram byte-for-byte.
+
+## Próxima frente F44
 
 A única `NEXT_ACTION` canônica está em `docs/ai/NEXT_ACTION.md`:
 
-`F43-PERSISTENT-MANUAL-TIMELINE-NOTE-DESIGN-01 - Desenhar criação persistente de nota manual na timeline`.
+`F44-PERSISTENT-MANUAL-TIMELINE-NOTE-IMPLEMENT-01 - Implementar criação persistente de nota manual na timeline`.
 
-F43 é uma slice T2 exclusivamente documental. Ela deve desenhar a primeira boundary persistente de nota manual em `contracting_events`, usando os fatos já previstos no DOMAIN_MODEL e DATABASE sem transformar a operação em primitive genérica de eventos.
+F44 deve materializar ADR-017 com:
 
-A decisão deve fechar apenas:
+- migration aditiva `0011`;
+- capability dedicada e policies RLS estreitas;
+- primitive `SECURITY DEFINER` com `search_path = pg_catalog`;
+- provisioning separado que concede somente `EXECUTE` à runtime;
+- adapter server-only e helper server-only de preparo do `eventId`;
+- replay exato e concorrência por UUID preparado;
+- testes SQL adversariais e prova PostgreSQL concorrente;
+- workflow F44 e regressões F22/F29/F32/F35/F38/F41.
 
-- payload server-only mínimo;
-- authorization guard pilot-only;
-- shape fechado do evento manual;
-- semântica de `note` para NULL/vazio/espaços;
-- idempotência/replay e concorrência;
-- capability dedicada e least privilege;
-- resultados externos sanitizados e opacidade protegida.
+F44 não inclui UI nem Server Action e não resolve qualquer questão aberta.
 
-F43 não inclui código operacional, UI, mutation de responsável/etapa/status/aguardando, Pendência, pesquisa de preços, edição/desvínculo de identificador ou resolução de questões abertas.
-
-A SPEC está em `tasks/F43-PERSISTENT-MANUAL-TIMELINE-NOTE-DESIGN-01/SPEC.md`.
-
+A SPEC está em `tasks/F44-PERSISTENT-MANUAL-TIMELINE-NOTE-IMPLEMENT-01/SPEC.md`.
 ## Modos da aplicação
 
 ### Demo
@@ -200,7 +224,7 @@ Migrations de domínio integradas e imutáveis:
 - `0009_contracting_item_mutation.sql`;
 - `0010_related_identifier_create.sql`.
 
-Migration aplicada não é reescrita. F42 não alterou as migrations `0001..0010`; F43 é uma slice de desenho e também deve mantê-las byte-for-byte.
+Migration aplicada não é reescrita. F43 não alterou as migrations `0001..0010`; a implementação F44 deve começar em migration aditiva `0011` ou posterior.
 
 ## Fonte de verdade
 
@@ -218,7 +242,7 @@ Startup mínimo:
 
 Fontes de produto: `PROJECT_DESIGN.md`, `DOMAIN_MODEL.md`, `BUSINESS_WORKFLOW.md`, `OPEN_QUESTIONS.md`.
 
-Fontes de arquitetura: `ARCHITECTURE.md`, `SECURITY.md`, `DATABASE.md`, ADR-003, ADR-005, ADR-009 a ADR-016.
+Fontes de arquitetura: `ARCHITECTURE.md`, `SECURITY.md`, `DATABASE.md`, ADR-003, ADR-005, ADR-009 a ADR-017.
 
 Operação por IA: `SOURCE_OF_TRUTH.md`, `WORK_PROTOCOL.md`, `CONTEXT_MANIFEST.md`, `CURRENT_STATE.md`, `NEXT_ACTION.md`.
 

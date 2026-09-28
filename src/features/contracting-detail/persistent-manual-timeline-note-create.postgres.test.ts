@@ -125,9 +125,9 @@ describePostgres("F44 PostgreSQL manual timeline note concurrency boundary", () 
     }>(
       `select
          count(event.id)::text as row_count,
-         max(event.team_id)::text as team_id,
-         max(event.contracting_id)::text as contracting_id,
-         max(event.actor_membership_id)::text as actor_membership_id,
+         max(event.team_id::text) as team_id,
+         max(event.contracting_id::text) as contracting_id,
+         max(event.actor_membership_id::text) as actor_membership_id,
          max(event.event_type) as event_type,
          max(event.note) as note,
          bool_and(

@@ -1,12 +1,12 @@
 # Current State - Compras
 
-**PROJECT_STATUS:** F43_INTEGRATED_F44_READY  
-**CURRENT_PHASE:** F43 integrada e verificada; F44 READY; F21 ON HOLD  
+**PROJECT_STATUS:** F44_INTEGRATED_F45_READY  
+**CURRENT_PHASE:** F44 integrada e verificada; F45 READY; F21 ON HOLD  
 **REPO_VISIBILITY:** PUBLIC  
-**APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_SIGNIN_LIMITER_CONTRACTING_CREATE_NEXT_ACTION_OBJECT_ITEM_CREATE_ITEM_EDIT_AND_RELATED_IDENTIFIER_CREATE_UI_INTEGRATED  
-**DATABASE_STATUS:** PROTECTED_READ_MODEL_F26_F29_F32_F35_F38_F41_VALIDATED_MIGRATIONS_0001_0010_IMMUTABLE  
+**APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_SIGNIN_LIMITER_CONTRACTING_CREATE_NEXT_ACTION_OBJECT_ITEM_CREATE_ITEM_EDIT_RELATED_IDENTIFIER_CREATE_UI_AND_MANUAL_TIMELINE_NOTE_BOUNDARY_INTEGRATED  
+**DATABASE_STATUS:** PROTECTED_READ_MODEL_F26_F29_F32_F35_F38_F41_F44_VALIDATED_MIGRATIONS_0001_0011_IMMUTABLE  
 **AUTH_STATUS:** SELF_HOSTED_BETTER_AUTH_AND_SIGNIN_LIMITER_INTEGRATED  
-**DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_NO_F43_HOSTED_WRITE_VALIDATION_REQUIRED  
+**DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_NO_F44_HOSTED_WRITE_VALIDATION_REQUIRED  
 **REAL_DATA_ALLOWED:** NO  
 **CONTEXT_STATUS:** VALID  
 **FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`  
@@ -14,55 +14,71 @@
 **F42_PR:** `#67`  
 **F42_MERGE_COMMIT:** `53db535df7981f957674ca708bea7b30308992b3`  
 **F43_PR:** `#69`  
-**F43_FINAL_HEAD:** `c253311e989d0d4f93031ab7cbbea3ac875005e5`  
 **F43_MERGE_COMMIT:** `adab76f1a02ca4602c917d812ceb1d5721ddbfd4`  
-**F43_CI_RUN:** `35997435206`  
+**F44_PR:** `#71`  
+**F44_FINAL_HEAD:** `c057b381454ad1d0499338fda1915ff337056fbe`  
+**F44_MERGE_COMMIT:** `55f887252cfd5e5e81596e7434e6d5cec906aced`  
+**F44_CI_RUN:** `36459883858`  
+**F44_WORKFLOW_RUN:** `36459883410`  
 **F21_STATE:** `ON HOLD / BLOCKED` - Vercel control-plane surface unavailable for required protection/env readback+CRUD  
 **F21_RESUME_WHEN:** sessão Vercel autenticada permitir readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch, sem exposição de valores  
 **ON_HOLD:** `F17-B2` histórico + `F21` conforme resume_when acima
 
 ## Recuperação e contexto desta frente
 
-A sessão recuperou `main` no checkpoint F42/F43, commit `47b9ec768a408e12d81e49219ebff5c9eacd0609`.
+A sessão recuperou o estado real do GitHub antes de qualquer edição.
 
-Não havia PR aberta. As branches F42 e checkpoint anteriores eram históricas; não existia branch operacional F43 ativa. A única frente canônica era:
+No início da frente:
 
-`F43-PERSISTENT-MANUAL-TIMELINE-NOTE-DESIGN-01 - Desenhar criação persistente de nota manual na timeline`.
+- `main` estava em `8ff39822207842f5df2b39b62a296628f75e8698`;
+- não havia PR aberta;
+- F43 já estava integrada;
+- a única `NEXT_ACTION` canônica era F44;
+- `CONTEXT_MANIFEST` foi revalidado contra os 10 inputs canônicos e todos os blob SHAs coincidiram;
+- migrations `0001..0010` foram verificadas byte-for-byte antes da implementação.
 
-O `CONTEXT_MANIFEST` foi revalidado contra os 10 inputs canônicos e todos os blob SHAs coincidiram. `CONTEXT_STATUS = VALID`.
+`CONTEXT_STATUS = VALID`.
 
-Como F43 é T2, foram lidos diretamente SECURITY, DATABASE, Definition of Done, PROJECT_DESIGN, DOMAIN_MODEL, BUSINESS_WORKFLOW, OPEN_QUESTIONS, o schema físico de `contracting_events`, as migrations/capabilities de escrita recentes e o resultado F42.
+O repositório permanece público e `REAL_DATA_ALLOWED = NO` continua obrigatório.
 
-O repositório continua público e `REAL_DATA_ALLOWED = NO` permanece obrigatório.
-
-## F43 integrada
+## F44 integrada
 
 A work unit foi executada na branch:
 
-`f43-persistent-manual-timeline-note-design`
+`f44-persistent-manual-timeline-note-implement`
 
-e promovida pela PR `#69`.
+e promovida pela PR `#71`.
 
 Head final promovido:
 
-`c253311e989d0d4f93031ab7cbbea3ac875005e5`.
+`c057b381454ad1d0499338fda1915ff337056fbe`.
 
 Merge em `main`:
 
-`adab76f1a02ca4602c917d812ceb1d5721ddbfd4`.
+`55f887252cfd5e5e81596e7434e6d5cec906aced`.
 
-F43 foi exclusivamente documental e adicionou somente:
+A F44 implementou a ADR-017 sem UI e sem Server Action.
 
-- `docs/decisions/ADR-017-minimal-persistent-manual-timeline-note.md`;
-- `tasks/F44-PERSISTENT-MANUAL-TIMELINE-NOTE-IMPLEMENT-01/SPEC.md`.
+Foram adicionados:
 
-Nenhum runtime, migration, policy, grant, capability, primitive, provisioning, adapter, Server Action ou UI foi alterado.
+- migration aditiva `0011_manual_timeline_note_create.sql`;
+- capability dedicada `compras_manual_timeline_note_create_owner`;
+- primitive `public.create_manual_timeline_note(uuid, uuid, text)`;
+- provisioning separado com EXECUTE-only para runtime;
+- adapter server-only;
+- helper server-only de preparo do `eventId`;
+- teste unitário do adapter;
+- suíte SQL adversarial;
+- prova PostgreSQL concorrente real;
+- workflow dedicado F44.
 
-## Decisão ADR-017
+O resultado detalhado está em:
 
-A primeira nota manual persistente será uma capability específica sobre `contracting_events`, sem primitive genérica de eventos.
+`tasks/F44-PERSISTENT-MANUAL-TIMELINE-NOTE-IMPLEMENT-01/RESULT.md`.
 
-Contrato server-only definido para a implementação:
+## Boundary F44
+
+Contrato server-only:
 
 ```text
 contractingId: string
@@ -70,144 +86,114 @@ eventId: string
 note: string | null
 ```
 
-`contractingId` é somente seletor candidato. `eventId` é UUID técnico preparado server-side e estável nos retries da mesma intenção. Nenhum deles concede scope ou autorização.
+`contractingId` e `eventId` são candidatos opacos. Scope, identidade, actor e autorização são derivados em boundaries confiáveis e aplicados no PostgreSQL.
 
-O browser não define team, actor, membership, issuer, subject, `event_type`, timestamps, field/old/new, item ou related identifier.
+A primitive grava somente `manual_note_added` com shape fechado e timestamp definido no banco.
 
-## Shape do evento manual
+Ela não altera `contractings.updated_at`.
 
-O evento canônico F44 será:
+A nota preserva exatamente `NULL`, vazio, spaces-only e leading/trailing spaces.
 
-```text
-id = eventId preparado
-team_id = team derivado
-contracting_id = contratação autorizada
-actor_membership_id = membership derivada
-event_type = 'manual_note_added'
-occurred_at = operation_at
-field_key = NULL
-old_value = NULL
-new_value = NULL
-note = valor exato
-related_identifier_id = NULL
-item_id = NULL
-created_at = operation_at
-```
+Resultados externos:
 
-`operation_at` vem do banco. A operação não altera `contractings.updated_at` e não muda qualquer estado estruturado da contratação.
-
-## Semântica textual
-
-`note` segue o contrato físico `text NULL` sem regra de negócio inventada.
-
-Continuam distintos:
-
-- `NULL`;
-- `''`;
-- spaces-only;
-- leading/trailing spaces.
-
-Não existe trim, empty-to-NULL, case-folding, limite arbitrário, sanitização de persistência, Markdown/HTML, categoria ou prioridade nesta boundary.
-
-## Idempotência e concorrência
-
-O próprio evento é a entidade criada. Por isso o `eventId` precisa permanecer estável nos retries da mesma intenção. Deduplicação por conteúdo da nota foi rejeitada.
-
-`already-added` só pode ser reconhecido depois de nova autorização do target e prova exata do evento existente: mesmo team, contracting e actor, event type fixo, nota null-safe idêntica, campos auxiliares nulos e `created_at = occurred_at`.
-
-Mesmo UUID com payload divergente não faz overwrite. UUIDs diferentes com a mesma nota podem criar eventos distintos. Colisão cross-team, em outra contratação ou com outro event type permanece opaca.
+- `created`;
+- `already-added`;
+- `not-available`;
+- `unavailable`.
 
 ## Autorização e least privilege
 
-ADR-017 reutiliza o guard target-team pilot-only de F26/F32/F35/F38/F41:
+O guard target-team pilot-only permanece:
 
 1. current app user ativo;
-2. contratação candidata visível e ativa;
-3. membership não revogada do usuário na equipe alvo;
+2. target ativo;
+3. membership não revogada na equipe alvo;
 4. exatamente uma membership não revogada na equipe alvo.
 
-Segundo membro não revogado bloqueia, inclusive se o app_user correspondente estiver desabilitado. Membership adicional do mesmo usuário em outra equipe não bloqueia por si só.
+Segundo membro não revogado bloqueia mesmo quando o app_user correspondente está desabilitado.
 
-A capability futura é dedicada, conceitualmente `compras_manual_timeline_note_create_owner`, selada e sem LOGIN/SUPERUSER/BYPASSRLS/ownership de tabela-base.
+Q-009 continua aberta.
 
-Runtime normal receberá somente `EXECUTE` da primitive futura por provisioning separado.
+A capability F44 é dedicada e selada. Não possui ownership de tabela-base, UPDATE/DELETE de eventos nem DML em contratação, itens, identifiers ou allocator.
 
-O INSERT de evento será coluna-a-coluna apenas para `id`, `team_id`, `contracting_id`, `actor_membership_id`, `event_type`, `occurred_at`, `note` e `created_at`.
+Runtime normal recebe somente EXECUTE da primitive F44 por provisioning separado e continua sem DML direto.
 
-A capability não recebe UPDATE/DELETE de eventos nem DML de contratação, item, identifier ou allocator. F26/F29/F32/F35/F38/F41 não ganham authority adicional.
+F26/F29/F32/F35/F38/F41 não receberam authority adicional.
 
-## Red-team F43
+## Idempotência e concorrência
 
-A decisão foi revisada contra os principais atalhos perigosos. Foram rejeitados:
+`eventId` é estável por intenção.
 
-- evento genérico controlável pelo caller;
-- team, actor, membership, issuer, subject ou timestamp como authority do browser;
-- `event_type` ou campos auxiliares arbitrários;
-- novo UUID automático em cada retry da mesma intenção;
-- deduplicação por texto da nota;
-- replay por simples colisão de UUID;
-- DML direto de eventos na runtime;
-- UPDATE/DELETE de evento na capability;
-- DML de contratação/item/identifier na nova capability;
-- ampliação de capabilities existentes;
-- vínculo de evento em target cross-team ou inativo;
-- oracle de existência por colisão;
-- normalização textual sem fonte canônica;
-- categoria, prioridade ou entidade Pendência inventadas;
-- alteração artificial de `contractings.updated_at`;
-- reescrita de migration aplicada;
-- resolução implícita de Q-001, Q-002, Q-003, Q-004, Q-006, Q-009 ou Q-010;
-- fallback para demo;
-- provider hosted, secret ou dado real.
+`already-added` exige autorização atual e prova exata do evento canônico existente.
 
-## Verificação F43
+Mesmo UUID com payload divergente não faz overwrite.
 
-A comparação `main...head` mostrou exatamente dois arquivos documentais novos.
+UUIDs diferentes com nota idêntica podem criar eventos distintos.
 
-Migrations `0001..0010` foram comparadas entre `main` e a branch F43 e permaneceram byte-for-byte idênticas.
+A prova PostgreSQL real validou oito chamadas concorrentes com o mesmo UUID/payload:
 
-Não havia review thread pendente na PR `#69` antes do merge.
+- 1 `created`;
+- 7 `already-added`;
+- 1 evento persistido.
 
-Gates no head final `c253311e989d0d4f93031ab7cbbea3ac875005e5`:
+## Red-team e verificação
 
-- CI `35997435206`: PASS;
-- F22 Private Preview Preflight `35997435203`: PASS;
-- F29 Contracting Create `35997435119`: PASS;
-- F32 Contracting Object Mutation `35997435090`: PASS;
-- F35 Contracting Item Create `35997435047`: PASS;
-- F38 Contracting Item Mutation `35997435210`: PASS;
-- F41 Related Identifier Create `35997435125`: PASS.
+A F44 foi testada contra:
 
-A slice não exigiu provider hosted write nem dado real.
+- roles/capabilities inseguras;
+- runtime com INHERIT ou DML direto;
+- auth/context ausente ou malformado;
+- identidade desconhecida ou desabilitada;
+- membership ausente/revogada;
+- segundo membro não revogado;
+- targets inexistentes, cross-team, arquivados e cancelados;
+- colisões de UUID não equivalentes;
+- replay divergente;
+- event type/actor/shape incorretos;
+- normalização indevida de texto;
+- deduplicação por conteúdo;
+- alteração de `contractings.updated_at`;
+- authority cruzada entre capabilities;
+- concorrência real.
+
+O primeiro run F44 encontrou somente um defeito no teste concorrente: uso de `max(uuid)` na consulta de asserção. A agregação foi corrigida para texto, sem alteração de comportamento de produção.
+
+Gates no head final `c057b381454ad1d0499338fda1915ff337056fbe`:
+
+- CI `36459883858`: PASS;
+- F22 Private Preview Preflight `36459883436`: PASS;
+- F29 Contracting Create `36459883423`: PASS;
+- F32 Contracting Object Mutation `36459883601`: PASS;
+- F35 Contracting Item Create `36459883350`: PASS;
+- F38 Contracting Item Mutation `36459883374`: PASS;
+- F41 Related Identifier Create `36459883354`: PASS;
+- F44 Manual Timeline Note Create `36459883410`: PASS.
+
+Não havia review thread pendente na PR `#71`.
 
 ## Imutabilidade
 
-SHAs das migrations após F43:
+Migrations `0001..0010` permaneceram byte-for-byte idênticas aos blobs canônicos verificados antes da execução.
 
-- `0001_core_foundation.sql`: `a10e9733b71abae272fb58b763cae4c1439dd70c`;
-- `0002_trusted_identity_read_policies.sql`: `ba6dd439f86e893faf1e4cb5ef59a3730876a757`;
-- `0003_team_member_directory.sql`: `33b98ad1b6134a02b0662e9f2f03dfbd07df92a8`;
-- `0004_next_action_mutation.sql`: `7773f1c0c19efb055a42d953d08bca1dab082b85`;
-- `0005_contracting_create.sql`: `fdf8bfd1176c9c1e047b1d5fcb3512c9fab71d74`;
-- `0006_contracting_object_mutation.sql`: `f3318318720b9df270430088001ad1f6002a4728`;
-- `0007_contracting_item_create.sql`: `ddb098fe03c123b7b6cb8665890b1a2c8c12093b`;
-- `0008_contracting_create_concurrency_repair.sql`: `c91f379aef0d0922c7de3be78d798e537fef9099`;
-- `0009_contracting_item_mutation.sql`: `11f0639ae623eefb5794e69a1c7419cfd6a66fc2`;
-- `0010_related_identifier_create.sql`: `9a1dd6fec62181c506a5efad8d5518f53cf2e154`.
+A nova migration aplicada é:
+
+- `0011_manual_timeline_note_create.sql`: `cc5d9016a5af409af8c71dd6d0f780fe5065c575`.
+
+A partir de F44, migrations `0001..0011` são baseline imutável.
 
 ## Próxima ação
 
 Existe exatamente uma `NEXT_ACTION` canônica:
 
-`F44-PERSISTENT-MANUAL-TIMELINE-NOTE-IMPLEMENT-01 - Implementar criação persistente de nota manual na timeline`.
+`F45-PERSISTENT-MANUAL-TIMELINE-NOTE-DETAIL-UI-01 - Integrar criação persistente de nota manual no detalhe`.
 
 A SPEC está em:
 
-`tasks/F44-PERSISTENT-MANUAL-TIMELINE-NOTE-IMPLEMENT-01/SPEC.md`.
+`tasks/F45-PERSISTENT-MANUAL-TIMELINE-NOTE-DETAIL-UI-01/SPEC.md`.
 
-F44 deve implementar ADR-017 com migration aditiva `0011`, capability dedicada, policies/grants mínimos, primitive, provisioning, adapter server-only, helper de candidate UUID, testes SQL adversariais, prova PostgreSQL concorrente e workflow/regressões.
+F45 deve integrar a boundary F44 ao detalhe persistente com Server Action estreita, `eventId` preparado server-side e estável em retry técnico, transporte explícito de `NULL`/texto, feedback sanitizado, readback pela timeline protegida e demo read-only.
 
-F44 não inclui UI nem Server Action.
+F45 não altera migration, grant, policy, capability, primitive ou provisioning F44.
 
 F21 permanece `ON HOLD` até seu `resume_when` objetivo.
 

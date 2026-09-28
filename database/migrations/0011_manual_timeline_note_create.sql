@@ -248,3 +248,253 @@ CREATE FUNCTION public.create_manual_timeline_note(
 )
 RETURNS text
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog
+AS $function$
+DECLARE
+  current_user_id uuid;
+  target_team_id uuid;
+  current_actor_membership_id uuid;
+  existing_team_id uuid;
+  existing_contracting_id uuid;
+  existing_actor_membership_id uuid;
+  existing_event_type text;
+  existing_occurred_at timestamptz;
+  existing_field_key text;
+  existing_old_value text;
+  existing_new_value text;
+  existing_note text;
+  existing_related_identifier_id uuid;
+  existing_item_id uuid;
+  existing_created_at timestamptz;
+  inserted_event_id uuid;
+  operation_at timestamptz;
+BEGIN
+  IF p_contracting_id IS NULL OR p_event_id IS NULL THEN
+    RETURN 'denied';
+  END IF;
+
+  current_user_id := public.current_app_user_id();
+
+  IF current_user_id IS NULL THEN
+    RETURN 'denied';
+  END IF;
+
+  SELECT target.team_id
+  INTO target_team_id
+  FROM public.contractings AS target
+  WHERE target.id = p_contracting_id
+    AND target.archived_at IS NULL
+    AND target.cancelled_at IS NULL;
+
+  IF NOT FOUND THEN
+    RETURN 'denied';
+  END IF;
+
+  SELECT membership.id
+  INTO current_actor_membership_id
+  FROM public.memberships AS membership
+  WHERE membership.team_id = target_team_id
+    AND membership.user_id = current_user_id
+    AND membership.revoked_at IS NULL;
+
+  IF current_actor_membership_id IS NULL THEN
+    RETURN 'denied';
+  END IF;
+
+  IF (
+    SELECT count(*)
+    FROM public.memberships AS active_membership
+    WHERE active_membership.team_id = target_team_id
+      AND active_membership.revoked_at IS NULL
+  ) <> 1 THEN
+    RETURN 'denied';
+  END IF;
+
+  -- The prepared event UUID is only an idempotency selector. Replay requires
+  -- current authorization and exact canonical-event proof.
+  SELECT
+    event.team_id,
+    event.contracting_id,
+    event.actor_membership_id,
+    event.event_type,
+    event.occurred_at,
+    event.field_key,
+    event.old_value,
+    event.new_value,
+    event.note,
+    event.related_identifier_id,
+    event.item_id,
+    event.created_at
+  INTO
+    existing_team_id,
+    existing_contracting_id,
+    existing_actor_membership_id,
+    existing_event_type,
+    existing_occurred_at,
+    existing_field_key,
+    existing_old_value,
+    existing_new_value,
+    existing_note,
+    existing_related_identifier_id,
+    existing_item_id,
+    existing_created_at
+  FROM public.contracting_events AS event
+  WHERE event.id = p_event_id;
+
+  IF FOUND THEN
+    IF existing_team_id = target_team_id
+       AND existing_contracting_id = p_contracting_id
+       AND existing_actor_membership_id = current_actor_membership_id
+       AND existing_event_type = 'manual_note_added'
+       AND existing_note IS NOT DISTINCT FROM p_note
+       AND existing_field_key IS NULL
+       AND existing_old_value IS NULL
+       AND existing_new_value IS NULL
+       AND existing_related_identifier_id IS NULL
+       AND existing_item_id IS NULL
+       AND existing_created_at = existing_occurred_at THEN
+      RETURN 'already-added';
+    END IF;
+
+    RETURN 'denied';
+  END IF;
+
+  operation_at := pg_catalog.clock_timestamp();
+
+  INSERT INTO public.contracting_events (
+    id,
+    team_id,
+    contracting_id,
+    actor_membership_id,
+    event_type,
+    occurred_at,
+    note,
+    created_at
+  ) VALUES (
+    p_event_id,
+    target_team_id,
+    p_contracting_id,
+    current_actor_membership_id,
+    'manual_note_added',
+    operation_at,
+    p_note,
+    operation_at
+  )
+  ON CONFLICT DO NOTHING
+  RETURNING id INTO inserted_event_id;
+
+  IF inserted_event_id IS NOT NULL THEN
+    RETURN 'created';
+  END IF;
+
+  -- A concurrent writer may have won the prepared UUID. Re-read only after
+  -- the target has already been authorized, then require the same exact proof.
+  SELECT
+    event.team_id,
+    event.contracting_id,
+    event.actor_membership_id,
+    event.event_type,
+    event.occurred_at,
+    event.field_key,
+    event.old_value,
+    event.new_value,
+    event.note,
+    event.related_identifier_id,
+    event.item_id,
+    event.created_at
+  INTO
+    existing_team_id,
+    existing_contracting_id,
+    existing_actor_membership_id,
+    existing_event_type,
+    existing_occurred_at,
+    existing_field_key,
+    existing_old_value,
+    existing_new_value,
+    existing_note,
+    existing_related_identifier_id,
+    existing_item_id,
+    existing_created_at
+  FROM public.contracting_events AS event
+  WHERE event.id = p_event_id;
+
+  IF FOUND
+     AND existing_team_id = target_team_id
+     AND existing_contracting_id = p_contracting_id
+     AND existing_actor_membership_id = current_actor_membership_id
+     AND existing_event_type = 'manual_note_added'
+     AND existing_note IS NOT DISTINCT FROM p_note
+     AND existing_field_key IS NULL
+     AND existing_old_value IS NULL
+     AND existing_new_value IS NULL
+     AND existing_related_identifier_id IS NULL
+     AND existing_item_id IS NULL
+     AND existing_created_at = existing_occurred_at THEN
+    RETURN 'already-added';
+  END IF;
+
+  RETURN 'denied';
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.create_manual_timeline_note(
+  uuid, uuid, text
+) FROM PUBLIC;
+
+GRANT CREATE ON SCHEMA public TO compras_manual_timeline_note_create_owner;
+
+DO $ownership$
+DECLARE
+  migration_is_superuser boolean;
+BEGIN
+  SELECT r.rolsuper
+  INTO migration_is_superuser
+  FROM pg_catalog.pg_roles AS r
+  WHERE r.rolname = current_user;
+
+  IF NOT COALESCE(migration_is_superuser, false) THEN
+    EXECUTE format(
+      'GRANT compras_manual_timeline_note_create_owner TO %I WITH INHERIT FALSE, SET TRUE GRANTED BY %I',
+      current_user,
+      current_user
+    );
+  END IF;
+
+  ALTER FUNCTION public.create_manual_timeline_note(
+    uuid, uuid, text
+  ) OWNER TO compras_manual_timeline_note_create_owner;
+
+  IF NOT COALESCE(migration_is_superuser, false) THEN
+    EXECUTE format(
+      'REVOKE compras_manual_timeline_note_create_owner FROM %I GRANTED BY %I',
+      current_user,
+      current_user
+    );
+  END IF;
+END;
+$ownership$;
+
+REVOKE CREATE ON SCHEMA public FROM compras_manual_timeline_note_create_owner;
+
+DO $postflight$
+DECLARE
+  capability_oid oid;
+  migration_oid oid;
+BEGIN
+  SELECT r.oid
+  INTO capability_oid
+  FROM pg_catalog.pg_roles AS r
+  WHERE r.rolname = 'compras_manual_timeline_note_create_owner';
+
+  SELECT r.oid
+  INTO migration_oid
+  FROM pg_catalog.pg_roles AS r
+  WHERE r.rolname = current_user;
+
+  IF capability_oid IS NULL OR migration_oid IS NULL THEN
+    RAISE EXCEPTION 'cannot resolve manual timeline note create postflight principals';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1

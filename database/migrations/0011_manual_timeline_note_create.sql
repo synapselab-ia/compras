@@ -498,3 +498,233 @@ BEGIN
 
   IF EXISTS (
     SELECT 1
+    FROM pg_catalog.pg_auth_members AS membership
+    WHERE membership.member = capability_oid
+       OR (
+         membership.roleid = capability_oid
+         AND (
+           membership.member <> migration_oid
+           OR membership.set_option
+           OR membership.inherit_option
+           OR NOT membership.admin_option
+         )
+       )
+  ) THEN
+    RAISE EXCEPTION 'manual timeline note create capability role is not sealed after ownership transfer';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_class AS relation
+    JOIN pg_catalog.pg_namespace AS namespace
+      ON namespace.oid = relation.relnamespace
+    WHERE namespace.nspname = 'public'
+      AND relation.relname IN (
+        'teams',
+        'app_users',
+        'memberships',
+        'contractings',
+        'related_identifiers',
+        'contracting_items',
+        'contracting_events',
+        'contracting_item_ordinal_counters'
+      )
+      AND relation.relowner = capability_oid
+  ) THEN
+    RAISE EXCEPTION 'manual timeline note create capability must not own protected base tables';
+  END IF;
+
+  IF pg_catalog.has_schema_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public',
+       'CREATE'
+     ) THEN
+    RAISE EXCEPTION 'manual timeline note create capability retained schema CREATE privilege';
+  END IF;
+
+  IF pg_catalog.has_any_column_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public.contractings',
+       'UPDATE'
+     )
+     OR pg_catalog.has_any_column_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public.related_identifiers',
+       'INSERT'
+     )
+     OR pg_catalog.has_any_column_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public.related_identifiers',
+       'UPDATE'
+     )
+     OR pg_catalog.has_table_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public.related_identifiers',
+       'DELETE'
+     )
+     OR pg_catalog.has_any_column_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public.contracting_items',
+       'INSERT'
+     )
+     OR pg_catalog.has_any_column_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public.contracting_items',
+       'UPDATE'
+     )
+     OR pg_catalog.has_table_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public.contracting_items',
+       'DELETE'
+     )
+     OR pg_catalog.has_table_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public.contracting_events',
+       'UPDATE'
+     )
+     OR pg_catalog.has_table_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public.contracting_events',
+       'DELETE'
+     ) THEN
+    RAISE EXCEPTION 'manual timeline note create capability can mutate existing domain state';
+  END IF;
+
+  IF NOT pg_catalog.has_column_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public.contracting_events',
+       'id',
+       'INSERT'
+     )
+     OR NOT pg_catalog.has_column_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public.contracting_events',
+       'note',
+       'INSERT'
+     )
+     OR NOT pg_catalog.has_column_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public.contracting_events',
+       'created_at',
+       'INSERT'
+     )
+     OR pg_catalog.has_column_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public.contracting_events',
+       'field_key',
+       'INSERT'
+     )
+     OR pg_catalog.has_column_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public.contracting_events',
+       'old_value',
+       'INSERT'
+     )
+     OR pg_catalog.has_column_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public.contracting_events',
+       'new_value',
+       'INSERT'
+     )
+     OR pg_catalog.has_column_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public.contracting_events',
+       'related_identifier_id',
+       'INSERT'
+     )
+     OR pg_catalog.has_column_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public.contracting_events',
+       'item_id',
+       'INSERT'
+     ) THEN
+    RAISE EXCEPTION 'manual timeline note create INSERT authority is not column-scoped as required';
+  END IF;
+
+  IF pg_catalog.has_function_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public.mutate_contracting_next_action(uuid,text,text,uuid)',
+       'EXECUTE'
+     )
+     OR pg_catalog.has_function_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public.create_contracting_minimal(uuid,text,uuid)',
+       'EXECUTE'
+     )
+     OR pg_catalog.has_function_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public.mutate_contracting_object(uuid,text,text,uuid)',
+       'EXECUTE'
+     )
+     OR pg_catalog.has_function_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public.create_contracting_item(uuid,text,numeric,text,text,uuid,uuid)',
+       'EXECUTE'
+     )
+     OR pg_catalog.has_function_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public.mutate_contracting_item_fields(uuid,uuid,text,numeric,text,text,text,numeric,text,text,uuid,uuid,uuid,uuid)',
+       'EXECUTE'
+     )
+     OR pg_catalog.has_function_privilege(
+       'compras_manual_timeline_note_create_owner',
+       'public.create_related_identifier(uuid,uuid,text,text,text,text,uuid)',
+       'EXECUTE'
+     ) THEN
+    RAISE EXCEPTION 'manual timeline note create capability inherited prior write authority';
+  END IF;
+
+  IF pg_catalog.has_function_privilege(
+       'compras_next_action_mutation_owner',
+       'public.create_manual_timeline_note(uuid,uuid,text)',
+       'EXECUTE'
+     )
+     OR pg_catalog.has_function_privilege(
+       'compras_contracting_create_owner',
+       'public.create_manual_timeline_note(uuid,uuid,text)',
+       'EXECUTE'
+     )
+     OR pg_catalog.has_function_privilege(
+       'compras_contracting_object_mutation_owner',
+       'public.create_manual_timeline_note(uuid,uuid,text)',
+       'EXECUTE'
+     )
+     OR pg_catalog.has_function_privilege(
+       'compras_contracting_item_create_owner',
+       'public.create_manual_timeline_note(uuid,uuid,text)',
+       'EXECUTE'
+     )
+     OR pg_catalog.has_function_privilege(
+       'compras_contracting_item_mutation_owner',
+       'public.create_manual_timeline_note(uuid,uuid,text)',
+       'EXECUTE'
+     )
+     OR pg_catalog.has_function_privilege(
+       'compras_related_identifier_create_owner',
+       'public.create_manual_timeline_note(uuid,uuid,text)',
+       'EXECUTE'
+     ) THEN
+    RAISE EXCEPTION 'prior write capability gained manual timeline note create EXECUTE';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_proc AS procedure
+    JOIN pg_catalog.pg_namespace AS namespace
+      ON namespace.oid = procedure.pronamespace
+    WHERE namespace.nspname = 'public'
+      AND procedure.proname = 'create_manual_timeline_note'
+      AND procedure.proowner = capability_oid
+      AND procedure.prosecdef
+      AND pg_catalog.pg_get_function_identity_arguments(procedure.oid)
+        = 'p_contracting_id uuid, p_event_id uuid, p_note text'
+      AND COALESCE(procedure.proconfig, ARRAY[]::text[])
+        @> ARRAY['search_path=pg_catalog']
+      AND position('EXECUTE ' IN upper(pg_catalog.pg_get_functiondef(procedure.oid))) = 0
+  ) THEN
+    RAISE EXCEPTION 'manual timeline note create primitive ownership/search_path/static SQL proof failed';
+  END IF;
+END;
+$postflight$;
+
+COMMIT;

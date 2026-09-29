@@ -3,7 +3,10 @@
 **Estado:** CONCLUÍDA E INTEGRADA  
 **PR:** #73  
 **Head validado:** `e5236dbbeef4fcb8bf2d568f37c2495e41a09f1a`  
-**Merge em main:** `0800553d95bddc8d4f2febe29f418dd543c1c659`
+**Merge em main:** `0800553d95bddc8d4f2febe29f418dd543c1c659`  
+**Revisão pós-integração:** PR #75  
+**Head validado da revisão:** `36157c0e78783789e0d7f69700e2cb55686e4030`  
+**Merge da revisão em main:** `60bcd9b7c86788f87d6dc76d8eec07a27611e59a`
 
 ## Entrega
 
@@ -53,6 +56,51 @@ No head final `e5236dbbeef4fcb8bf2d568f37c2495e41a09f1a`:
 - F44 Manual Timeline Note Create: PASS.
 
 CI inclui lint, typecheck, testes e build. Não havia review thread pendente na PR #73.
+
+
+## Revisão pós-integração da F45
+
+Uma segunda revisão adversarial identificou duas lacunas de qualidade sem impacto na authority ou na persistência:
+
+- o seletor permitia escolher `Ausente (NULL)`, mas o `textarea` continuava visível;
+- a suíte de página/action não materializava individualmente todos os cenários de candidate/retry exigidos pela SPEC.
+
+A PR #75 fechou ambas sem alterar a boundary F44.
+
+Na UI, `ManualTimelineNoteEditor` passou a manter o `noteKind` como estado explícito. O campo `note` só é renderizado no modo `Texto`. Em `Ausente (NULL)`, nenhum scalar de texto é submetido, e a Server Action continua convertendo o transporte exatamente para `note = null`.
+
+A cobertura adversarial foi ampliada para provar explicitamente:
+
+- candidate novo após `created`, `already-added` e `not-available`;
+- preservação do mesmo candidate somente em `unavailable`;
+- descarte de candidate malformado;
+- query state duplicado sem ganhar semântica de retry;
+- ausência de candidate/feedback em demo;
+- ausência de candidate quando a leitura protegida está indisponível;
+- modo não persistente sem chamada à F44;
+- UUIDs candidatos malformados rejeitados antes da boundary;
+- transporte nullable inválido rejeitado antes da boundary;
+- `NULL` sem scalar `note`;
+- payloads duplicados ou browser-controlled adicionais rejeitados;
+- `already-added` como sucesso idempotente com revalidação;
+- erro interno, resultado impossível, SQL/connection string/claims não vazando para feedback.
+
+O primeiro CI da revisão falhou somente em uma nova fixture de teste: usar `undefined` como segundo argumento acionava o valor default da função auxiliar e criava acidentalmente um campo `note`. A fixture foi corrigida para usar um sentinela explícito de ausência. Nenhum código de produção precisou ser alterado por essa falha.
+
+No head final `36157c0e78783789e0d7f69700e2cb55686e4030`:
+
+- CI: PASS;
+- F22 Private Preview Preflight: PASS;
+- F29 Contracting Create: PASS;
+- F32 Contracting Object Mutation: PASS;
+- F35 Contracting Item Create: PASS;
+- F38 Contracting Item Mutation: PASS;
+- F41 Related Identifier Create: PASS;
+- F44 Manual Timeline Note Create: PASS.
+
+Não havia review thread pendente na PR #75.
+
+O diff da revisão contém somente três arquivos da F45, sendo UI e testes. Migrations `0001..0011`, grants, policies, capability, primitive e provisioning permaneceram imutáveis.
 
 ## Invariantes preservadas
 

@@ -26,6 +26,12 @@ type RelatedIdentifierCreateBrowserResult =
   | "not-available"
   | "unavailable";
 
+type ManualTimelineNoteCreateBrowserResult =
+  | "created"
+  | "already-added"
+  | "not-available"
+  | "unavailable";
+
 const ITEM_CREATE_FORM_FIELDS = new Set([
   "contractingId",
   "description",
@@ -49,6 +55,13 @@ const ITEM_MUTATION_FORM_FIELDS = new Set([
   "newUnit",
   "newCatalogCodeKind",
   "newCatalogCode",
+]);
+
+const MANUAL_TIMELINE_NOTE_CREATE_FORM_FIELDS = new Set([
+  "contractingId",
+  "eventId",
+  "noteKind",
+  "note",
 ]);
 
 const RELATED_IDENTIFIER_CREATE_FORM_FIELDS = new Set([
@@ -172,6 +185,15 @@ function hasOnlyExpectedItemMutationFields(formData: FormData): boolean {
   return true;
 }
 
+function hasOnlyExpectedManualTimelineNoteCreateFields(formData: FormData): boolean {
+  for (const name of formData.keys()) {
+    if (!MANUAL_TIMELINE_NOTE_CREATE_FORM_FIELDS.has(name) && !name.startsWith("$ACTION_")) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function hasOnlyExpectedRelatedIdentifierCreateFields(formData: FormData): boolean {
   for (const name of formData.keys()) {
     if (
@@ -201,6 +223,17 @@ function isRelatedIdentifierCreateBrowserResult(
   return (
     value === "created" ||
     value === "already-linked" ||
+    value === "not-available" ||
+    value === "unavailable"
+  );
+}
+
+function isManualTimelineNoteCreateBrowserResult(
+  value: unknown,
+): value is ManualTimelineNoteCreateBrowserResult {
+  return (
+    value === "created" ||
+    value === "already-added" ||
     value === "not-available" ||
     value === "unavailable"
   );
@@ -464,6 +497,68 @@ export async function createPersistentRelatedIdentifierAction(
 
   redirect(
     relatedIdentifierCreateFeedbackPath(
+      path,
+      result,
+      result === "unavailable" ? retryCandidate : undefined,
+    ),
+  );
+}
+
+function manualTimelineNoteCreateFeedbackPath(
+  path: string,
+  result: ManualTimelineNoteCreateBrowserResult,
+  retryCandidate?: string,
+): string {
+  const base = `${path}?manualNoteCreation=${result}`;
+  return result === "unavailable" && retryCandidate && isPersistentContractingId(retryCandidate)
+    ? `${base}&manualNoteCandidate=${encodeURIComponent(retryCandidate)}`
+    : base;
+}
+
+/**
+ * The only F45 browser-facing manual-note entrypoint. The event UUID is an
+ * opaque idempotency key. It never defines scope or authorization.
+ */
+export async function createPersistentManualTimelineNoteAction(
+  formData: FormData,
+): Promise<never> {
+  if (readPersistentReadMode() !== "persistent") redirect("/");
+
+  const contractingId = readRequiredStringOnce(formData, "contractingId");
+  if (!contractingId || !isPersistentContractingId(contractingId)) redirect("/");
+
+  const path = detailPath(contractingId);
+  const eventId = readRequiredStringOnce(formData, "eventId");
+  const retryCandidate = eventId && isPersistentContractingId(eventId) ? eventId : undefined;
+
+  if (!hasOnlyExpectedManualTimelineNoteCreateFields(formData) || !retryCandidate) {
+    redirect(manualTimelineNoteCreateFeedbackPath(path, "unavailable", retryCandidate));
+  }
+
+  const note = readNullableTextTransportOnce(formData, "noteKind", "note");
+  if (!note.ok) {
+    redirect(manualTimelineNoteCreateFeedbackPath(path, "unavailable", retryCandidate));
+  }
+
+  let result: ManualTimelineNoteCreateBrowserResult = "unavailable";
+  try {
+    const { createPersistentManualTimelineNote } = await import(
+      "./persistent-manual-timeline-note-create"
+    );
+    const boundaryResult: unknown = await createPersistentManualTimelineNote({
+      contractingId,
+      eventId: retryCandidate,
+      note: note.value,
+    });
+    if (isManualTimelineNoteCreateBrowserResult(boundaryResult)) result = boundaryResult;
+  } catch {
+    result = "unavailable";
+  }
+
+  if (result === "created" || result === "already-added") revalidatePath(path);
+
+  redirect(
+    manualTimelineNoteCreateFeedbackPath(
       path,
       result,
       result === "unavailable" ? retryCandidate : undefined,

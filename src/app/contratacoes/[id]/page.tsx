@@ -40,13 +40,13 @@ type ContractingDetailPageProps = {
 function readUuidRetryCandidate(
   value: string | string[] | undefined,
 ): string | null {
-  return readUuidRetryCandidate(value);
+  return typeof value === "string" && UUID_PATTERN.test(value) ? value : null;
 }
 
 function readRelatedIdentifierRetryCandidate(
   value: string | string[] | undefined,
 ): string | null {
-  return typeof value === "string" && UUID_PATTERN.test(value) ? value : null;
+  return readUuidRetryCandidate(value);
 }
 
 export const dynamic = "force-dynamic";

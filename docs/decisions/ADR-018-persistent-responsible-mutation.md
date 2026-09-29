@@ -127,13 +127,13 @@ Membership cross-team, revogada, inexistente ou cujo app_user esteja desabilitad
 
 O estado atual pode conter referência para membership depois revogada ou app_user depois desabilitado. A boundary não altera esse estado silenciosamente.
 
-Depois de autorização da contratação e validação do snapshot esperado:
+A interação com o guard pilot-only precisa ser explícita:
 
-- limpar esse responsável continua permitido;
-- substituir por candidato elegível continua permitido;
-- submeter exatamente o mesmo valor atual é `unchanged`, mesmo que a referência atual já não seja elegível para uma nova atribuição.
+- se o responsável atual aponta para membership revogada, essa membership não entra na contagem do guard. Um actor que seja o único membro não revogado da equipe pode limpar ou substituir esse vínculo, desde que o expected corresponda;
+- se o responsável atual aponta para membership ainda não revogada cujo app_user foi desabilitado e existe outra membership não revogada do actor, a equipe possui pelo menos duas memberships não revogadas. Nesse caso a capability pilot-only nega a operação antes de conflict/no-op/candidate, exatamente como nas demais mutations;
+- um no-op sobre referência revogada pode retornar `unchanged` depois de target/guard autorizados. Isso não renova a elegibilidade histórica nem cria evento.
 
-Essa última regra é deliberada: um no-op não renova nem valida novamente a atribuição histórica. Ele também não cria evento ou timestamp falso. Uma mudança real para um valor não nulo sempre exige elegibilidade atual do novo candidato.
+Uma mudança real para um valor não nulo sempre exige elegibilidade atual do novo candidato. A correção de uma referência para usuário desabilitado cuja membership permaneça não revogada exige primeiro a governança apropriada dessa membership ou uma futura política multiusuário explícita. F46 não contorna Q-009 para "consertar" esse estado.
 
 ## 4. Autorização target-team pilot-only
 
@@ -397,34 +397,35 @@ A implementação deve provar em PostgreSQL 17 descartável e testes server-only
 6. current diferente de expected retorna `conflict` sem write/evento;
 7. stale expected continua `conflict` mesmo se new coincide com current;
 8. expected atual + new igual ao current retorna `unchanged` sem timestamp/evento;
-9. current responsável revogado ou com app_user desabilitado pode ser limpo quando expected corresponde;
-10. no-op sobre current responsável degradado retorna `unchanged` sem reatribuição/evento;
-11. candidato não nulo revogado é negado;
-12. candidato não nulo com app_user desabilitado é negado;
-13. candidato cross-team é negado;
-14. candidato inexistente é negado;
-15. a FK composta impede referência cross-team como backstop;
-16. claims ausentes/malformados, identidade desconhecida ou app_user corrente desabilitado negam;
-17. membership do actor ausente/revogada nega;
-18. segundo membro não revogado na equipe alvo bloqueia, inclusive app_user desabilitado;
-19. membership adicional do mesmo usuário em outra equipe não bloqueia por si só;
-20. target cross-team e inexistente são externamente indistinguíveis;
-21. target arquivado/cancelado bloqueia;
-22. oito writers concorrentes com mesmo expected produzem exatamente um `updated`, demais `conflict`, e um único evento;
-23. retry pós-sucesso não cria segundo evento;
-24. falha forçada no evento reverte responsável e `updated_at`;
-25. old/new do evento preservam `NULL` e UUID textual corretamente;
-26. `event_type`, `field_key`, actor e timestamps têm shape fechado;
-27. runtime normal não possui DML direto;
-28. capability possui UPDATE somente de `responsible_membership_id` e `updated_at`;
-29. capability não altera object, next_action, stage, status, waiting, creator, archived/cancelled;
-30. capability não escreve memberships/app_users nem UPDATE/DELETE eventos;
-31. capability é selada, não privilegiada e sem ownership de tabela-base;
-32. `PUBLIC EXECUTE` permanece revogado e `search_path` é fixo;
-33. F26/F29/F32/F35/F38/F41/F44 permanecem com authority original;
-34. migrations `0001..0011` permanecem byte-for-byte imutáveis;
-35. suites de leitura/Auth/F22/F29/F32/F35/F38/F41/F44 permanecem verdes;
-36. somente dados e identidades fictícios, sem provider hosted write.
+9. current responsável revogado pode ser limpo quando expected corresponde e o actor satisfaz o guard;
+10. no-op sobre current responsável revogado retorna `unchanged` sem reatribuição/evento;
+11. current responsável de app_user desabilitado com membership ainda não revogada continua bloqueado quando isso cria segundo membro não revogado no team;
+12. candidato não nulo revogado é negado;
+13. candidato não nulo cujo app_user esteja desabilitado é negado, sem exigir resultado externo distinto;
+14. candidato cross-team é negado;
+15. candidato inexistente é negado;
+16. a FK composta impede referência cross-team como backstop;
+17. claims ausentes/malformados, identidade desconhecida ou app_user corrente desabilitado negam;
+18. membership do actor ausente/revogada nega;
+19. segundo membro não revogado na equipe alvo bloqueia, inclusive app_user desabilitado;
+20. membership adicional do mesmo usuário em outra equipe não bloqueia por si só;
+21. target cross-team e inexistente são externamente indistinguíveis;
+22. target arquivado/cancelado bloqueia;
+23. oito writers concorrentes com mesmo expected produzem exatamente um `updated`, demais `conflict`, e um único evento;
+24. retry pós-sucesso não cria segundo evento;
+25. falha forçada no evento reverte responsável e `updated_at`;
+26. old/new do evento preservam `NULL` e UUID textual corretamente;
+27. `event_type`, `field_key`, actor e timestamps têm shape fechado;
+28. runtime normal não possui DML direto;
+29. capability possui UPDATE somente de `responsible_membership_id` e `updated_at`;
+30. capability não altera object, next_action, stage, status, waiting, creator, archived/cancelled;
+31. capability não escreve memberships/app_users nem UPDATE/DELETE eventos;
+32. capability é selada, não privilegiada e sem ownership de tabela-base;
+33. `PUBLIC EXECUTE` permanece revogado e `search_path` é fixo;
+34. F26/F29/F32/F35/F38/F41/F44 permanecem com authority original;
+35. migrations `0001..0011` permanecem byte-for-byte imutáveis;
+36. suites de leitura/Auth/F22/F29/F32/F35/F38/F41/F44 permanecem verdes;
+37. somente dados e identidades fictícios, sem provider hosted write.
 
 ## 13. Red-team da decisão
 
@@ -461,7 +462,7 @@ O desenho é rejeitado se qualquer implementação:
 - clear para `NULL` preserva o contrato atual;
 - candidato não pode escolher scope ou actor;
 - assignment novo exige membro atualmente autorizado e usuário ativo;
-- referências antigas revogadas/desabilitadas podem ser corrigidas sem mutação silenciosa;
+- referências revogadas podem ser corrigidas quando o guard pilot-only continua satisfeito; referências de usuário desabilitado com membership ainda não revogada permanecem conservadoramente bloqueadas se houver segundo membro;
 - optimistic concurrency evita lost update;
 - evento preserva identidade estável do vínculo;
 - runtime continua sem CRUD amplo;

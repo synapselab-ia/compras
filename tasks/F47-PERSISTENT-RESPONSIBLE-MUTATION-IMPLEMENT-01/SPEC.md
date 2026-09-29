@@ -180,11 +180,11 @@ Além de lint, typecheck, testes e build:
 3. expected stale retorna `conflict`;
 4. stale permanece conflict quando new já coincide com current;
 5. no-op retorna `unchanged` sem timestamp/evento;
-6. current revogado pode ser limpo;
-7. current de app_user desabilitado pode ser limpo;
-8. no-op de current degradado permanece unchanged;
+6. current revogado pode ser limpo quando o actor permanece o único membro não revogado da equipe;
+7. no-op de current revogado permanece unchanged;
+8. current de app_user desabilitado com membership ainda não revogada bloqueia quando isso produz segundo membro não revogado;
 9. novo candidate revogado nega;
-10. novo candidate app_user desabilitado nega;
+10. novo candidate cujo app_user esteja desabilitado nega sem resultado externo específico;
 11. candidate cross-team nega;
 12. candidate inexistente nega;
 13. target cross-team/inexistente indistinguível;

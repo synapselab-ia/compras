@@ -86,6 +86,8 @@ export function getDemoContractingDetail(id: string): DemoContractingDetail | un
 
   return {
     ...centralRecord,
+    responsibleMembershipId: null,
+    responsibleOptions: [],
     nextActionValue: centralRecord.nextAction,
     waitingSince: "Não informado",
     waitingReason: "Não informado",

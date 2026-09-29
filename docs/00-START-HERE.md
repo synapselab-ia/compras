@@ -22,14 +22,14 @@ A fundação possui:
 - criação mínima persistente de `contracting_items`, com allocator concorrente e UI;
 - edição persistente dos quatro campos de item com UI e optimistic concurrency por snapshot completo;
 - criação persistente mínima de `related_identifiers`, auditável e idempotente por UUID preparado, com UI persistente e demo read-only;
-- ADR-017 integrado para a primeira criação persistente de nota manual na timeline, com implementação operacional ainda pendente na F44;
-- migrations de domínio `0001..0010` integradas e imutáveis.
+- criação persistente de nota manual na timeline com boundary dedicada, retry idempotente e UI persistente read-only em demo;
+- migrations de domínio `0001..0011` integradas e imutáveis.
 
-F43 foi integrada pela PR `#69`, merge `adab76f1a02ca4602c917d812ceb1d5721ddbfd4`. O head promovido `c253311e989d0d4f93031ab7cbbea3ac875005e5` ficou verde em CI, F22, F29, F32, F35, F38 e F41.
+F45 foi integrada pela PR `#73`, head final `e5236dbbeef4fcb8bf2d568f37c2495e41a09f1a`, merge `0800553d95bddc8d4f2febe29f418dd543c1c659`. CI, F22, F29, F32, F35, F38, F41 e F44 ficaram verdes.
 
 A próxima e única frente canônica é:
 
-`F44-PERSISTENT-MANUAL-TIMELINE-NOTE-IMPLEMENT-01 - Implementar criação persistente de nota manual na timeline`.
+`F46-PERSISTENT-RESPONSIBLE-MUTATION-DESIGN-01 - Desenhar edição persistente do responsável interno`.
 
 F17 permanece `ON HOLD` histórico. F21 permanece `ON HOLD` até existir control plane Vercel capaz de readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch sem expor valores.
 
@@ -163,26 +163,23 @@ F43 adicionou apenas:
 
 Todos os sete workflows aplicáveis ficaram verdes no head final da PR `#69`, não havia review thread pendente e migrations `0001..0010` permaneceram byte-for-byte.
 
-## Próxima frente F44
+## F44/F45 - nota manual na timeline
+
+ADR-017 foi materializada em F44 por uma capability dedicada e primitive específica de criação de `manual_note_added`. F45 integrou essa boundary ao detalhe persistente com candidate UUID preparado server-side, retry técnico idempotente, transporte explícito de `NULL`/texto, feedback sanitizado e demo read-only.
+
+Resultados:
+
+- `tasks/F44-PERSISTENT-MANUAL-TIMELINE-NOTE-IMPLEMENT-01/RESULT.md`;
+- `tasks/F45-PERSISTENT-MANUAL-TIMELINE-NOTE-DETAIL-UI-01/RESULT.md`.
+
+## Próxima frente F46
 
 A única `NEXT_ACTION` canônica está em `docs/ai/NEXT_ACTION.md`:
 
-`F44-PERSISTENT-MANUAL-TIMELINE-NOTE-IMPLEMENT-01 - Implementar criação persistente de nota manual na timeline`.
+`F46-PERSISTENT-RESPONSIBLE-MUTATION-DESIGN-01 - Desenhar edição persistente do responsável interno`.
 
-F44 deve materializar ADR-017 com:
+F46 é design-only e não implementa produção.
 
-- migration aditiva `0011`;
-- capability dedicada e policies RLS estreitas;
-- primitive `SECURITY DEFINER` com `search_path = pg_catalog`;
-- provisioning separado que concede somente `EXECUTE` à runtime;
-- adapter server-only e helper server-only de preparo do `eventId`;
-- replay exato e concorrência por UUID preparado;
-- testes SQL adversariais e prova PostgreSQL concorrente;
-- workflow F44 e regressões F22/F29/F32/F35/F38/F41.
-
-F44 não inclui UI nem Server Action e não resolve qualquer questão aberta.
-
-A SPEC está em `tasks/F44-PERSISTENT-MANUAL-TIMELINE-NOTE-IMPLEMENT-01/SPEC.md`.
 ## Modos da aplicação
 
 ### Demo
@@ -222,9 +219,10 @@ Migrations de domínio integradas e imutáveis:
 - `0007_contracting_item_create.sql`;
 - `0008_contracting_create_concurrency_repair.sql`;
 - `0009_contracting_item_mutation.sql`;
-- `0010_related_identifier_create.sql`.
+- `0010_related_identifier_create.sql`;
+- `0011_manual_timeline_note_create.sql`.
 
-Migration aplicada não é reescrita. F43 não alterou as migrations `0001..0010`; a implementação F44 deve começar em migration aditiva `0011` ou posterior.
+Migration aplicada não é reescrita. Migrations `0001..0011` são baseline imutável.
 
 ## Fonte de verdade
 

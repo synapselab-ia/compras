@@ -32,6 +32,13 @@ type ManualTimelineNoteCreateBrowserResult =
   | "not-available"
   | "unavailable";
 
+type ResponsibleMutationBrowserResult =
+  | "updated"
+  | "unchanged"
+  | "conflict"
+  | "not-available"
+  | "unavailable";
+
 const ITEM_CREATE_FORM_FIELDS = new Set([
   "contractingId",
   "description",
@@ -62,6 +69,14 @@ const MANUAL_TIMELINE_NOTE_CREATE_FORM_FIELDS = new Set([
   "eventId",
   "noteKind",
   "note",
+]);
+
+const RESPONSIBLE_MUTATION_FORM_FIELDS = new Set([
+  "contractingId",
+  "expectedResponsibleKind",
+  "expectedResponsibleMembershipId",
+  "newResponsibleKind",
+  "newResponsibleMembershipId",
 ]);
 
 const RELATED_IDENTIFIER_CREATE_FORM_FIELDS = new Set([
@@ -194,6 +209,40 @@ function hasOnlyExpectedManualTimelineNoteCreateFields(formData: FormData): bool
   return true;
 }
 
+function hasOnlyExpectedResponsibleMutationFields(formData: FormData): boolean {
+  for (const name of formData.keys()) {
+    if (!RESPONSIBLE_MUTATION_FORM_FIELDS.has(name) && !name.startsWith("$ACTION_")) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function readNullableMembershipTransportOnce(
+  formData: FormData,
+  kindName: string,
+  valueName: string,
+): ParsedNullableField {
+  const kind = readRequiredStringOnce(formData, kindName);
+  const values = formData.getAll(valueName);
+
+  if (kind === "null") {
+    return values.length === 0 ? { ok: true, value: null } : { ok: false, value: null };
+  }
+
+  if (
+    kind === "membership" &&
+    values.length === 1 &&
+    typeof values[0] === "string" &&
+    isPersistentContractingId(values[0])
+  ) {
+    return { ok: true, value: values[0] };
+  }
+
+  return { ok: false, value: null };
+}
+
 function hasOnlyExpectedRelatedIdentifierCreateFields(formData: FormData): boolean {
   for (const name of formData.keys()) {
     if (
@@ -208,6 +257,18 @@ function hasOnlyExpectedRelatedIdentifierCreateFields(formData: FormData): boole
 }
 
 function isItemMutationBrowserResult(value: unknown): value is ItemMutationBrowserResult {
+  return (
+    value === "updated" ||
+    value === "unchanged" ||
+    value === "conflict" ||
+    value === "not-available" ||
+    value === "unavailable"
+  );
+}
+
+function isResponsibleMutationBrowserResult(
+  value: unknown,
+): value is ResponsibleMutationBrowserResult {
   return (
     value === "updated" ||
     value === "unchanged" ||
@@ -342,6 +403,70 @@ export async function updatePersistentObjectAction(formData: FormData): Promise<
   }
 
   redirect(`${path}?objectMutation=${result}`);
+}
+
+/**
+ * The only F48 browser-facing responsible edit entrypoint. The browser carries
+ * only a candidate contracting UUID plus explicit nullable expected/new
+ * membership values. Team, actor and identity remain derived and enforced by
+ * F47/PostgreSQL. Any extra browser field fails closed.
+ */
+export async function updatePersistentResponsibleAction(formData: FormData): Promise<never> {
+  if (readPersistentReadMode() !== "persistent") {
+    redirect("/");
+  }
+
+  const contractingId = readRequiredStringOnce(formData, "contractingId");
+
+  if (!contractingId || !isPersistentContractingId(contractingId)) {
+    redirect("/");
+  }
+
+  const path = detailPath(contractingId);
+
+  if (!hasOnlyExpectedResponsibleMutationFields(formData)) {
+    redirect(`${path}?responsibleMutation=unavailable`);
+  }
+
+  const expectedResponsible = readNullableMembershipTransportOnce(
+    formData,
+    "expectedResponsibleKind",
+    "expectedResponsibleMembershipId",
+  );
+  const newResponsible = readNullableMembershipTransportOnce(
+    formData,
+    "newResponsibleKind",
+    "newResponsibleMembershipId",
+  );
+
+  if (!expectedResponsible.ok || !newResponsible.ok) {
+    redirect(`${path}?responsibleMutation=unavailable`);
+  }
+
+  let result: ResponsibleMutationBrowserResult = "unavailable";
+
+  try {
+    const { mutatePersistentContractingResponsible } = await import(
+      "./persistent-responsible-mutation"
+    );
+    const boundaryResult: unknown = await mutatePersistentContractingResponsible({
+      contractingId,
+      expectedResponsibleMembershipId: expectedResponsible.value,
+      newResponsibleMembershipId: newResponsible.value,
+    });
+
+    if (isResponsibleMutationBrowserResult(boundaryResult)) {
+      result = boundaryResult;
+    }
+  } catch {
+    result = "unavailable";
+  }
+
+  if (result === "updated" || result === "conflict") {
+    revalidatePath(path);
+  }
+
+  redirect(`${path}?responsibleMutation=${result}`);
 }
 
 /**

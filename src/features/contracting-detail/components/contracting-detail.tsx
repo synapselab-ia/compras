@@ -34,7 +34,9 @@ import type {
 } from "../types";
 import { ManualTimelineNoteEditor } from "./manual-timeline-note-editor";
 import { NextActionSubmitButton } from "./next-action-submit-button";
+import { ResponsibleEditor } from "./responsible-editor";
 import type { ManualTimelineNoteCreationUiState } from "../manual-timeline-note-create-feedback";
+import type { ResponsibleMutationUiState } from "../responsible-feedback";
 
 type ContractingDetailProps = Readonly<{
   detail: ContractingDetailPresentation;
@@ -47,6 +49,7 @@ type ContractingDetailProps = Readonly<{
   relatedIdentifierCreationState?: RelatedIdentifierCreationUiState | null;
   manualNoteCandidateId?: string | null;
   manualNoteCreationState?: ManualTimelineNoteCreationUiState | null;
+  responsibleMutationState?: ResponsibleMutationUiState | null;
 }>;
 
 type ItemMutationEditorProps = Readonly<{
@@ -184,6 +187,7 @@ export function ContractingDetail({
   relatedIdentifierCreationState = null,
   manualNoteCandidateId = null,
   manualNoteCreationState = null,
+  responsibleMutationState = null,
 }: ContractingDetailProps) {
   const isDemo = source === "demo";
   const feedback = isDemo ? null : getNextActionMutationFeedback(mutationState);
@@ -306,6 +310,16 @@ export function ContractingDetail({
           </div>
         </dl>
       </section>
+
+      {!isDemo ? (
+        <ResponsibleEditor
+          contractingId={detail.id}
+          currentLabel={detail.responsible}
+          expectedResponsibleMembershipId={detail.responsibleMembershipId}
+          options={detail.responsibleOptions}
+          state={responsibleMutationState}
+        />
+      ) : null}
 
       {!isDemo ? (
         <section className="detail-panel next-action-editor" aria-labelledby={`${objectEditorId}-title`}>

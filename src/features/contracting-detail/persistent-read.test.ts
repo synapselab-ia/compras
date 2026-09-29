@@ -42,6 +42,16 @@ describe("readPersistentContractingDetail", () => {
           object: "Contratação fictícia persistente",
           responsible_membership_id: "00000000-0000-4000-8000-000000000902",
           responsible_name: "Pessoa Demo Colega",
+          responsible_options: [
+            {
+              membershipId: "00000000-0000-4000-8000-000000000902",
+              displayName: "Pessoa Demo Colega",
+            },
+            {
+              membershipId: "00000000-0000-4000-8000-000000000906",
+              displayName: "Pessoa Demo Outra",
+            },
+          ],
           stage: "analise-demo",
           status: "em-andamento-demo",
           waiting_type: "setor",
@@ -86,6 +96,17 @@ describe("readPersistentContractingDetail", () => {
     await expect(readPersistentContractingDetail(id)).resolves.toMatchObject({
       id,
       responsible: "Pessoa Demo Colega",
+      responsibleMembershipId: "00000000-0000-4000-8000-000000000902",
+      responsibleOptions: [
+        {
+          membershipId: "00000000-0000-4000-8000-000000000902",
+          displayName: "Pessoa Demo Colega",
+        },
+        {
+          membershipId: "00000000-0000-4000-8000-000000000906",
+          displayName: "Pessoa Demo Outra",
+        },
+      ],
       nextAction: "Validar registro fictício",
       nextActionValue: "Validar registro fictício",
       lastMovement: "2026-09-01T12:30:00.000Z",
@@ -124,7 +145,12 @@ describe("readPersistentContractingDetail", () => {
 
     const baseSql = query.mock.calls[0][0] as string;
     expect(baseSql).toContain("LEFT JOIN public.team_member_directory");
+    expect(baseSql).toContain("FROM public.team_member_directory AS directory");
+    expect(baseSql).toContain("directory.team_id = c.team_id");
+    expect(baseSql).toContain("ORDER BY lower(directory.display_name)");
     expect(baseSql).not.toContain("team_id = $1");
+    expect(baseSql).not.toContain("public.memberships");
+    expect(baseSql).not.toContain("public.app_users");
   });
 
   it("keeps item NULL, empty string and spaces distinct in the mutation snapshot", async () => {
@@ -212,6 +238,10 @@ describe("readPersistentContractingDetail", () => {
     });
 
     expect(result?.responsible).toBe("Responsável não disponível");
+    expect(result?.responsibleMembershipId).toBe(
+      "00000000-0000-4000-8000-000000000922",
+    );
+    expect(result?.responsibleOptions).toEqual([]);
     expect(result?.nextAction).toBe("Não informada");
     expect(result?.nextActionValue).toBeNull();
     expect(query.mock.calls.every(([, values]) => values.length === 1)).toBe(true);

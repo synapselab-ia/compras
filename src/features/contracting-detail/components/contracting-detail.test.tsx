@@ -8,6 +8,7 @@ vi.mock("../actions", () => ({
   updatePersistentContractingItemAction: "/f39-test-item-mutation",
   updatePersistentNextActionAction: "/f27-test-next-action",
   updatePersistentObjectAction: "/f33-test-object",
+  updatePersistentResponsibleAction: "/f48-test-responsible",
 }));
 vi.mock("./next-action-submit-button", () => ({
   NextActionSubmitButton: ({ label }: { label: string }) => (
@@ -26,6 +27,18 @@ const MANUAL_NOTE_CANDIDATE =
 const persistentDetail = {
   ...detail,
   id: "39000000-0000-4000-8000-000000000001",
+  responsible: "Pessoa Demo Responsável",
+  responsibleMembershipId: "39000000-0000-4000-8000-000000000010",
+  responsibleOptions: [
+    {
+      membershipId: "39000000-0000-4000-8000-000000000010",
+      displayName: "Pessoa Demo Responsável",
+    },
+    {
+      membershipId: "39000000-0000-4000-8000-000000000011",
+      displayName: "Pessoa Demo Alternativa",
+    },
+  ],
   items: [
     {
       id: "39000000-0000-4000-8000-000000000002",
@@ -66,6 +79,7 @@ describe("ContractingDetail persistent editor boundaries", () => {
         relatedIdentifierCreationState="created"
         manualNoteCandidateId={MANUAL_NOTE_CANDIDATE}
         manualNoteCreationState="created"
+        responsibleMutationState="updated"
       />,
     );
 
@@ -88,6 +102,8 @@ describe("ContractingDetail persistent editor boundaries", () => {
     expect(html).not.toContain("Item adicionado.");
     expect(html).not.toContain("Item atualizado.");
     expect(html).not.toContain("Identificador relacionado vinculado.");
+    expect(html).not.toContain("Salvar responsável");
+    expect(html).not.toContain("Responsável atualizado.");
   });
 
   it("renders existing editors plus F39 item editors only in persistent detail", () => {
@@ -103,6 +119,7 @@ describe("ContractingDetail persistent editor boundaries", () => {
         relatedIdentifierCreationState="not-available"
         manualNoteCandidateId={MANUAL_NOTE_CANDIDATE}
         manualNoteCreationState="not-available"
+        responsibleMutationState="conflict"
       />,
     );
 
@@ -116,6 +133,18 @@ describe("ContractingDetail persistent editor boundaries", () => {
     expect(html).toContain(RELATED_IDENTIFIER_CANDIDATE);
     expect(html).toContain("Adicionar nota");
     expect(html).toContain(MANUAL_NOTE_CANDIDATE);
+    expect(html).toContain("Salvar responsável");
+    expect(html).toContain("O responsável mudou desde sua leitura");
+    expect(html).toContain('name="expectedResponsibleKind" value="membership"');
+    expect(html).toContain(
+      'name="expectedResponsibleMembershipId" value="39000000-0000-4000-8000-000000000010"',
+    );
+    expect(html).toContain('name="newResponsibleKind" value="membership"');
+    expect(html).toContain(
+      'name="newResponsibleMembershipId" value="39000000-0000-4000-8000-000000000010"',
+    );
+    expect(html).toContain("Sem responsável");
+    expect(html).toContain("Pessoa Demo Alternativa");
     expect(html).toContain('name="eventId"');
     expect(html).toContain("A inclusão de nota não está disponível para este registro.");
     expect(html).toContain('name="contractingId"');
@@ -354,4 +383,50 @@ describe("ContractingDetail persistent editor boundaries", () => {
     expect(html).toContain("Descrição, unidade e código são preservados exatamente.");
     expect(html).toContain("O snapshot completo é conferido antes da gravação.");
   });
+  it("transports responsible NULL explicitly without a membership sentinel", () => {
+    const html = renderToStaticMarkup(
+      <ContractingDetail
+        detail={{
+          ...persistentDetail,
+          responsible: "Sem responsável",
+          responsibleMembershipId: null,
+        }}
+        source="persistent"
+      />,
+    );
+
+    expect(html).toContain('name="expectedResponsibleKind" value="null"');
+    expect(html).not.toContain('name="expectedResponsibleMembershipId"');
+    expect(html).toContain('name="newResponsibleKind" value="null"');
+    expect(html).not.toContain('name="newResponsibleMembershipId"');
+    expect(html).toContain("Sem responsável");
+  });
+
+  it("keeps a degraded current responsible as raw expected without adding it to human options", () => {
+    const degradedId = "39000000-0000-4000-8000-000000000099";
+    const html = renderToStaticMarkup(
+      <ContractingDetail
+        detail={{
+          ...persistentDetail,
+          responsible: "Responsável não disponível",
+          responsibleMembershipId: degradedId,
+          responsibleOptions: persistentDetail.responsibleOptions.filter(
+            (option) => option.membershipId !== degradedId,
+          ),
+        }}
+        source="persistent"
+      />,
+    );
+
+    expect(html).toContain("Responsável não disponível");
+    expect(html).toContain("Responsável atual não disponível");
+    expect(html).toContain(
+      `name="expectedResponsibleMembershipId" value="${degradedId}"`,
+    );
+    expect(html).toContain("Sem responsável");
+    expect(html).toContain("Pessoa Demo Alternativa");
+    expect(html).not.toContain("Criar membro");
+    expect(html).not.toContain("Revogar membro");
+  });
+
 });

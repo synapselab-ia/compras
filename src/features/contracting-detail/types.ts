@@ -9,6 +9,11 @@ export type ContractingRelatedIdentifier = {
   note: string | null;
 };
 
+export type ContractingResponsibleOption = Readonly<{
+  membershipId: string;
+  displayName: string;
+}>;
+
 export type ContractingItemMutationSnapshot = Readonly<{
   description: string;
   quantity: string | null;
@@ -36,6 +41,16 @@ export type ContractingActivityPresentation = {
 };
 
 export type ContractingDetailPresentation = SectorCentralRecord & {
+  /**
+   * Raw protected responsible membership used only as the F47 optimistic
+   * concurrency precondition. It never defines team scope or actor authority.
+   */
+  responsibleMembershipId: string | null;
+  /**
+   * Human candidate projection from team_member_directory. Membership IDs are
+   * opaque candidate values only; PostgreSQL remains authoritative.
+   */
+  responsibleOptions: ContractingResponsibleOption[];
   /**
    * Raw nullable value from the protected read model. `nextAction` remains the
    * human presentation string, while this field preserves NULL versus the

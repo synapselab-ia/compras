@@ -1,7 +1,7 @@
 # Current State - Compras
 
-**PROJECT_STATUS:** F45_INTEGRATED_F46_READY  
-**CURRENT_PHASE:** F45 integrada, endurecida e verificada; F46 READY; F21 ON HOLD  
+**PROJECT_STATUS:** F46_INTEGRATED_F47_READY  
+**CURRENT_PHASE:** F46 integrada e verificada; F47 READY; F21 ON HOLD  
 **REPO_VISIBILITY:** PUBLIC  
 **APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_SIGNIN_LIMITER_CONTRACTING_CREATE_NEXT_ACTION_OBJECT_ITEM_CREATE_ITEM_EDIT_RELATED_IDENTIFIER_CREATE_AND_MANUAL_TIMELINE_NOTE_UI_INTEGRATED  
 **DATABASE_STATUS:** PROTECTED_READ_MODEL_F26_F29_F32_F35_F38_F41_F44_VALIDATED_MIGRATIONS_0001_0011_IMMUTABLE  
@@ -26,6 +26,11 @@
 **F45_HARDENING_PR:** `#75`  
 **F45_HARDENING_HEAD:** `36157c0e78783789e0d7f69700e2cb55686e4030`  
 **F45_HARDENING_MERGE_COMMIT:** `60bcd9b7c86788f87d6dc76d8eec07a27611e59a`  
+**F46_PR:** `#77`  
+**F46_FINAL_HEAD:** `aeb8e75a097680a2c1aad5f4f1274d42fb5398dd`  
+**F46_MERGE_COMMIT:** `12ff777e94ffcd14879eea6b09fb4905e3347642`  
+**F46_CI_RUN:** `36575375791`  
+
 **F21_STATE:** `ON HOLD / BLOCKED` - Vercel control-plane surface unavailable for required protection/env readback+CRUD  
 **F21_RESUME_WHEN:** sessão Vercel autenticada permitir readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch, sem exposição de valores  
 **ON_HOLD:** `F17-B2` histórico + `F21` conforme resume_when acima
@@ -216,17 +221,104 @@ No head final da revisão, CI, F22, F29, F32, F35, F38, F41 e F44 ficaram verdes
 
 Migrations `0001..0011`, grants, policies, capability, primitive e provisioning F44 permaneceram imutáveis.
 
+## F46 integrada
+
+F46 foi executada como slice exclusivamente documental na branch:
+
+`f46-persistent-responsible-mutation-design`
+
+e promovida pela PR `#77`.
+
+Head final validado:
+
+`aeb8e75a097680a2c1aad5f4f1274d42fb5398dd`.
+
+Merge em `main`:
+
+`12ff777e94ffcd14879eea6b09fb4905e3347642`.
+
+A frente produziu:
+
+- `docs/decisions/ADR-018-persistent-responsible-mutation.md`;
+- `tasks/F47-PERSISTENT-RESPONSIBLE-MUTATION-IMPLEMENT-01/SPEC.md`.
+
+Nenhuma migration, primitive, policy, grant, provisioning, adapter, Server Action ou UI foi adicionada em F46.
+
+### Decisão F46
+
+ADR-018 define uma boundary dedicada para `contractings.responsible_membership_id` com:
+
+- payload server-only restrito a `contractingId`, expected membership e new membership;
+- team, actor, issuer, subject e actor membership derivados de contexto confiável;
+- candidate responsável tratado somente como valor solicitado, nunca authority;
+- clear para `NULL` preservado porque o schema canônico já admite responsável ausente;
+- candidate não nulo limitado a membership do mesmo team, não revogada e com app_user não desabilitado;
+- guard target-team pilot-only idêntico ao padrão F26/F32/F35/F38/F41/F44;
+- `SELECT ... FOR UPDATE` + expected value null-safe;
+- precedência `denied -> conflict -> unchanged -> candidate validation -> updated`;
+- evento atômico `responsible_changed`, `field_key = 'responsible_membership_id'`, com old/new UUID textual ou `NULL`;
+- capability dedicada futura, runtime sem DML direto e provisioning EXECUTE-only;
+- resultados externos `updated`, `unchanged`, `conflict`, `not-available` e `unavailable`.
+
+Q-009 permanece aberta. Enquanto o guard pilot-only exigir exatamente uma membership não revogada no target team, a boundary não permite transferência entre dois membros ativos da mesma equipe.
+
+### Estado degradado e red-team
+
+O red-team documental encontrou e corrigiu uma distinção importante antes da promoção:
+
+- responsável atual apontando para membership revogada pode ser limpo/substituído quando o actor continua sendo o único membro não revogado;
+- responsável atual apontando para app_user desabilitado cuja membership continua não revogada conta como segundo membro e bloqueia a capability pilot-only, em vez de ser "corrigido" contornando Q-009;
+- no-op de referência revogada continua sem evento e sem novo timestamp depois de target/guard autorizados.
+
+Também foram rejeitados:
+
+- browser-controlled team/actor/identity;
+- candidate membership como prova de autorização;
+- assignment cross-team;
+- nova atribuição para membership revogada;
+- nova atribuição para app_user desabilitado;
+- UPDATE genérico de `contractings`;
+- DML direto do runtime;
+- last-write-wins;
+- evento sem update atômico;
+- oracle cross-team por feedback;
+- autoatribuição obrigatória ou responsável non-null inventado;
+- alteração de migrations aplicadas;
+- resolução implícita de Q-009;
+- provider hosted, secret ou dado real.
+
+### Verificação F46
+
+O diff final da PR `#77` continha exatamente dois arquivos novos, ambos documentais.
+
+A comparação contra o baseline pós-F45 confirmou migrations `0001..0011` byte-for-byte imutáveis.
+
+Não havia review thread pendente antes do merge.
+
+Gates no head final `aeb8e75a097680a2c1aad5f4f1274d42fb5398dd`:
+
+- CI `36575375791`: PASS;
+- F22 Private Preview Preflight `36575375726`: PASS;
+- F29 Contracting Create `36575375568`: PASS;
+- F32 Contracting Object Mutation `36575375621`: PASS;
+- F35 Contracting Item Create `36575375676`: PASS;
+- F38 Contracting Item Mutation `36575375679`: PASS;
+- F41 Related Identifier Create `36575375596`: PASS;
+- F44 Manual Timeline Note Create `36575375785`: PASS.
+
+`REAL_DATA_ALLOWED = NO` permaneceu preservado.
+
 ## Próxima ação
 
 Existe exatamente uma `NEXT_ACTION` canônica:
 
-`F46-PERSISTENT-RESPONSIBLE-MUTATION-DESIGN-01 - Desenhar edição persistente do responsável interno`.
+`F47-PERSISTENT-RESPONSIBLE-MUTATION-IMPLEMENT-01 - Implementar edição persistente do responsável interno`.
 
 A SPEC está em:
 
-`tasks/F46-PERSISTENT-RESPONSIBLE-MUTATION-DESIGN-01/SPEC.md`.
+`tasks/F47-PERSISTENT-RESPONSIBLE-MUTATION-IMPLEMENT-01/SPEC.md`.
 
-F46 é design-only. Deve definir a menor boundary auditável e least-privilege para `contractings.responsible_membership_id`, com optimistic concurrency e resultados opacos, sem implementar produção e sem resolver Q-009 silenciosamente.
+F47 é T2 e deve materializar ADR-018 em migration aditiva `0012`, capability dedicada, RLS/grants mínimos, primitive, provisioning, adapter server-only, testes PostgreSQL/adversariais/concorrentes e workflow/regressões aplicáveis, sem UI ou Server Action.
 
 F21 permanece `ON HOLD` até seu `resume_when` objetivo.
 

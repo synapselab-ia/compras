@@ -73,12 +73,14 @@ vi.mock("@/features/contracting-detail/components/contracting-detail", () => ({
     relatedIdentifierCreationState,
     manualNoteCandidateId,
     manualNoteCreationState,
+    responsibleMutationState,
   }: {
     source: string;
     relatedIdentifierCandidateId?: string | null;
     relatedIdentifierCreationState?: string | null;
     manualNoteCandidateId?: string | null;
     manualNoteCreationState?: string | null;
+    responsibleMutationState?: string | null;
   }) => (
     <section
       data-detail-source={source}
@@ -86,6 +88,7 @@ vi.mock("@/features/contracting-detail/components/contracting-detail", () => ({
       data-related-state={relatedIdentifierCreationState ?? "none"}
       data-manual-note-candidate={manualNoteCandidateId ?? "none"}
       data-manual-note-state={manualNoteCreationState ?? "none"}
+      data-responsible-state={responsibleMutationState ?? "none"}
     />
   ),
 }));
@@ -137,6 +140,7 @@ describe("contracting detail F42 candidate preparation", () => {
     const html = await renderPage({
       relatedIdentifierCreation: "unavailable",
       relatedIdentifierCandidate: RETRY,
+      responsibleMutation: "updated",
     });
 
     expect(
@@ -191,6 +195,7 @@ describe("contracting detail F42 candidate preparation", () => {
     expect(html).toContain('data-related-candidate="none"');
     expect(html).toContain('data-related-state="none"');
     expect(html).not.toContain(RETRY);
+    expect(html).toContain('data-responsible-state="none"');
   });
 
   it("never prepares or exposes a write candidate when protected detail is unavailable", async () => {
@@ -315,4 +320,21 @@ describe("contracting detail F45 manual note candidate preparation", () => {
     expect(html).not.toContain("data-manual-note-candidate");
     expect(html).not.toContain("data-manual-note-state");
   });
+  it("passes only a fixed responsible feedback state to persistent detail", async () => {
+    const html = await renderPage({ responsibleMutation: "conflict" });
+
+    expect(html).toContain('data-detail-source="persistent"');
+    expect(html).toContain('data-responsible-state="conflict"');
+  });
+
+  it("drops duplicated or unknown responsible feedback query values", async () => {
+    const duplicated = await renderPage({
+      responsibleMutation: ["updated", "updated"],
+    });
+    const unknown = await renderPage({ responsibleMutation: "cross-team" });
+
+    expect(duplicated).toContain('data-responsible-state="none"');
+    expect(unknown).toContain('data-responsible-state="none"');
+  });
+
 });

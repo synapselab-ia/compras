@@ -6,7 +6,6 @@ import { redirect } from "next/navigation";
 import { readPersistentReadMode } from "@/server/persistent-read-mode";
 import { mutatePersistentContractingNextAction } from "./persistent-mutation";
 import { mutatePersistentContractingObject } from "./persistent-object-mutation";
-import { mutatePersistentContractingResponsible } from "./persistent-responsible-mutation";
 import { isPersistentContractingId } from "./persistent-read";
 
 type ParsedNullableField = Readonly<
@@ -447,6 +446,9 @@ export async function updatePersistentResponsibleAction(formData: FormData): Pro
   let result: ResponsibleMutationBrowserResult = "unavailable";
 
   try {
+    const { mutatePersistentContractingResponsible } = await import(
+      "./persistent-responsible-mutation"
+    );
     const boundaryResult: unknown = await mutatePersistentContractingResponsible({
       contractingId,
       expectedResponsibleMembershipId: expectedResponsible.value,

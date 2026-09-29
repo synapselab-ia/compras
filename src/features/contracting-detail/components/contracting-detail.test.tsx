@@ -383,4 +383,50 @@ describe("ContractingDetail persistent editor boundaries", () => {
     expect(html).toContain("Descrição, unidade e código são preservados exatamente.");
     expect(html).toContain("O snapshot completo é conferido antes da gravação.");
   });
+  it("transports responsible NULL explicitly without a membership sentinel", () => {
+    const html = renderToStaticMarkup(
+      <ContractingDetail
+        detail={{
+          ...persistentDetail,
+          responsible: "Sem responsável",
+          responsibleMembershipId: null,
+        }}
+        source="persistent"
+      />,
+    );
+
+    expect(html).toContain('name="expectedResponsibleKind" value="null"');
+    expect(html).not.toContain('name="expectedResponsibleMembershipId"');
+    expect(html).toContain('name="newResponsibleKind" value="null"');
+    expect(html).not.toContain('name="newResponsibleMembershipId"');
+    expect(html).toContain("Sem responsável");
+  });
+
+  it("keeps a degraded current responsible as raw expected without adding it to human options", () => {
+    const degradedId = "39000000-0000-4000-8000-000000000099";
+    const html = renderToStaticMarkup(
+      <ContractingDetail
+        detail={{
+          ...persistentDetail,
+          responsible: "Responsável não disponível",
+          responsibleMembershipId: degradedId,
+          responsibleOptions: persistentDetail.responsibleOptions.filter(
+            (option) => option.membershipId !== degradedId,
+          ),
+        }}
+        source="persistent"
+      />,
+    );
+
+    expect(html).toContain("Responsável não disponível");
+    expect(html).toContain("Responsável atual não disponível");
+    expect(html).toContain(
+      `name="expectedResponsibleMembershipId" value="${degradedId}"`,
+    );
+    expect(html).toContain("Sem responsável");
+    expect(html).toContain("Pessoa Demo Alternativa");
+    expect(html).not.toContain("Criar membro");
+    expect(html).not.toContain("Revogar membro");
+  });
+
 });

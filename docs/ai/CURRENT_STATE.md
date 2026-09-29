@@ -1,9 +1,9 @@
 # Current State - Compras
 
-**PROJECT_STATUS:** F44_INTEGRATED_F45_READY  
-**CURRENT_PHASE:** F44 integrada e verificada; F45 READY; F21 ON HOLD  
+**PROJECT_STATUS:** F45_INTEGRATED_F46_READY  
+**CURRENT_PHASE:** F45 integrada e verificada; F46 READY; F21 ON HOLD  
 **REPO_VISIBILITY:** PUBLIC  
-**APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_SIGNIN_LIMITER_CONTRACTING_CREATE_NEXT_ACTION_OBJECT_ITEM_CREATE_ITEM_EDIT_RELATED_IDENTIFIER_CREATE_UI_AND_MANUAL_TIMELINE_NOTE_BOUNDARY_INTEGRATED  
+**APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_SIGNIN_LIMITER_CONTRACTING_CREATE_NEXT_ACTION_OBJECT_ITEM_CREATE_ITEM_EDIT_RELATED_IDENTIFIER_CREATE_AND_MANUAL_TIMELINE_NOTE_UI_INTEGRATED  
 **DATABASE_STATUS:** PROTECTED_READ_MODEL_F26_F29_F32_F35_F38_F41_F44_VALIDATED_MIGRATIONS_0001_0011_IMMUTABLE  
 **AUTH_STATUS:** SELF_HOSTED_BETTER_AUTH_AND_SIGNIN_LIMITER_INTEGRATED  
 **DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_NO_F44_HOSTED_WRITE_VALIDATION_REQUIRED  
@@ -19,7 +19,10 @@
 **F44_FINAL_HEAD:** `c057b381454ad1d0499338fda1915ff337056fbe`  
 **F44_MERGE_COMMIT:** `55f887252cfd5e5e81596e7434e6d5cec906aced`  
 **F44_CI_RUN:** `36459883858`  
-**F44_WORKFLOW_RUN:** `36459883410`  
+**F44_WORKFLOW_RUN:** `36459883410`
+**F45_PR:** `#73`
+**F45_FINAL_HEAD:** `e5236dbbeef4fcb8bf2d568f37c2495e41a09f1a`
+**F45_MERGE_COMMIT:** `0800553d95bddc8d4f2febe29f418dd543c1c659`  
 **F21_STATE:** `ON HOLD / BLOCKED` - Vercel control-plane surface unavailable for required protection/env readback+CRUD  
 **F21_RESUME_WHEN:** sessão Vercel autenticada permitir readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch, sem exposição de valores  
 **ON_HOLD:** `F17-B2` histórico + `F21` conforme resume_when acima
@@ -181,19 +184,31 @@ A nova migration aplicada é:
 
 A partir de F44, migrations `0001..0011` são baseline imutável.
 
+## F45 integrada
+
+F45 foi promovida pela PR `#73`, head final `e5236dbbeef4fcb8bf2d568f37c2495e41a09f1a`, merge `0800553d95bddc8d4f2febe29f418dd543c1c659`.
+
+A slice integrou F44 ao detalhe persistente com Server Action estreita, candidate `eventId` preparado server-side e estável apenas em retry técnico `unavailable`, transporte explícito de `NULL`/texto, feedback sanitizado, revalidação/readback protegido e demo read-only.
+
+O diff final não tocou migrations, grants, policies, capability, primitive ou provisioning F44. Migrations `0001..0011` permaneceram imutáveis.
+
+Todos os oito gates aplicáveis ficaram verdes no head final: CI, F22, F29, F32, F35, F38, F41 e F44. Não havia review thread pendente.
+
+Resultado detalhado:
+
+`tasks/F45-PERSISTENT-MANUAL-TIMELINE-NOTE-DETAIL-UI-01/RESULT.md`.
+
 ## Próxima ação
 
 Existe exatamente uma `NEXT_ACTION` canônica:
 
-`F45-PERSISTENT-MANUAL-TIMELINE-NOTE-DETAIL-UI-01 - Integrar criação persistente de nota manual no detalhe`.
+`F46-PERSISTENT-RESPONSIBLE-MUTATION-DESIGN-01 - Desenhar edição persistente do responsável interno`.
 
 A SPEC está em:
 
-`tasks/F45-PERSISTENT-MANUAL-TIMELINE-NOTE-DETAIL-UI-01/SPEC.md`.
+`tasks/F46-PERSISTENT-RESPONSIBLE-MUTATION-DESIGN-01/SPEC.md`.
 
-F45 deve integrar a boundary F44 ao detalhe persistente com Server Action estreita, `eventId` preparado server-side e estável em retry técnico, transporte explícito de `NULL`/texto, feedback sanitizado, readback pela timeline protegida e demo read-only.
-
-F45 não altera migration, grant, policy, capability, primitive ou provisioning F44.
+F46 é design-only. Deve definir a menor boundary auditável e least-privilege para `contractings.responsible_membership_id`, com optimistic concurrency e resultados opacos, sem implementar produção e sem resolver Q-009 silenciosamente.
 
 F21 permanece `ON HOLD` até seu `resume_when` objetivo.
 

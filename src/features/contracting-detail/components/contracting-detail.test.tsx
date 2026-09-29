@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../actions", () => ({
   createPersistentContractingItemAction: "/f36-test-item-create",
   createPersistentRelatedIdentifierAction: "/f42-test-related-identifier-create",
+  createPersistentManualTimelineNoteAction: "/f45-test-manual-note-create",
   updatePersistentContractingItemAction: "/f39-test-item-mutation",
   updatePersistentNextActionAction: "/f27-test-next-action",
   updatePersistentObjectAction: "/f33-test-object",
@@ -20,6 +21,8 @@ import { ContractingDetail } from "./contracting-detail";
 const detail = getDemoContractingDetail("DEMO-001")!;
 const RELATED_IDENTIFIER_CANDIDATE =
   "42010000-0000-4000-8000-000000000001";
+const MANUAL_NOTE_CANDIDATE =
+  "45010000-0000-4000-8000-000000000001";
 const persistentDetail = {
   ...detail,
   id: "39000000-0000-4000-8000-000000000001",
@@ -61,6 +64,8 @@ describe("ContractingDetail persistent editor boundaries", () => {
         itemMutationState="updated"
         relatedIdentifierCandidateId={RELATED_IDENTIFIER_CANDIDATE}
         relatedIdentifierCreationState="created"
+        manualNoteCandidateId={MANUAL_NOTE_CANDIDATE}
+        manualNoteCreationState="created"
       />,
     );
 
@@ -73,6 +78,9 @@ describe("ContractingDetail persistent editor boundaries", () => {
     expect(html).not.toContain("Salvar item");
     expect(html).not.toContain("Vincular identificador");
     expect(html).not.toContain(RELATED_IDENTIFIER_CANDIDATE);
+    expect(html).not.toContain(MANUAL_NOTE_CANDIDATE);
+    expect(html).not.toContain("Adicionar nota");
+    expect(html).not.toContain("Nota adicionada à atividade.");
     expect(html).not.toContain("expectedDescription");
     expect(html).not.toContain("expectedUnitKind");
     expect(html).not.toContain("Próxima ação atualizada.");

@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+
 import { createPersistentManualTimelineNoteAction } from "../actions";
 import {
   getManualTimelineNoteCreationFeedback,
@@ -11,8 +15,11 @@ type Props = Readonly<{
   state?: ManualTimelineNoteCreationUiState | null;
 }>;
 
+type NoteKind = "text" | "null";
+
 export function ManualTimelineNoteEditor({ contractingId, eventId, state = null }: Props) {
   const feedback = getManualTimelineNoteCreationFeedback(state);
+  const [noteKind, setNoteKind] = useState<NoteKind>("text");
   const baseId = "manual-timeline-note";
   const helpId = `${baseId}-help`;
 
@@ -33,21 +40,36 @@ export function ManualTimelineNoteEditor({ contractingId, eventId, state = null 
         <input type="hidden" name="eventId" value={eventId} />
 
         <label htmlFor={`${baseId}-kind`}>Estado da nota</label>
-        <select id={`${baseId}-kind`} name="noteKind" defaultValue="text">
+        <select
+          id={`${baseId}-kind`}
+          name="noteKind"
+          value={noteKind}
+          onChange={(event) => {
+            setNoteKind(event.target.value === "null" ? "null" : "text");
+          }}
+          aria-describedby={helpId}
+        >
           <option value="text">Texto</option>
           <option value="null">Ausente (NULL)</option>
         </select>
 
-        <label htmlFor={`${baseId}-text`}>Nota</label>
-        <textarea
-          id={`${baseId}-text`}
-          name="note"
-          rows={4}
-          autoComplete="off"
-          aria-describedby={helpId}
-        />
+        {noteKind === "text" ? (
+          <>
+            <label htmlFor={`${baseId}-text`}>Nota</label>
+            <textarea
+              id={`${baseId}-text`}
+              name="note"
+              rows={4}
+              autoComplete="off"
+              aria-describedby={helpId}
+            />
+          </>
+        ) : null}
+
         <p id={helpId} className="next-action-help">
-          NULL e texto são estados distintos. Texto vazio e espaços são preservados exatamente.
+          {noteKind === "text"
+            ? "Texto vazio e espaços são preservados exatamente. NULL é um estado distinto."
+            : "NULL será enviado sem campo textual. Selecione Texto para informar inclusive vazio ou espaços."}
         </p>
         <div className="next-action-actions">
           <NextActionSubmitButton label="Adicionar nota" pendingLabel="Adicionando…" />

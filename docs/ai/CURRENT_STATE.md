@@ -1,12 +1,12 @@
 # Current State - Compras
 
-**PROJECT_STATUS:** F46_INTEGRATED_F47_READY  
-**CURRENT_PHASE:** F46 integrada e verificada; F47 READY; F21 ON HOLD  
+**PROJECT_STATUS:** F47_INTEGRATED_F48_READY  
+**CURRENT_PHASE:** F47 integrada e verificada; F48 READY; F21 ON HOLD  
 **REPO_VISIBILITY:** PUBLIC  
 **APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_SIGNIN_LIMITER_CONTRACTING_CREATE_NEXT_ACTION_OBJECT_ITEM_CREATE_ITEM_EDIT_RELATED_IDENTIFIER_CREATE_AND_MANUAL_TIMELINE_NOTE_UI_INTEGRATED  
-**DATABASE_STATUS:** PROTECTED_READ_MODEL_F26_F29_F32_F35_F38_F41_F44_VALIDATED_MIGRATIONS_0001_0011_IMMUTABLE  
+**DATABASE_STATUS:** PROTECTED_READ_MODEL_F26_F29_F32_F35_F38_F41_F44_F47_VALIDATED_MIGRATIONS_0001_0012_IMMUTABLE  
 **AUTH_STATUS:** SELF_HOSTED_BETTER_AUTH_AND_SIGNIN_LIMITER_INTEGRATED  
-**DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_NO_F44_HOSTED_WRITE_VALIDATION_REQUIRED  
+**DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_NO_F47_HOSTED_WRITE_VALIDATION_REQUIRED  
 **REAL_DATA_ALLOWED:** NO  
 **CONTEXT_STATUS:** VALID  
 **FOUNDATION_BASELINE_COMMIT:** `40c3297094d700552896d2945e10b18b982186da`  
@@ -30,6 +30,11 @@
 **F46_FINAL_HEAD:** `aeb8e75a097680a2c1aad5f4f1274d42fb5398dd`  
 **F46_MERGE_COMMIT:** `12ff777e94ffcd14879eea6b09fb4905e3347642`  
 **F46_CI_RUN:** `36575375791`  
+**F47_PR:** `#79`  
+**F47_FINAL_HEAD:** `b4c86ec71016a1c33d6825e9420a91a2b7f330db`  
+**F47_MERGE_COMMIT:** `4e7bb411205469977878e01cb04ea35d5ad50401`  
+**F47_CI_RUN:** `36583612708`  
+**F47_WORKFLOW_RUN:** `36583612741`  
 
 **F21_STATE:** `ON HOLD / BLOCKED` - Vercel control-plane surface unavailable for required protection/env readback+CRUD  
 **F21_RESUME_WHEN:** sessão Vercel autenticada permitir readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch, sem exposição de valores  
@@ -308,17 +313,136 @@ Gates no head final `aeb8e75a097680a2c1aad5f4f1274d42fb5398dd`:
 
 `REAL_DATA_ALLOWED = NO` permaneceu preservado.
 
+## F47 integrada
+
+F47 foi executada na branch:
+
+`f47-persistent-responsible-mutation`
+
+e promovida pela PR `#79`.
+
+Head final validado:
+
+`b4c86ec71016a1c33d6825e9420a91a2b7f330db`.
+
+Merge em `main`:
+
+`4e7bb411205469977878e01cb04ea35d5ad50401`.
+
+A frente materializou a ADR-018 sem UI e sem Server Action.
+
+Foram adicionados:
+
+- migration aditiva `0012_contracting_responsible_mutation.sql`;
+- capability dedicada e selada `compras_contracting_responsible_mutation_owner`;
+- primitive `public.mutate_contracting_responsible(uuid, uuid, uuid, uuid)`;
+- provisioning separado EXECUTE-only;
+- adapter server-only `mutatePersistentContractingResponsible`;
+- testes unitários, SQL adversariais e PostgreSQL concorrente real;
+- workflow dedicado F47.
+
+Resultado detalhado:
+
+`tasks/F47-PERSISTENT-RESPONSIBLE-MUTATION-IMPLEMENT-01/RESULT.md`.
+
+### Boundary F47
+
+O contrato server-only aceita somente:
+
+```text
+contractingId
+expectedResponsibleMembershipId
+newResponsibleMembershipId
+```
+
+Expected e new são `string | null`, com UUID sintaticamente válido quando não nulos.
+
+Team, actor, issuer, subject e actor membership continuam derivados de contexto confiável e banco. O event UUID é gerado server-side por tentativa.
+
+A ordem de decisão implementada é:
+
+1. identidade, target e guard target-team pilot-only;
+2. lock da contratação;
+3. `conflict` se current difere do expected;
+4. `unchanged` se current coincide com new;
+5. validação da candidate não nula;
+6. update e evento atômico;
+7. `updated`.
+
+Candidate não nula precisa pertencer ao mesmo team, estar não revogada e apontar para app_user ativo.
+
+Clear para `NULL` permanece permitido.
+
+Q-009 continua aberta. Segundo membro não revogado no target team continua bloqueando, inclusive quando o app_user correspondente está desabilitado.
+
+### Auditoria, least privilege e concorrência
+
+Mudança real atualiza `responsible_membership_id` e `updated_at` e grava exatamente um evento `responsible_changed` com old/new UUID textual ou `NULL`.
+
+Estado e evento compartilham o mesmo timestamp de operação e são atômicos. Falha forçada do INSERT do evento foi provada como rollback do update e de `updated_at`.
+
+A capability F47 possui apenas leituras mínimas, UPDATE das duas colunas aprovadas e INSERT coluna-a-coluna do event shape. Não possui ownership de tabela-base, DML de identity/membership nem UPDATE/DELETE de eventos.
+
+Runtime normal recebe somente EXECUTE da primitive por provisioning separado e continua sem DML direto. Auth/read-only runtimes não recebem EXECUTE F47.
+
+A prova concorrente com oito writers no mesmo expected produziu:
+
+- 1 `updated`;
+- 7 `conflict`;
+- exatamente 1 evento.
+
+Retry posterior com expected stale permaneceu `conflict` sem duplicação.
+
+### Estado degradado e red-team
+
+A implementação preservou:
+
+- current responsável revogado pode ser no-op ou clear quando o actor continua sendo o único membro não revogado;
+- a membership revogada não pode ser reatribuída como new candidate;
+- membership não revogada de app_user desabilitado continua contando para o guard;
+- cross-team, inexistente, revogado e estados protegidos permanecem opacos externamente;
+- stale expected não vira last-write-wins nem `unchanged`;
+- no-op e negação não criam evento.
+
+O diff final da PR `#79` continha exatamente sete arquivos novos da F47 e nenhuma alteração em arquivo anterior.
+
+Não havia review thread, review pendente ou comentário antes do merge.
+
+### Verificação F47
+
+No head final `b4c86ec71016a1c33d6825e9420a91a2b7f330db`:
+
+- CI `36583612708`: PASS;
+- F22 Private Preview Preflight `36583612785`: PASS;
+- F29 Contracting Create `36583612773`: PASS;
+- F32 Contracting Object Mutation `36583612662`: PASS;
+- F35 Contracting Item Create `36583612851`: PASS;
+- F38 Contracting Item Mutation `36583612588`: PASS;
+- F41 Related Identifier Create `36583612637`: PASS;
+- F44 Manual Timeline Note Create `36583612716`: PASS;
+- F47 Contracting Responsible Mutation `36583612741`: PASS.
+
+Migrations `0001..0011` foram verificadas byte-for-byte no workflow F47 e permaneceram imutáveis.
+
+A nova migration aplicada é:
+
+- `0012_contracting_responsible_mutation.sql`: `1635b6874cc3bd7f044b3c6ecff8423e14442e80`.
+
+A partir de F47, migrations `0001..0012` formam o baseline imutável.
+
+`REAL_DATA_ALLOWED = NO` permaneceu preservado.
+
 ## Próxima ação
 
 Existe exatamente uma `NEXT_ACTION` canônica:
 
-`F47-PERSISTENT-RESPONSIBLE-MUTATION-IMPLEMENT-01 - Implementar edição persistente do responsável interno`.
+`F48-PERSISTENT-RESPONSIBLE-MUTATION-DETAIL-UI-01 - Integrar edição persistente do responsável no detalhe`.
 
 A SPEC está em:
 
-`tasks/F47-PERSISTENT-RESPONSIBLE-MUTATION-IMPLEMENT-01/SPEC.md`.
+`tasks/F48-PERSISTENT-RESPONSIBLE-MUTATION-DETAIL-UI-01/SPEC.md`.
 
-F47 é T2 e deve materializar ADR-018 em migration aditiva `0012`, capability dedicada, RLS/grants mínimos, primitive, provisioning, adapter server-only, testes PostgreSQL/adversariais/concorrentes e workflow/regressões aplicáveis, sem UI ou Server Action.
+F48 deve integrar exclusivamente a boundary F47 ao detalhe persistente, acrescentando expected membership bruto e opções humanas pelo diretório protegido, transporte nullable explícito, Server Action estreita, feedback sanitizado e readback protegido, sem alterar migrations/grants/policies/capability/primitive/provisioning F47 e sem resolver Q-009.
 
 F21 permanece `ON HOLD` até seu `resume_when` objetivo.
 

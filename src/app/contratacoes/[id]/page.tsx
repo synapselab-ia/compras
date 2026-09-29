@@ -11,6 +11,7 @@ import { readItemMutationUiState } from "@/features/contracting-detail/item-muta
 import { readManualTimelineNoteCreationUiState } from "@/features/contracting-detail/manual-timeline-note-create-feedback";
 import { readNextActionMutationUiState } from "@/features/contracting-detail/next-action-feedback";
 import { readObjectMutationUiState } from "@/features/contracting-detail/object-feedback";
+import { readResponsibleMutationUiState } from "@/features/contracting-detail/responsible-feedback";
 import {
   readRelatedIdentifierCreationUiState,
 } from "@/features/contracting-detail/related-identifier-create-feedback";
@@ -34,6 +35,7 @@ type ContractingDetailPageProps = {
     relatedIdentifierCandidate?: string | string[];
     manualNoteCreation?: string | string[];
     manualNoteCandidate?: string | string[];
+    responsibleMutation?: string | string[];
   }>;
 };
 
@@ -138,6 +140,11 @@ export default async function ContractingDetailPage({
         relatedIdentifierCreationState={relatedIdentifierCreationState}
         manualNoteCandidateId={manualNoteCandidateId}
         manualNoteCreationState={manualNoteCreationState}
+        responsibleMutationState={
+          viewData.kind === "demo"
+            ? null
+            : readResponsibleMutationUiState(query.responsibleMutation)
+        }
       />
     </>
   );

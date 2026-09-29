@@ -13,6 +13,10 @@ type PersistentContractingRow = {
   object: string;
   responsible_membership_id: string | null;
   responsible_name: string | null;
+  responsible_options?: Array<{
+    membershipId: string;
+    displayName: string;
+  }>;
   stage: string | null;
   status: string | null;
   waiting_type: string | null;
@@ -56,6 +60,20 @@ const CONTRACTING_SQL = `
     c.object,
     c.responsible_membership_id::text AS responsible_membership_id,
     responsible_directory.display_name AS responsible_name,
+    COALESCE(
+      (
+        SELECT json_agg(
+          json_build_object(
+            'membershipId', directory.membership_id::text,
+            'displayName', directory.display_name
+          )
+          ORDER BY lower(directory.display_name), directory.display_name, directory.membership_id
+        )
+        FROM public.team_member_directory AS directory
+        WHERE directory.team_id = c.team_id
+      ),
+      '[]'::json
+    ) AS responsible_options,
     c.stage_key AS stage,
     c.status_key AS status,
     c.waiting_type,
@@ -184,6 +202,19 @@ async function queryPersistentContractingDetail(
     id: contracting.id,
     object: contracting.object,
     responsible,
+    responsibleMembershipId: contracting.responsible_membership_id,
+    responsibleOptions: Array.isArray(contracting.responsible_options)
+      ? contracting.responsible_options
+          .filter(
+            (option) =>
+              typeof option?.membershipId === "string" &&
+              typeof option?.displayName === "string",
+          )
+          .map((option) => ({
+            membershipId: option.membershipId,
+            displayName: option.displayName,
+          }))
+      : [],
     stage: nonEmptyOr(contracting.stage, "Não informado"),
     status: nonEmptyOr(contracting.status, "Não informado"),
     waitingOn: nonEmptyOr(

@@ -1,70 +1,57 @@
 # Next Action - Compras
 
-## F48-PERSISTENT-RESPONSIBLE-MUTATION-DETAIL-UI-01 - Integrar edição persistente do responsável no detalhe
+## F49-PERSISTENT-WAITING-STATE-MUTATION-DESIGN-01 - Desenhar edição persistente do estado de espera
 
-**Classe:** T1 - feature normal, com impacto T2 - autorização/escrita server-side  
-**Estado:** READY após integração da F47  
-**Objetivo:** integrar exclusivamente a boundary F47 ao detalhe persistente para alterar ou limpar o responsável interno, preservando optimistic concurrency, options humanas pelo diretório protegido, transporte nullable explícito, feedback sanitizado e demo read-only, sem ampliar authority PostgreSQL e sem resolver Q-009.
+**Classe:** T2 - design de boundary de escrita e auditoria  
+**Estado:** READY após integração da F48  
+**Objetivo:** desenhar a futura mutation persistente do conjunto `waiting_type`, `waiting_reference`, `waiting_since` e `waiting_reason`, preservando optimistic concurrency, nullabilidade, timestamp confiável, auditoria atômica e least privilege, sem definir taxonomias finais e sem resolver silenciosamente Q-002 ou Q-009.
 
 Esta é a única `NEXT_ACTION` canônica.
 
 ## Por que esta ação agora
 
-F47 integrou e validou a authority server/database para `contractings.responsible_membership_id`.
+F48 tornou o responsável interno editável com a authority F47 preservada.
 
-O detalhe persistente já apresenta o nome do responsável via `team_member_directory`, mas ainda não preserva o UUID bruto do current responsável na apresentação nem oferece a jornada de edição.
+A regra operacional central ainda exige responder com quem ou onde a ação está pendente, desde quando e por qual motivo. Esses campos já existem no schema e no read model, mas permanecem somente leitura.
 
-A próxima slice independente é conectar a boundary F47 à UI sem alterar sua autoridade.
+Etapa e status definitivos continuam bloqueados pelas taxonomias abertas Q-001/Q-002. O estado de espera pode ser estudado como conjunto técnico atual sem inventar catálogo, desde que o desenho não transforme seus textos abertos em taxonomia definitiva.
 
 ## Execução obrigatória
 
-1. recuperar `main` real e confirmar F47 integrada pela PR `#79`, merge `4e7bb411205469977878e01cb04ea35d5ad50401`;
+1. recuperar `main` real e confirmar F48 integrada pela PR `#81`, merge `bc0704297c2326e6eea6dca91c16b0c5b1ec3ce7`;
 2. revalidar `CONTEXT_MANIFEST`;
-3. ler ADR-018, resultado F47 e `tasks/F48-PERSISTENT-RESPONSIBLE-MUTATION-DETAIL-UI-01/SPEC.md`;
-4. inspecionar F33, F45, F11, `persistent-read.ts`, `types.ts`, `view-data.ts`, `actions.ts`, página e componente do detalhe;
-5. confirmar migrations `0001..0012` byte-for-byte antes de editar;
-6. manter migration, grants, policies, capability, primitive e provisioning F47 imutáveis;
-7. estender o read model com `responsibleMembershipId: string | null`;
-8. carregar options humanas somente de `team_member_directory`, restritas ao target protegido;
-9. não expor team_id, user_id, issuer ou subject como dados da jornada;
-10. preservar current responsável degradado como expected raw mesmo quando seu nome não estiver disponível;
-11. implementar transporte explícito `null|membership` para expected e new;
-12. criar Server Action estreita que aceita somente `contractingId`, expected e new;
-13. rejeitar scalars duplicados, shapes ambíguos, UUIDs malformados e campos extras controlados pelo browser;
-14. não executar SQL/DML na Server Action;
-15. chamar exclusivamente `mutatePersistentContractingResponsible`;
-16. não tratar options renderizadas nem membership UUID como authority;
-17. permitir `Sem responsável` como new `NULL`;
-18. mapear `updated`, `unchanged`, `conflict`, `not-available` e `unavailable` para feedback fixo e sanitizado;
-19. revalidar/readback somente pela rota local e modelo protegido;
-20. manter demo, config inválida e protected failure sem write e sem fallback;
-21. manter Q-009 aberta e não introduzir gestão de memberships;
-22. adicionar testes adversariais de read model, action, feedback, component/page, current degradado e candidate forjada;
-23. executar CI, F22, F29, F32, F35, F38, F41, F44 e F47;
-24. fazer red-team integral do diff;
-25. confirmar migrations `0001..0012` e authority F47 imutáveis;
-26. promover somente estado verde;
-27. atualizar checkpoint deixando exatamente uma nova `NEXT_ACTION`.
+3. ler `tasks/F48-PERSISTENT-RESPONSIBLE-MUTATION-DETAIL-UI-01/RESULT.md`;
+4. ler PROJECT_DESIGN, BUSINESS_WORKFLOW e Q-001/Q-002/Q-006/Q-009;
+5. inspecionar schema/migrations `0001..0012` e read model atual;
+6. usar F26, F32 e F47 como precedentes de optimistic concurrency, atomicidade e least privilege;
+7. definir a unidade de snapshot expected para os quatro campos de espera;
+8. definir semântica segura de `waiting_since`, sem timestamp técnico controlado pelo browser;
+9. definir transporte nullable e preservação de texto sem normalização inventada;
+10. definir ordem de `denied/conflict/unchanged/updated`;
+11. definir evento(s) atômico(s) compatível(is) com o modelo atual;
+12. definir capability e primitive futuras com authority mínima;
+13. manter target-team pilot-only enquanto Q-009 estiver aberta;
+14. não definir enum, catálogo ou transição de etapa/status/waiting;
+15. produzir ADR-019 e SPEC F50, sem código de produção;
+16. fazer red-team documental;
+17. executar CI e gates aplicáveis;
+18. confirmar migrations `0001..0012` imutáveis;
+19. atualizar checkpoint e deixar exatamente uma nova `NEXT_ACTION`.
 
 ## Red-team mínimo
 
 Rejeitar PASS se:
 
-- browser puder definir team, actor, user, issuer ou subject;
-- membership UUID ou lista do diretório virar authority;
-- Server Action consultar banco para criar autorização paralela;
-- candidate cross-team, revogada ou disabled puder ser atribuída;
-- current degradado for autoajustado;
-- clear para `NULL` for removido;
-- expected value for ignorado;
-- stale conflict virar sucesso ou last-write-wins;
-- Server Action executar SQL/DML próprio;
-- feedback revelar target/candidate protegido;
-- demo ou configuração inválida puder gravar;
-- falha protegida cair para fixture/demo;
-- migrations `0001..0012` forem alteradas;
-- grants, policies, capability, primitive ou provisioning F47 forem ampliados;
-- Q-009 for resolvida implicitamente;
+- taxonomia final de etapa, status ou waiting for inventada;
+- Q-002, Q-006 ou Q-009 for resolvida implicitamente;
+- browser puder controlar timestamp técnico, team, actor, user, issuer ou subject;
+- update parcial puder gerar estado misto sem regra explícita;
+- stale write puder virar last-write-wins;
+- waiting value virar authority;
+- runtime receber DML direto;
+- capability futura ganhar UPDATE genérico de `contractings`;
+- evento não for atômico ou puder ser alterado;
+- migration aplicada for reescrita;
 - provider hosted, secret ou dado real for necessário.
 
 ## Invariantes
@@ -76,8 +63,6 @@ Rejeitar PASS se:
 - autenticação não é autorização;
 - RLS/capabilities permanecem autoritativas;
 - runtime normal continua sem DML direto;
-- F47 continua sendo a única boundary persistente de alteração do responsável;
-- `team_member_directory` continua sendo a superfície humana aprovada para membros;
 - migrations `0001..0012` permanecem imutáveis;
 - falha protegida nunca vira demo fallback.
 
@@ -85,16 +70,8 @@ Rejeitar PASS se:
 
 Executar:
 
-`tasks/F48-PERSISTENT-RESPONSIBLE-MUTATION-DETAIL-UI-01/SPEC.md`.
-
-Boundary canônica:
-
-`tasks/F47-PERSISTENT-RESPONSIBLE-MUTATION-IMPLEMENT-01/RESULT.md`.
-
-Decisão canônica:
-
-`docs/decisions/ADR-018-persistent-responsible-mutation.md`.
+`tasks/F49-PERSISTENT-WAITING-STATE-MUTATION-DESIGN-01/SPEC.md`.
 
 ## Critério de encerramento
 
-F48 fecha quando uma pessoa autorizada em modo persistente puder alterar ou limpar o responsável pelo detalhe usando exclusivamente F47, com expected membership bruto do read model protegido, options humanas do diretório protegido, transporte nullable explícito, payload sem authority controlada pelo browser, feedback sanitizado, optimistic concurrency preservada, readback protegido, demo read-only e todos os gates/adversariais verdes, sem ampliar a camada PostgreSQL e sem resolver Q-009.
+F49 fecha quando existir uma ADR defensável e uma SPEC F50 executável para mutation do estado de espera atual, com concorrência, nullabilidade, timestamp, autorização, auditoria e least privilege definidos, sem implementar produção e sem resolver silenciosamente taxonomias ou permissões abertas.

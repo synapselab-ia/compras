@@ -226,7 +226,9 @@ describe("contracting detail F45 manual note candidate preparation", () => {
 
   it("prepares a server candidate for a fresh intent", async () => {
     const html = await renderPage();
+
     expect(html).toContain(`data-manual-note-candidate="${MANUAL_GENERATED}"`);
+    expect(html).toContain('data-manual-note-state="none"');
     expect(pageMocks.preparePersistentManualTimelineNoteEventId).toHaveBeenCalledTimes(1);
   });
 
@@ -235,21 +237,82 @@ describe("contracting detail F45 manual note candidate preparation", () => {
       manualNoteCreation: "unavailable",
       manualNoteCandidate: MANUAL_RETRY,
     });
+
     expect(html).toContain(`data-manual-note-candidate="${MANUAL_RETRY}"`);
+    expect(html).toContain('data-manual-note-state="unavailable"');
     expect(pageMocks.preparePersistentManualTimelineNoteEventId).not.toHaveBeenCalled();
   });
 
-  it("does not expose a manual-note candidate in demo", async () => {
+  it.each(["created", "already-added", "not-available"] as const)(
+    "starts a fresh candidate after %s and never reuses a supplied candidate",
+    async (state) => {
+      const html = await renderPage({
+        manualNoteCreation: state,
+        manualNoteCandidate: MANUAL_RETRY,
+      });
+
+      expect(pageMocks.preparePersistentManualTimelineNoteEventId).toHaveBeenCalledTimes(1);
+      expect(html).toContain(`data-manual-note-candidate="${MANUAL_GENERATED}"`);
+      expect(html).not.toContain(`data-manual-note-candidate="${MANUAL_RETRY}"`);
+      expect(html).toContain(`data-manual-note-state="${state}"`);
+    },
+  );
+
+  it("discards a malformed unavailable retry candidate and prepares a fresh server candidate", async () => {
+    const html = await renderPage({
+      manualNoteCreation: "unavailable",
+      manualNoteCandidate: "not-a-uuid",
+    });
+
+    expect(pageMocks.preparePersistentManualTimelineNoteEventId).toHaveBeenCalledTimes(1);
+    expect(html).toContain(`data-manual-note-candidate="${MANUAL_GENERATED}"`);
+    expect(html).not.toContain("not-a-uuid");
+    expect(html).toContain('data-manual-note-state="unavailable"');
+  });
+
+  it("does not treat duplicated query state as a technical retry", async () => {
+    const html = await renderPage({
+      manualNoteCreation: ["unavailable", "unavailable"],
+      manualNoteCandidate: MANUAL_RETRY,
+    });
+
+    expect(pageMocks.preparePersistentManualTimelineNoteEventId).toHaveBeenCalledTimes(1);
+    expect(html).toContain(`data-manual-note-candidate="${MANUAL_GENERATED}"`);
+    expect(html).toContain('data-manual-note-state="none"');
+    expect(html).not.toContain(`data-manual-note-candidate="${MANUAL_RETRY}"`);
+  });
+
+  it("does not expose a manual-note candidate or feedback in demo", async () => {
     pageMocks.loadContractingDetailViewData.mockResolvedValue({
       kind: "demo",
       detail: { id: "DEMO-001" },
     });
+
     const html = await renderPage({
       manualNoteCreation: "unavailable",
       manualNoteCandidate: MANUAL_RETRY,
     });
+
     expect(html).toContain('data-manual-note-candidate="none"');
     expect(html).toContain('data-manual-note-state="none"');
+    expect(html).not.toContain(MANUAL_RETRY);
     expect(pageMocks.preparePersistentManualTimelineNoteEventId).not.toHaveBeenCalled();
+  });
+
+  it("never prepares or exposes a manual-note candidate when protected detail is unavailable", async () => {
+    pageMocks.loadContractingDetailViewData.mockResolvedValue({
+      kind: "unavailable",
+    });
+
+    const html = await renderPage({
+      manualNoteCreation: "unavailable",
+      manualNoteCandidate: MANUAL_RETRY,
+    });
+
+    expect(pageMocks.preparePersistentManualTimelineNoteEventId).not.toHaveBeenCalled();
+    expect(html).toContain("Dados protegidos indisponíveis.");
+    expect(html).not.toContain(MANUAL_RETRY);
+    expect(html).not.toContain("data-manual-note-candidate");
+    expect(html).not.toContain("data-manual-note-state");
   });
 });

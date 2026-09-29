@@ -1,9 +1,9 @@
 # Current State - Compras
 
-**PROJECT_STATUS:** F47_INTEGRATED_F48_READY  
-**CURRENT_PHASE:** F47 integrada e verificada; F48 READY; F21 ON HOLD  
+**PROJECT_STATUS:** F48_INTEGRATED_F49_READY  
+**CURRENT_PHASE:** F48 integrada e verificada; F49 READY; F21 ON HOLD  
 **REPO_VISIBILITY:** PUBLIC  
-**APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_SIGNIN_LIMITER_CONTRACTING_CREATE_NEXT_ACTION_OBJECT_ITEM_CREATE_ITEM_EDIT_RELATED_IDENTIFIER_CREATE_AND_MANUAL_TIMELINE_NOTE_UI_INTEGRATED  
+**APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_SIGNIN_LIMITER_CONTRACTING_CREATE_NEXT_ACTION_OBJECT_ITEM_CREATE_ITEM_EDIT_RELATED_IDENTIFIER_CREATE_MANUAL_TIMELINE_NOTE_AND_RESPONSIBLE_UI_INTEGRATED  
 **DATABASE_STATUS:** PROTECTED_READ_MODEL_F26_F29_F32_F35_F38_F41_F44_F47_VALIDATED_MIGRATIONS_0001_0012_IMMUTABLE  
 **AUTH_STATUS:** SELF_HOSTED_BETTER_AUTH_AND_SIGNIN_LIMITER_INTEGRATED  
 **DEPLOYMENT_STATUS:** EXISTING_F18_PREVIEW_READY_NO_F47_HOSTED_WRITE_VALIDATION_REQUIRED  
@@ -35,6 +35,10 @@
 **F47_MERGE_COMMIT:** `4e7bb411205469977878e01cb04ea35d5ad50401`  
 **F47_CI_RUN:** `36583612708`  
 **F47_WORKFLOW_RUN:** `36583612741`  
+**F48_PR:** `#81`  
+**F48_FINAL_HEAD:** `29064794dd75231f05a0fadb840a635e5d26d0de`  
+**F48_MERGE_COMMIT:** `bc0704297c2326e6eea6dca91c16b0c5b1ec3ce7`  
+**F48_CI_RUN:** `36615545417`  
 
 **F21_STATE:** `ON HOLD / BLOCKED` - Vercel control-plane surface unavailable for required protection/env readback+CRUD  
 **F21_RESUME_WHEN:** sessão Vercel autenticada permitir readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch, sem exposição de valores  
@@ -432,17 +436,69 @@ A partir de F47, migrations `0001..0012` formam o baseline imutável.
 
 `REAL_DATA_ALLOWED = NO` permaneceu preservado.
 
+## F48 integrada
+
+F48 foi executada na branch:
+
+`f48-persistent-responsible-mutation-detail-ui`
+
+e promovida pela PR `#81`.
+
+Head final validado:
+
+`29064794dd75231f05a0fadb840a635e5d26d0de`.
+
+Merge em `main`:
+
+`bc0704297c2326e6eea6dca91c16b0c5b1ec3ce7`.
+
+A slice integrou exclusivamente a boundary F47 ao detalhe persistente.
+
+Foram adicionados:
+
+- `responsibleMembershipId` bruto no read model protegido;
+- `responsibleOptions` somente via `team_member_directory`;
+- transporte explícito `null|membership`;
+- Server Action estreita;
+- editor persistente mínimo de responsável;
+- feedback sanitizado;
+- cobertura adversarial de read model, action, componente, rota e estados degradados.
+
+Demo permanece read-only e protected failure não cai para fixtures.
+
+O diff final não contém migration, grant, policy, capability, primitive ou provisioning. A migration `0012_contracting_responsible_mutation.sql` permaneceu no blob canônico `1635b6874cc3bd7f044b3c6ecff8423e14442e80`.
+
+Gates no head final:
+
+- CI `36615545417`: PASS;
+- F22 `36615545383`: PASS;
+- F29 `36615545712`: PASS;
+- F32 `36615545393`: PASS;
+- F35 `36615545414`: PASS;
+- F38 `36615545456`: PASS;
+- F41 `36615545466`: PASS;
+- F44 `36615545504`: PASS;
+- F47 `36615545424`: PASS.
+
+Não havia review thread, review ou comentário pendente antes do merge.
+
+Resultado detalhado:
+
+`tasks/F48-PERSISTENT-RESPONSIBLE-MUTATION-DETAIL-UI-01/RESULT.md`.
+
+`REAL_DATA_ALLOWED = NO` permaneceu preservado.
+
 ## Próxima ação
 
 Existe exatamente uma `NEXT_ACTION` canônica:
 
-`F48-PERSISTENT-RESPONSIBLE-MUTATION-DETAIL-UI-01 - Integrar edição persistente do responsável no detalhe`.
+`F49-PERSISTENT-WAITING-STATE-MUTATION-DESIGN-01 - Desenhar edição persistente do estado de espera`.
 
 A SPEC está em:
 
-`tasks/F48-PERSISTENT-RESPONSIBLE-MUTATION-DETAIL-UI-01/SPEC.md`.
+`tasks/F49-PERSISTENT-WAITING-STATE-MUTATION-DESIGN-01/SPEC.md`.
 
-F48 deve integrar exclusivamente a boundary F47 ao detalhe persistente, acrescentando expected membership bruto e opções humanas pelo diretório protegido, transporte nullable explícito, Server Action estreita, feedback sanitizado e readback protegido, sem alterar migrations/grants/policies/capability/primitive/provisioning F47 e sem resolver Q-009.
+F49 é design-only. Deve definir a futura boundary do conjunto `waiting_type`, `waiting_reference`, `waiting_since` e `waiting_reason`, sem implementar produção, sem inventar taxonomias de etapa/status/waiting e sem resolver silenciosamente Q-002 ou Q-009.
 
 F21 permanece `ON HOLD` até seu `resume_when` objetivo.
 

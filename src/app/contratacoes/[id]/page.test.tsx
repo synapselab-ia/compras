@@ -40,6 +40,15 @@ vi.mock("@/features/contracting-detail/next-action-feedback", () => ({
 vi.mock("@/features/contracting-detail/object-feedback", () => ({
   readObjectMutationUiState: () => null,
 }));
+vi.mock("@/features/contracting-detail/responsible-feedback", () => ({
+  readResponsibleMutationUiState: (
+    value: string | string[] | undefined,
+  ) =>
+    typeof value === "string" &&
+    ["updated", "unchanged", "conflict", "not-available", "unavailable"].includes(value)
+      ? value
+      : null,
+}));
 vi.mock("@/features/contracting-detail/related-identifier-create-feedback", () => ({
   readRelatedIdentifierCreationUiState: (
     value: string | string[] | undefined,

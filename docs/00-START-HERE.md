@@ -23,13 +23,14 @@ A fundação possui:
 - edição persistente dos quatro campos de item com UI e optimistic concurrency por snapshot completo;
 - criação persistente mínima de `related_identifiers`, auditável e idempotente por UUID preparado, com UI persistente e demo read-only;
 - criação persistente de nota manual na timeline com boundary dedicada, retry idempotente e UI persistente read-only em demo;
-- migrations de domínio `0001..0011` integradas e imutáveis.
+- edição persistente de `contractings.responsible_membership_id` com optimistic concurrency, diretório humano protegido e UI persistente;
+- migrations de domínio `0001..0012` integradas e imutáveis.
 
-F45 foi integrada pela PR `#73`, head final `e5236dbbeef4fcb8bf2d568f37c2495e41a09f1a`, merge `0800553d95bddc8d4f2febe29f418dd543c1c659`. CI, F22, F29, F32, F35, F38, F41 e F44 ficaram verdes.
+F48 foi integrada pela PR `#81`, head final `29064794dd75231f05a0fadb840a635e5d26d0de`, merge `bc0704297c2326e6eea6dca91c16b0c5b1ec3ce7`. CI, F22, F29, F32, F35, F38, F41, F44 e F47 ficaram verdes.
 
 A próxima e única frente canônica é:
 
-`F46-PERSISTENT-RESPONSIBLE-MUTATION-DESIGN-01 - Desenhar edição persistente do responsável interno`.
+`F49-PERSISTENT-WAITING-STATE-MUTATION-DESIGN-01 - Desenhar edição persistente do estado de espera`.
 
 F17 permanece `ON HOLD` histórico. F21 permanece `ON HOLD` até existir control plane Vercel capaz de readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch sem expor valores.
 
@@ -172,13 +173,33 @@ Resultados:
 - `tasks/F44-PERSISTENT-MANUAL-TIMELINE-NOTE-IMPLEMENT-01/RESULT.md`;
 - `tasks/F45-PERSISTENT-MANUAL-TIMELINE-NOTE-DETAIL-UI-01/RESULT.md`.
 
-## Próxima frente F46
+## F46/F47/F48 - responsável interno
+
+ADR-018 definiu a mutation específica de `contractings.responsible_membership_id`. F47 materializou a capability/primitive persistente e F48 integrou a operação ao detalhe.
+
+A integração preserva:
+
+- expected membership bruto do read model protegido;
+- candidate humana via `team_member_directory`;
+- clear explícito para `NULL`;
+- optimistic concurrency;
+- guard target-team pilot-only;
+- feedback sanitizado;
+- demo read-only;
+- runtime normal sem DML direto.
+
+Resultados:
+
+- `tasks/F47-PERSISTENT-RESPONSIBLE-MUTATION-IMPLEMENT-01/RESULT.md`;
+- `tasks/F48-PERSISTENT-RESPONSIBLE-MUTATION-DETAIL-UI-01/RESULT.md`.
+
+## Próxima frente F49
 
 A única `NEXT_ACTION` canônica está em `docs/ai/NEXT_ACTION.md`:
 
-`F46-PERSISTENT-RESPONSIBLE-MUTATION-DESIGN-01 - Desenhar edição persistente do responsável interno`.
+`F49-PERSISTENT-WAITING-STATE-MUTATION-DESIGN-01 - Desenhar edição persistente do estado de espera`.
 
-F46 é design-only e não implementa produção.
+F49 é design-only e não implementa produção.
 
 ## Modos da aplicação
 
@@ -220,9 +241,10 @@ Migrations de domínio integradas e imutáveis:
 - `0008_contracting_create_concurrency_repair.sql`;
 - `0009_contracting_item_mutation.sql`;
 - `0010_related_identifier_create.sql`;
-- `0011_manual_timeline_note_create.sql`.
+- `0011_manual_timeline_note_create.sql`;
+- `0012_contracting_responsible_mutation.sql`.
 
-Migration aplicada não é reescrita. Migrations `0001..0011` são baseline imutável.
+Migration aplicada não é reescrita. Migrations `0001..0012` são baseline imutável.
 
 ## Fonte de verdade
 
@@ -240,7 +262,7 @@ Startup mínimo:
 
 Fontes de produto: `PROJECT_DESIGN.md`, `DOMAIN_MODEL.md`, `BUSINESS_WORKFLOW.md`, `OPEN_QUESTIONS.md`.
 
-Fontes de arquitetura: `ARCHITECTURE.md`, `SECURITY.md`, `DATABASE.md`, ADR-003, ADR-005, ADR-009 a ADR-017.
+Fontes de arquitetura: `ARCHITECTURE.md`, `SECURITY.md`, `DATABASE.md`, ADR-003, ADR-005, ADR-009 a ADR-018.
 
 Operação por IA: `SOURCE_OF_TRUTH.md`, `WORK_PROTOCOL.md`, `CONTEXT_MANIFEST.md`, `CURRENT_STATE.md`, `NEXT_ACTION.md`.
 

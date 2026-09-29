@@ -1,7 +1,7 @@
 # Current State - Compras
 
 **PROJECT_STATUS:** F45_INTEGRATED_F46_READY  
-**CURRENT_PHASE:** F45 integrada e verificada; F46 READY; F21 ON HOLD  
+**CURRENT_PHASE:** F45 integrada, endurecida e verificada; F46 READY; F21 ON HOLD  
 **REPO_VISIBILITY:** PUBLIC  
 **APPLICATION_STATUS:** HOSTED_DEMO_AVAILABLE_SELF_HOSTED_AUTH_SIGNIN_LIMITER_CONTRACTING_CREATE_NEXT_ACTION_OBJECT_ITEM_CREATE_ITEM_EDIT_RELATED_IDENTIFIER_CREATE_AND_MANUAL_TIMELINE_NOTE_UI_INTEGRATED  
 **DATABASE_STATUS:** PROTECTED_READ_MODEL_F26_F29_F32_F35_F38_F41_F44_VALIDATED_MIGRATIONS_0001_0011_IMMUTABLE  
@@ -23,6 +23,9 @@
 **F45_PR:** `#73`
 **F45_FINAL_HEAD:** `e5236dbbeef4fcb8bf2d568f37c2495e41a09f1a`
 **F45_MERGE_COMMIT:** `0800553d95bddc8d4f2febe29f418dd543c1c659`  
+**F45_HARDENING_PR:** `#75`  
+**F45_HARDENING_HEAD:** `36157c0e78783789e0d7f69700e2cb55686e4030`  
+**F45_HARDENING_MERGE_COMMIT:** `60bcd9b7c86788f87d6dc76d8eec07a27611e59a`  
 **F21_STATE:** `ON HOLD / BLOCKED` - Vercel control-plane surface unavailable for required protection/env readback+CRUD  
 **F21_RESUME_WHEN:** sessão Vercel autenticada permitir readback de Deployment Protection/bypasses e CRUD de sensitive Preview env vars escopadas à branch, sem exposição de valores  
 **ON_HOLD:** `F17-B2` histórico + `F21` conforme resume_when acima
@@ -197,6 +200,21 @@ Todos os oito gates aplicáveis ficaram verdes no head final: CI, F22, F29, F32,
 Resultado detalhado:
 
 `tasks/F45-PERSISTENT-MANUAL-TIMELINE-NOTE-DETAIL-UI-01/RESULT.md`.
+
+### Revisão pós-integração F45
+
+A F45 recebeu hardening pela PR `#75`, head final `36157c0e78783789e0d7f69700e2cb55686e4030`, merge `60bcd9b7c86788f87d6dc76d8eec07a27611e59a`.
+
+A revisão fechou as duas lacunas encontradas na auditoria pós-integração:
+
+- o campo textual agora só existe quando `noteKind = text`; `Ausente (NULL)` envia `null` sem scalar de texto;
+- a matriz adversarial de candidate/retry, malformed input, protected failure, demo e sanitização passou a ter cobertura explícita adicional.
+
+A primeira execução do CI da revisão expôs somente um defeito em fixture de teste por uso de argumento `undefined` com valor default. A fixture foi corrigida sem mudança de produção.
+
+No head final da revisão, CI, F22, F29, F32, F35, F38, F41 e F44 ficaram verdes. Não havia review thread pendente.
+
+Migrations `0001..0011`, grants, policies, capability, primitive e provisioning F44 permaneceram imutáveis.
 
 ## Próxima ação
 

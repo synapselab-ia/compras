@@ -26,12 +26,12 @@ const ID = "45000000-0000-4000-8000-000000000001";
 const EVENT = "45010000-0000-4000-8000-000000000001";
 const PATH = `/contratacoes/${ID}`;
 
-function form(noteKind = "text", note: string | undefined = "  DEMO nota  "): FormData {
+function form(noteKind = "text", note: string | null = "  DEMO nota  "): FormData {
   const data = new FormData();
   data.set("contractingId", ID);
   data.set("eventId", EVENT);
   data.set("noteKind", noteKind);
-  if (note !== undefined) data.set("note", note);
+  if (note !== null) data.set("note", note);
   return data;
 }
 
@@ -56,7 +56,7 @@ describe("createPersistentManualTimelineNoteAction", () => {
   });
 
   it("keeps NULL, empty, spaces-only and leading/trailing spaces distinct", async () => {
-    await expect(createPersistentManualTimelineNoteAction(form("null", undefined))).rejects.toThrow(
+    await expect(createPersistentManualTimelineNoteAction(form("null", null))).rejects.toThrow(
       `REDIRECT:${PATH}?manualNoteCreation=created`,
     );
     expect(actionMocks.createPersistentManualTimelineNote).toHaveBeenLastCalledWith(
@@ -141,7 +141,7 @@ describe("createPersistentManualTimelineNoteAction", () => {
     vi.clearAllMocks();
     actionMocks.readPersistentReadMode.mockReturnValue("persistent");
     actionMocks.isPersistentContractingId.mockReturnValue(true);
-    await expect(createPersistentManualTimelineNoteAction(form("text", undefined))).rejects.toThrow(
+    await expect(createPersistentManualTimelineNoteAction(form("text", null))).rejects.toThrow(
       `REDIRECT:${PATH}?manualNoteCreation=unavailable&manualNoteCandidate=${EVENT}`,
     );
     expect(actionMocks.createPersistentManualTimelineNote).not.toHaveBeenCalled();

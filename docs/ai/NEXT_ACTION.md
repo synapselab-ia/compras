@@ -16,7 +16,7 @@ Após F45, as slices de objeto, próxima ação, itens, identificadores e nota m
 
 ## Execução obrigatória
 
-1. recuperar `main` real e confirmar F45 integrada pela PR `#73`, merge `0800553d95bddc8d4f2febe29f418dd543c1c659`;
+1. recuperar `main` real e confirmar F45 integrada pela PR `#73`, merge `0800553d95bddc8d4f2febe29f418dd543c1c659`, incluindo o hardening pós-integração da PR `#75`, merge `60bcd9b7c86788f87d6dc76d8eec07a27611e59a`;
 2. revalidar `CONTEXT_MANIFEST`;
 3. ler integralmente `PROJECT_DESIGN.md`, `DOMAIN_MODEL.md`, `BUSINESS_WORKFLOW.md`, `OPEN_QUESTIONS.md`, ADR-003, ADR-004, ADR-005, ADR-011 a ADR-017 e resultados F26/F32/F38/F41/F45;
 4. inspecionar schema, constraints, RLS, read model e apresentação atuais de `responsible_membership_id`;

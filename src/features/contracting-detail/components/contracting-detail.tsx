@@ -187,6 +187,7 @@ export function ContractingDetail({
   relatedIdentifierCreationState = null,
   manualNoteCandidateId = null,
   manualNoteCreationState = null,
+  responsibleMutationState = null,
 }: ContractingDetailProps) {
   const isDemo = source === "demo";
   const feedback = isDemo ? null : getNextActionMutationFeedback(mutationState);

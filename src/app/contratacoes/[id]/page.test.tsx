@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const pageMocks = vi.hoisted(() => ({
   loadContractingDetailViewData: vi.fn(),
   preparePersistentRelatedIdentifierCandidateId: vi.fn(),
+  preparePersistentManualTimelineNoteEventId: vi.fn(),
   redirect: vi.fn((url: string) => {
     throw new Error(`REDIRECT:${url}`);
   }),
@@ -26,6 +27,13 @@ vi.mock("@/features/contracting-detail/item-create-feedback", () => ({
 vi.mock("@/features/contracting-detail/item-mutation-feedback", () => ({
   readItemMutationUiState: () => null,
 }));
+vi.mock("@/features/contracting-detail/manual-timeline-note-create-feedback", () => ({
+  readManualTimelineNoteCreationUiState: (value: string | string[] | undefined) =>
+    typeof value === "string" &&
+    ["created", "already-added", "not-available", "unavailable"].includes(value)
+      ? value
+      : null,
+}));
 vi.mock("@/features/contracting-detail/next-action-feedback", () => ({
   readNextActionMutationUiState: () => null,
 }));
@@ -45,6 +53,13 @@ vi.mock("@/features/contracting-detail/view-data", () => ({
   loadContractingDetailViewData: pageMocks.loadContractingDetailViewData,
 }));
 vi.mock(
+  "@/features/contracting-detail/persistent-manual-timeline-note-create",
+  () => ({
+    preparePersistentManualTimelineNoteEventId:
+      pageMocks.preparePersistentManualTimelineNoteEventId,
+  }),
+);
+vi.mock(
   "@/features/contracting-detail/persistent-related-identifier-create",
   () => ({
     preparePersistentRelatedIdentifierCandidateId:
@@ -56,15 +71,21 @@ vi.mock("@/features/contracting-detail/components/contracting-detail", () => ({
     source,
     relatedIdentifierCandidateId,
     relatedIdentifierCreationState,
+    manualNoteCandidateId,
+    manualNoteCreationState,
   }: {
     source: string;
     relatedIdentifierCandidateId?: string | null;
     relatedIdentifierCreationState?: string | null;
+    manualNoteCandidateId?: string | null;
+    manualNoteCreationState?: string | null;
   }) => (
     <section
       data-detail-source={source}
       data-related-candidate={relatedIdentifierCandidateId ?? "none"}
       data-related-state={relatedIdentifierCreationState ?? "none"}
+      data-manual-note-candidate={manualNoteCandidateId ?? "none"}
+      data-manual-note-state={manualNoteCreationState ?? "none"}
     />
   ),
 }));
@@ -74,6 +95,8 @@ import ContractingDetailPage from "./page";
 const ID = "42000000-0000-4000-8000-000000000001";
 const GENERATED = "42010000-0000-4000-8000-000000000001";
 const RETRY = "42010000-0000-4000-8000-000000000002";
+const MANUAL_GENERATED = "45010000-0000-4000-8000-000000000001";
+const MANUAL_RETRY = "45010000-0000-4000-8000-000000000002";
 
 function renderPage(
   query: Record<string, string | string[] | undefined> = {},
@@ -89,6 +112,9 @@ describe("contracting detail F42 candidate preparation", () => {
     vi.clearAllMocks();
     pageMocks.preparePersistentRelatedIdentifierCandidateId.mockReturnValue(
       GENERATED,
+    );
+    pageMocks.preparePersistentManualTimelineNoteEventId.mockReturnValue(
+      MANUAL_GENERATED,
     );
     pageMocks.loadContractingDetailViewData.mockResolvedValue({
       kind: "persistent",
@@ -183,5 +209,47 @@ describe("contracting detail F42 candidate preparation", () => {
     expect(html).toContain("Dados protegidos indisponíveis.");
     expect(html).not.toContain(RETRY);
     expect(html).not.toContain("data-related-candidate");
+  });
+});
+
+
+describe("contracting detail F45 manual note candidate preparation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    pageMocks.preparePersistentRelatedIdentifierCandidateId.mockReturnValue(GENERATED);
+    pageMocks.preparePersistentManualTimelineNoteEventId.mockReturnValue(MANUAL_GENERATED);
+    pageMocks.loadContractingDetailViewData.mockResolvedValue({
+      kind: "persistent",
+      detail: { id: ID },
+    });
+  });
+
+  it("prepares a server candidate for a fresh intent", async () => {
+    const html = await renderPage();
+    expect(html).toContain(`data-manual-note-candidate="${MANUAL_GENERATED}"`);
+    expect(pageMocks.preparePersistentManualTimelineNoteEventId).toHaveBeenCalledTimes(1);
+  });
+
+  it("reuses only a valid candidate for technical unavailable", async () => {
+    const html = await renderPage({
+      manualNoteCreation: "unavailable",
+      manualNoteCandidate: MANUAL_RETRY,
+    });
+    expect(html).toContain(`data-manual-note-candidate="${MANUAL_RETRY}"`);
+    expect(pageMocks.preparePersistentManualTimelineNoteEventId).not.toHaveBeenCalled();
+  });
+
+  it("does not expose a manual-note candidate in demo", async () => {
+    pageMocks.loadContractingDetailViewData.mockResolvedValue({
+      kind: "demo",
+      detail: { id: "DEMO-001" },
+    });
+    const html = await renderPage({
+      manualNoteCreation: "unavailable",
+      manualNoteCandidate: MANUAL_RETRY,
+    });
+    expect(html).toContain('data-manual-note-candidate="none"');
+    expect(html).toContain('data-manual-note-state="none"');
+    expect(pageMocks.preparePersistentManualTimelineNoteEventId).not.toHaveBeenCalled();
   });
 });

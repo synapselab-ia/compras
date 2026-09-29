@@ -32,7 +32,9 @@ import type {
   ContractingDetailSource,
   ContractingItemPresentation,
 } from "../types";
+import { ManualTimelineNoteEditor } from "./manual-timeline-note-editor";
 import { NextActionSubmitButton } from "./next-action-submit-button";
+import type { ManualTimelineNoteCreationUiState } from "../manual-timeline-note-create-feedback";
 
 type ContractingDetailProps = Readonly<{
   detail: ContractingDetailPresentation;
@@ -43,6 +45,8 @@ type ContractingDetailProps = Readonly<{
   itemMutationState?: ItemMutationUiState | null;
   relatedIdentifierCandidateId?: string | null;
   relatedIdentifierCreationState?: RelatedIdentifierCreationUiState | null;
+  manualNoteCandidateId?: string | null;
+  manualNoteCreationState?: ManualTimelineNoteCreationUiState | null;
 }>;
 
 type ItemMutationEditorProps = Readonly<{
@@ -178,6 +182,8 @@ export function ContractingDetail({
   itemMutationState = null,
   relatedIdentifierCandidateId = null,
   relatedIdentifierCreationState = null,
+  manualNoteCandidateId = null,
+  manualNoteCreationState = null,
 }: ContractingDetailProps) {
   const isDemo = source === "demo";
   const feedback = isDemo ? null : getNextActionMutationFeedback(mutationState);
@@ -664,6 +670,13 @@ export function ContractingDetail({
               <h2 id="activity-title">Atividade recente</h2>
             </div>
           </div>
+          {!isDemo && manualNoteCandidateId ? (
+            <ManualTimelineNoteEditor
+              contractingId={detail.id}
+              eventId={manualNoteCandidateId}
+              state={manualNoteCreationState}
+            />
+          ) : null}
           {detail.activity.length > 0 ? (
             <ol className="activity-list">
               {detail.activity.map((activity) => (

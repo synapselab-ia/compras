@@ -1,82 +1,70 @@
 # Next Action - Compras
 
-## F47-PERSISTENT-RESPONSIBLE-MUTATION-IMPLEMENT-01 - Implementar edição persistente do responsável interno
+## F48-PERSISTENT-RESPONSIBLE-MUTATION-DETAIL-UI-01 - Integrar edição persistente do responsável no detalhe
 
-**Classe:** T2 - banco/segurança  
-**Estado:** READY após integração da F46  
-**Objetivo:** materializar ADR-018 em uma boundary persistente least-privilege para alterar ou limpar `contractings.responsible_membership_id`, com optimistic concurrency, candidate elegível, evento atômico e resultados opacos, sem UI ou Server Action nesta slice.
+**Classe:** T1 - feature normal, com impacto T2 - autorização/escrita server-side  
+**Estado:** READY após integração da F47  
+**Objetivo:** integrar exclusivamente a boundary F47 ao detalhe persistente para alterar ou limpar o responsável interno, preservando optimistic concurrency, options humanas pelo diretório protegido, transporte nullable explícito, feedback sanitizado e demo read-only, sem ampliar authority PostgreSQL e sem resolver Q-009.
 
 Esta é a única `NEXT_ACTION` canônica.
 
 ## Por que esta ação agora
 
-F46 integrou a decisão arquitetural e a SPEC executável. O read model já apresenta o responsável, a FK composta já impede vínculo cross-team e o diretório mínimo já define membership ativa + app_user ativo para apresentação.
+F47 integrou e validou a authority server/database para `contractings.responsible_membership_id`.
 
-O próximo passo independente é implementar somente a authority server/database. A jornada de UI fica para uma slice posterior, depois de a capability ser provada contra concorrência, RLS, least privilege e estados degradados.
+O detalhe persistente já apresenta o nome do responsável via `team_member_directory`, mas ainda não preserva o UUID bruto do current responsável na apresentação nem oferece a jornada de edição.
+
+A próxima slice independente é conectar a boundary F47 à UI sem alterar sua autoridade.
 
 ## Execução obrigatória
 
-1. recuperar `main` real e confirmar F46 integrada pela PR `#77`, merge `12ff777e94ffcd14879eea6b09fb4905e3347642`;
+1. recuperar `main` real e confirmar F47 integrada pela PR `#79`, merge `4e7bb411205469977878e01cb04ea35d5ad50401`;
 2. revalidar `CONTEXT_MANIFEST`;
-3. ler integralmente ADR-018 e `tasks/F47-PERSISTENT-RESPONSIBLE-MUTATION-IMPLEMENT-01/SPEC.md`;
-4. reler SECURITY, DATABASE, ADR-003, ADR-004, ADR-005 e os precedentes F26/F32/F38 porque a tarefa é T2;
-5. confirmar migrations `0001..0011` byte-for-byte antes de editar;
-6. criar somente migration aditiva `0012_contracting_responsible_mutation.sql` ou nome equivalente ordenável;
-7. criar capability dedicada equivalente a `compras_contracting_responsible_mutation_owner`, seguindo ADR-005;
-8. conceder somente leituras mínimas de identidade, memberships, app_users e contratação;
-9. conceder UPDATE somente de `responsible_membership_id` e `updated_at`;
-10. conceder INSERT coluna-a-coluna somente do event shape aprovado;
-11. criar policies RLS específicas sem ampliar capabilities anteriores;
-12. materializar primitive `SECURITY DEFINER` com `search_path = pg_catalog`, SQL estático e `PUBLIC EXECUTE` revogado;
-13. derivar current app user, actor membership e team exclusivamente do contexto confiável + banco;
-14. aplicar guard target-team pilot-only antes de expor conflict/no-op;
-15. bloquear a contratação e comparar current/expected com semântica null-safe;
-16. manter precedência `denied -> conflict -> unchanged -> candidate validation -> updated`;
-17. permitir new responsável `NULL`;
-18. para new não nulo, exigir membership no mesmo team, não revogada e app_user não desabilitado;
-19. tratar candidate somente como valor, nunca authority;
-20. atualizar responsável + `updated_at` e inserir exatamente um `responsible_changed` na mesma transação;
-21. registrar old/new como membership UUID textual ou `NULL`;
-22. criar provisioning separado EXECUTE-only para runtime explicitamente validado;
-23. criar adapter server-only reutilizando `withTrustedDatabaseMutationContext` e gerar event UUID no servidor;
-24. manter F47 sem Server Action e sem UI;
-25. implementar matriz SQL adversarial e teste PostgreSQL concorrente real;
-26. provar rollback em falha do evento e ausência de evento/timestamp em conflict/unchanged/denied;
-27. provar current responsável revogado corrigível somente quando o guard continua satisfeito;
-28. provar que app_user desabilitado com membership ainda não revogada continua contando para o guard e não abre atalho;
-29. provar candidate revogado, disabled, cross-team e inexistente negados de forma opaca;
-30. provar runtime sem DML direto e capability sem grants além dos necessários;
-31. executar CI, F22, F29, F32, F35, F38, F41, F44 e gate F47;
-32. fazer red-team integral do diff e de grants/policies/function ownership;
-33. confirmar migrations `0001..0011` imutáveis;
-34. promover somente depois dos gates aplicáveis verdes;
-35. atualizar checkpoint deixando exatamente uma nova `NEXT_ACTION`.
+3. ler ADR-018, resultado F47 e `tasks/F48-PERSISTENT-RESPONSIBLE-MUTATION-DETAIL-UI-01/SPEC.md`;
+4. inspecionar F33, F45, F11, `persistent-read.ts`, `types.ts`, `view-data.ts`, `actions.ts`, página e componente do detalhe;
+5. confirmar migrations `0001..0012` byte-for-byte antes de editar;
+6. manter migration, grants, policies, capability, primitive e provisioning F47 imutáveis;
+7. estender o read model com `responsibleMembershipId: string | null`;
+8. carregar options humanas somente de `team_member_directory`, restritas ao target protegido;
+9. não expor team_id, user_id, issuer ou subject como dados da jornada;
+10. preservar current responsável degradado como expected raw mesmo quando seu nome não estiver disponível;
+11. implementar transporte explícito `null|membership` para expected e new;
+12. criar Server Action estreita que aceita somente `contractingId`, expected e new;
+13. rejeitar scalars duplicados, shapes ambíguos, UUIDs malformados e campos extras controlados pelo browser;
+14. não executar SQL/DML na Server Action;
+15. chamar exclusivamente `mutatePersistentContractingResponsible`;
+16. não tratar options renderizadas nem membership UUID como authority;
+17. permitir `Sem responsável` como new `NULL`;
+18. mapear `updated`, `unchanged`, `conflict`, `not-available` e `unavailable` para feedback fixo e sanitizado;
+19. revalidar/readback somente pela rota local e modelo protegido;
+20. manter demo, config inválida e protected failure sem write e sem fallback;
+21. manter Q-009 aberta e não introduzir gestão de memberships;
+22. adicionar testes adversariais de read model, action, feedback, component/page, current degradado e candidate forjada;
+23. executar CI, F22, F29, F32, F35, F38, F41, F44 e F47;
+24. fazer red-team integral do diff;
+25. confirmar migrations `0001..0012` e authority F47 imutáveis;
+26. promover somente estado verde;
+27. atualizar checkpoint deixando exatamente uma nova `NEXT_ACTION`.
 
 ## Red-team mínimo
 
 Rejeitar PASS se:
 
-- browser/caller puder escolher team, actor, issuer, subject ou actor membership como authority;
-- candidate responsável conceder autorização;
-- assignment cross-team for possível;
-- nova atribuição para membership revogada for possível;
-- nova atribuição para app_user desabilitado for possível;
-- segundo membro não revogado deixar de bloquear sem decisão explícita de Q-009;
-- responsável for tornado obrigatório ou autoatribuído sem fonte canônica;
+- browser puder definir team, actor, user, issuer ou subject;
+- membership UUID ou lista do diretório virar authority;
+- Server Action consultar banco para criar autorização paralela;
+- candidate cross-team, revogada ou disabled puder ser atribuída;
+- current degradado for autoajustado;
 - clear para `NULL` for removido;
-- stale expected virar `unchanged` ou last-write-wins;
-- runtime normal ganhar UPDATE/INSERT direto;
-- capability conseguir UPDATE genérico de `contractings`;
-- capability conseguir escrever memberships/app_users;
-- capabilities anteriores ganharem authority F47;
-- evento deixar de ser atômico;
-- evento puder sofrer UPDATE/DELETE;
-- target/candidate cross-team ou inexistente virar oracle;
-- no-op/denied alterar `updated_at`;
-- migration `0001..0011` for reescrita;
-- F47 adicionar UI/Server Action;
+- expected value for ignorado;
+- stale conflict virar sucesso ou last-write-wins;
+- Server Action executar SQL/DML próprio;
+- feedback revelar target/candidate protegido;
+- demo ou configuração inválida puder gravar;
+- falha protegida cair para fixture/demo;
+- migrations `0001..0012` forem alteradas;
+- grants, policies, capability, primitive ou provisioning F47 forem ampliados;
 - Q-009 for resolvida implicitamente;
-- falha protegida cair para demo;
 - provider hosted, secret ou dado real for necessário.
 
 ## Invariantes
@@ -88,14 +76,20 @@ Rejeitar PASS se:
 - autenticação não é autorização;
 - RLS/capabilities permanecem autoritativas;
 - runtime normal continua sem DML direto;
-- migrations `0001..0011` permanecem imutáveis;
-- F47 não inclui UI nem Server Action.
+- F47 continua sendo a única boundary persistente de alteração do responsável;
+- `team_member_directory` continua sendo a superfície humana aprovada para membros;
+- migrations `0001..0012` permanecem imutáveis;
+- falha protegida nunca vira demo fallback.
 
 ## Fonte da tarefa
 
 Executar:
 
-`tasks/F47-PERSISTENT-RESPONSIBLE-MUTATION-IMPLEMENT-01/SPEC.md`.
+`tasks/F48-PERSISTENT-RESPONSIBLE-MUTATION-DETAIL-UI-01/SPEC.md`.
+
+Boundary canônica:
+
+`tasks/F47-PERSISTENT-RESPONSIBLE-MUTATION-IMPLEMENT-01/RESULT.md`.
 
 Decisão canônica:
 
@@ -103,4 +97,4 @@ Decisão canônica:
 
 ## Critério de encerramento
 
-F47 fecha quando ADR-018 estiver implementada por migration aditiva, capability selada, primitive estreita, provisioning EXECUTE-only, adapter server-only e provas adversariais/concorrentes, com estado+evento atômicos, expected-value concurrency, candidate elegível, resultados opacos, migrations anteriores imutáveis e regressões verdes, sem UI e sem resolver Q-009.
+F48 fecha quando uma pessoa autorizada em modo persistente puder alterar ou limpar o responsável pelo detalhe usando exclusivamente F47, com expected membership bruto do read model protegido, options humanas do diretório protegido, transporte nullable explícito, payload sem authority controlada pelo browser, feedback sanitizado, optimistic concurrency preservada, readback protegido, demo read-only e todos os gates/adversariais verdes, sem ampliar a camada PostgreSQL e sem resolver Q-009.

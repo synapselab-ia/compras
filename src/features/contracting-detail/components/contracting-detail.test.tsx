@@ -101,6 +101,8 @@ describe("ContractingDetail persistent editor boundaries", () => {
         itemMutationState="conflict"
         relatedIdentifierCandidateId={RELATED_IDENTIFIER_CANDIDATE}
         relatedIdentifierCreationState="not-available"
+        manualNoteCandidateId={MANUAL_NOTE_CANDIDATE}
+        manualNoteCreationState="not-available"
       />,
     );
 
@@ -112,6 +114,10 @@ describe("ContractingDetail persistent editor boundaries", () => {
     expect(html).toContain("Salvar item");
     expect(html).toContain("Vincular identificador");
     expect(html).toContain(RELATED_IDENTIFIER_CANDIDATE);
+    expect(html).toContain("Adicionar nota");
+    expect(html).toContain(MANUAL_NOTE_CANDIDATE);
+    expect(html).toContain('name="eventId"');
+    expect(html).toContain("A inclusão de nota não está disponível para este registro.");
     expect(html).toContain('name="contractingId"');
     expect(html).toContain('name="expectedObject"');
     expect(html).toContain('name="newObject"');
@@ -163,7 +169,6 @@ describe("ContractingDetail persistent editor boundaries", () => {
       "ordinal",
       "retiredAt",
       "updatedAt",
-      "eventId",
       "descriptionEventId",
       "quantityEventId",
       "unitEventId",

@@ -8,11 +8,13 @@ import {
 import { ContractingDetail } from "@/features/contracting-detail/components/contracting-detail";
 import { readItemCreationUiState } from "@/features/contracting-detail/item-create-feedback";
 import { readItemMutationUiState } from "@/features/contracting-detail/item-mutation-feedback";
+import { readManualTimelineNoteCreationUiState } from "@/features/contracting-detail/manual-timeline-note-create-feedback";
 import { readNextActionMutationUiState } from "@/features/contracting-detail/next-action-feedback";
 import { readObjectMutationUiState } from "@/features/contracting-detail/object-feedback";
 import {
   readRelatedIdentifierCreationUiState,
 } from "@/features/contracting-detail/related-identifier-create-feedback";
+import { preparePersistentManualTimelineNoteEventId } from "@/features/contracting-detail/persistent-manual-timeline-note-create";
 import {
   preparePersistentRelatedIdentifierCandidateId,
 } from "@/features/contracting-detail/persistent-related-identifier-create";
@@ -30,8 +32,16 @@ type ContractingDetailPageProps = {
     creation?: string | string[];
     relatedIdentifierCreation?: string | string[];
     relatedIdentifierCandidate?: string | string[];
+    manualNoteCreation?: string | string[];
+    manualNoteCandidate?: string | string[];
   }>;
 };
+
+function readUuidRetryCandidate(
+  value: string | string[] | undefined,
+): string | null {
+  return readUuidRetryCandidate(value);
+}
 
 function readRelatedIdentifierRetryCandidate(
   value: string | string[] | undefined,
@@ -91,6 +101,18 @@ export default async function ContractingDetailPage({
     viewData.kind === "persistent"
       ? retryCandidate ?? preparePersistentRelatedIdentifierCandidateId()
       : null;
+  const manualNoteCreationState =
+    viewData.kind === "demo"
+      ? null
+      : readManualTimelineNoteCreationUiState(query.manualNoteCreation);
+  const manualNoteRetryCandidate =
+    manualNoteCreationState === "unavailable"
+      ? readUuidRetryCandidate(query.manualNoteCandidate)
+      : null;
+  const manualNoteCandidateId =
+    viewData.kind === "persistent"
+      ? manualNoteRetryCandidate ?? preparePersistentManualTimelineNoteEventId()
+      : null;
 
   return (
     <>
@@ -114,6 +136,8 @@ export default async function ContractingDetailPage({
         itemMutationState={readItemMutationUiState(query.itemMutation)}
         relatedIdentifierCandidateId={relatedIdentifierCandidateId}
         relatedIdentifierCreationState={relatedIdentifierCreationState}
+        manualNoteCandidateId={manualNoteCandidateId}
+        manualNoteCreationState={manualNoteCreationState}
       />
     </>
   );
